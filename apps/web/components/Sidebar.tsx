@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   Boxes,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Contact,
   DollarSign,
@@ -21,6 +22,7 @@ import {
   ShoppingCart,
   Tag,
   Users,
+  UserSquare,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -66,6 +68,13 @@ const sections: NavSection[] = [
     items: [
       { href: "/app/purchasing/suppliers", label: "Proveedores", icon: Contact },
       { href: "/app/purchasing/orders", label: "Órdenes de compra", icon: ShoppingCart },
+    ],
+  },
+  {
+    title: "Ventas",
+    items: [
+      { href: "/app/sales/customers", label: "Clientes", icon: UserSquare },
+      { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck },
     ],
   },
   {

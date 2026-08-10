@@ -16,6 +16,7 @@ import { StockCountsModule } from "./stock-counts/stock-counts.module.js";
 import { PricingModule } from "./pricing/pricing.module.js";
 import { SuppliersModule } from "./suppliers/suppliers.module.js";
 import { PurchasingModule } from "./purchasing/purchasing.module.js";
+import { SalesModule } from "./sales/sales.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { RequestContextMiddleware } from "./common/middleware/request-context.middleware.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
@@ -41,6 +42,7 @@ import { PermissionsGuard } from "./common/guards/permissions.guard.js";
     PricingModule,
     SuppliersModule,
     PurchasingModule,
+    SalesModule,
     HealthModule,
   ],
   providers: [

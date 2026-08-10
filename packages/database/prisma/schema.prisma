@@ -1093,3 +1093,107 @@ model PurchaseReceiptItem {
   @@index([purchaseReceiptId])
   @@index([organizationId, variantId])
 }
+
+// ==========================================================================
+//  VENTAS Y PEDIDOS (ADR-020, ADR-021)
+// ==========================================================================
+
+enum CustomerType {
+  RETAIL
+  WHOLESALE
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+model Customer {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String         @db.Uuid
+  name           String
+  legalName      String?
+  email          String?
+  phone          String?
+  taxId          String?
+  type           CustomerType   @default(RETAIL)
+  creditLimit    Decimal?       @db.Decimal(18, 4)
+  status         CustomerStatus @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  orders Order[]
+
+  @@index([organizationId, status])
+}
+
+model Order {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @db.Uuid
+  branchId        String        @db.Uuid
+  warehouseId     String        @db.Uuid
+  customerId      String?       @db.Uuid
+  customer        Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  number          String
+  status          OrderStatus   @default(DRAFT)
+  channel         String?
+  currency        String        @default("MXN") @db.Char(3)
+  priceListId     String?       @db.Uuid
+  subtotal        Decimal       @default(0) @db.Decimal(18, 4)
+  discountTotal   Decimal       @default(0) @db.Decimal(18, 4)
+  taxTotal        Decimal       @default(0) @db.Decimal(18, 4)
+  total           Decimal       @default(0) @db.Decimal(18, 4)
+  paymentStatus   PaymentStatus @default(PENDING)
+  notes           String?
+  confirmedAt     DateTime?
+  fulfilledAt     DateTime?
+  cancelledAt     DateTime?
+  createdByUserId String        @db.Uuid
+  correlationId   String?
+  idempotencyKey  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items OrderItem[]
+
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @db.Uuid
+  orderId           String   @db.Uuid
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId         String   @db.Uuid
+  quantity          Decimal  @db.Decimal(18, 6)
+  unitPrice         Decimal  @db.Decimal(18, 4)
+  discount          Decimal  @default(0) @db.Decimal(18, 4)
+  taxRate           Decimal  @default(0) @db.Decimal(5, 4)
+  lineTotal         Decimal  @db.Decimal(18, 4)
+  reservationId     String?  @db.Uuid
+  fulfilledQuantity Decimal  @default(0) @db.Decimal(18, 6)
+  unitCostSnapshot  Decimal? @db.Decimal(18, 4)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([organizationId, variantId])
+}

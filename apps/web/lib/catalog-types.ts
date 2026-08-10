@@ -144,3 +144,41 @@ export interface PurchaseOrder {
     receivedQuantity: string;
   }>;
 }
+
+export interface Customer {
+  id: string;
+  name: string;
+  legalName: string | null;
+  email: string | null;
+  phone: string | null;
+  taxId: string | null;
+  type: "RETAIL" | "WHOLESALE";
+  creditLimit: string | null;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+export interface Order {
+  id: string;
+  customerId: string | null;
+  warehouseId: string;
+  number: string;
+  status: "DRAFT" | "CONFIRMED" | "PARTIALLY_FULFILLED" | "FULFILLED" | "COMPLETED" | "CANCELLED";
+  currency: string;
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  total: string;
+  paymentStatus: "PENDING" | "PARTIAL" | "PAID";
+  createdAt: string;
+  items: Array<{
+    id: string;
+    variantId: string;
+    quantity: string;
+    unitPrice: string;
+    discount: string;
+    taxRate: string;
+    lineTotal: string;
+    fulfilledQuantity: string;
+    unitCostSnapshot: string | null;
+  }>;
+}

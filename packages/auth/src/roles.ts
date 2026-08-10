@@ -53,7 +53,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "inventory.count", "inventory.count.approve",
       "suppliers.read", "suppliers.manage", "purchasing.read",
       "purchase.order.create", "purchase.order.approve", "purchase.receipt.post", "purchase.return",
-      "orders.read", "orders.create", "orders.cancel",
+      "customers.read", "customers.manage",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
       "finance.read",
     ],
   },
@@ -71,7 +72,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "inventory.read", "inventory.movement.read", "inventory.adjust", "inventory.reserve",
       "inventory.transfer.create", "inventory.transfer.receive",
       "inventory.count",
-      "orders.read", "orders.create", "orders.cancel",
+      "customers.read", "customers.manage",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
     ],
   },
   {
@@ -88,7 +90,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "inventory.transfer.create", "inventory.transfer.approve", "inventory.transfer.ship", "inventory.transfer.receive",
       "inventory.count", "inventory.count.approve",
       "suppliers.read", "purchasing.read", "purchase.receipt.post",
-      "orders.read",
+      "orders.read", "orders.fulfill",
     ],
   },
   {
@@ -100,7 +102,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "catalog.read", "products.read",
       "inventory.read", "inventory.movement.read",
       "inventory.count", "inventory.reserve", "inventory.transfer.receive",
-      "orders.read",
+      "orders.read", "orders.fulfill",
     ],
   },
   {
@@ -109,7 +111,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     description: "Ventas de mostrador (sin costos ni ajustes)",
     permissions: [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
-      "orders.read", "orders.create",
+      "customers.read", "customers.manage",
+      "orders.read", "orders.create", "orders.confirm",
     ],
   },
   {
@@ -118,7 +121,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     description: "Ventas de mayoreo",
     permissions: [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
-      "orders.read", "orders.create", "orders.cancel",
+      "customers.read", "customers.manage",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
       "finance.read",
     ],
   },
@@ -128,7 +132,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     description: "Cobro en caja",
     permissions: [
       "catalog.read", "products.read", "pricing.read",
-      "orders.read", "orders.create", "finance.read",
+      "customers.read",
+      "orders.read", "orders.create", "orders.confirm", "orders.fulfill", "finance.read",
     ],
   },
   {
@@ -147,6 +152,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "pricing.read",
       "suppliers.read", "purchasing.read",
       "products.read", "inventory.read", "inventory.movement.read",
+      "customers.read",
       "orders.read", "audit.read",
     ],
   },

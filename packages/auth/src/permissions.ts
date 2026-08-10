@@ -72,6 +72,12 @@ export const PERMISSIONS = [
   { key: "purchase.order.approve", category: "purchasing", description: "Aprobar órdenes de compra" },
   { key: "purchase.receipt.post", category: "purchasing", description: "Postear recepciones de compra" },
   { key: "purchase.return", category: "purchasing", description: "Devoluciones a proveedor" },
+
+  // --- Ventas y pedidos (Prompt 4) ---
+  { key: "customers.read", category: "sales", description: "Ver clientes" },
+  { key: "customers.manage", category: "sales", description: "Gestionar clientes" },
+  { key: "orders.confirm", category: "sales", description: "Confirmar pedidos (reservar stock)" },
+  { key: "orders.fulfill", category: "sales", description: "Entregar pedidos (consumir stock)" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
