@@ -57,6 +57,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # El cliente Prisma debe existir antes de lint/typecheck/build (aporta los
+      # tipos MovementType, delegates, etc.). Turbo no lo garantiza por sí solo.
+      - name: Generate Prisma client
+        run: pnpm --filter @24hits/database db:generate
+
       - name: Lint
         run: pnpm lint
 
