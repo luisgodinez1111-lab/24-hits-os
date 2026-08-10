@@ -1,0 +1,33 @@
+{
+  "name": "24-hits-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "24 HITS OS — plataforma SaaS institucional multi-tenant, multiusuario y multisucursal.",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "db:migrate": "pnpm --filter @24hits/database db:migrate",
+    "db:seed": "pnpm --filter @24hits/database db:seed",
+    "db:studio": "pnpm --filter @24hits/database db:studio",
+    "db:generate": "pnpm --filter @24hits/database db:generate",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+    "infra:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infrastructure/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@24hits/eslint-config": "workspace:*",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hits
+          POSTGRES_PASSWORD: hits
+          POSTGRES_DB: hits_os
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hits -d hits_os"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://hits:hits@localhost:5432/hits_os?schema=public
+      DIRECT_URL: postgresql://hits:hits@localhost:5432/hits_os?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-01234567890123456789
+      JWT_REFRESH_SECRET: ci-refresh-secret-01234567890123456789
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Apply migrations
+        run: pnpm --filter @24hits/database db:deploy
+
+      - name: Integration tests (RLS / tenant isolation)
+        run: pnpm --filter @24hits/api test:integration

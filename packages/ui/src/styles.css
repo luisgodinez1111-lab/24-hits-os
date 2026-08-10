@@ -1,0 +1,6 @@
+/* Tokens/estilos base opcionales del design system.
+   La paleta `brand` se define en el tailwind.config del app consumidor. */
+:root {
+  --brand: #7c3aed;
+  --brand-dark: #5b21b6;
+}

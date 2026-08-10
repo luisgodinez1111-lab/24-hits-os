@@ -1,0 +1,26 @@
+{
+  "name": "@24hits/worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@24hits/config": "workspace:*",
+    "@24hits/database": "workspace:*",
+    "@24hits/observability": "workspace:*",
+    "@24hits/storage": "workspace:*",
+    "bullmq": "^5.34.6",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "@24hits/typescript-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

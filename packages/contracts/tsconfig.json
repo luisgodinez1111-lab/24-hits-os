@@ -1,0 +1,6 @@
+{
+  "extends": "@24hits/typescript-config/base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}
