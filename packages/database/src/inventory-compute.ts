@@ -51,9 +51,16 @@ export async function computeBalanceBuckets(
     buckets.quarantine = buckets.quarantine.plus(q.times(e.quarantine));
   }
 
+  // Campos explícitos (no spread de `key`): verifyDrift puede pasar una fila de
+  // balance completa como key, y esos campos extra romperían el where.
+  const scope = {
+    organizationId: key.organizationId,
+    warehouseId: key.warehouseId,
+    variantId: key.variantId,
+  };
   const [reservedAgg, allocatedAgg, outgoing, incoming] = await Promise.all([
-    client.inventoryReservation.aggregate({ where: { ...key, status: "ACTIVE" }, _sum: { quantity: true } }),
-    client.inventoryAllocation.aggregate({ where: { ...key, status: "ACTIVE" }, _sum: { quantity: true } }),
+    client.inventoryReservation.aggregate({ where: { ...scope, status: "ACTIVE" }, _sum: { quantity: true } }),
+    client.inventoryAllocation.aggregate({ where: { ...scope, status: "ACTIVE" }, _sum: { quantity: true } }),
     client.warehouseTransferItem.findMany({
       where: {
         organizationId: key.organizationId,
