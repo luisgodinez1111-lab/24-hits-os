@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Contact, Plus } from "lucide-react";
 import {
-  Badge, Button, Card, CardBody, Dialog, EmptyState, FormField, Input, Skeleton,
+  Badge, Button, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Supplier } from "@/lib/catalog-types";
