@@ -55,7 +55,7 @@ export class PurchaseOrderService {
           supplierId: input.supplierId,
           warehouseId: input.warehouseId,
           branchId: wh.branchId,
-          number: `PO-${newId().slice(0, 8).toUpperCase()}`,
+          number: `PO-${newId().replace(/-/g, "").slice(-12).toUpperCase()}`,
           status: "DRAFT",
           currency: input.currency.toUpperCase(),
           notes: input.notes ?? null,

@@ -47,7 +47,7 @@ export class PurchaseReceiptService {
           warehouseId: input.warehouseId,
           branchId: wh.branchId,
           purchaseOrderId: input.purchaseOrderId ?? null,
-          number: `PR-${newId().slice(0, 8).toUpperCase()}`,
+          number: `PR-${newId().replace(/-/g, "").slice(-12).toUpperCase()}`,
           status: "DRAFT",
           notes: input.notes ?? null,
           receivedByUserId: userId,
