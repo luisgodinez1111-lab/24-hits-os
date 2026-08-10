@@ -35,6 +35,8 @@ jobs:
 
     env:
       NODE_ENV: test
+      CHECKPOINT_DISABLE: "1"
+      DO_NOT_TRACK: "1"
       DATABASE_URL: postgresql://hits:hits@localhost:5432/hits_os?schema=public
       DIRECT_URL: postgresql://hits:hits@localhost:5432/hits_os?schema=public
       REDIS_URL: redis://localhost:6379
@@ -44,13 +46,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # La versión de pnpm la toma de package.json "packageManager" (no duplicar aquí).
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install
@@ -71,5 +72,27 @@ jobs:
       - name: Apply migrations
         run: pnpm --filter @24hits/database db:deploy
 
-      - name: Integration tests (RLS / tenant isolation)
+      # El POSTGRES_USER del contenedor es superusuario y los superusuarios SALTAN RLS.
+      # Creamos un rol no-superusuario para que las pruebas de aislamiento sean válidas.
+      - name: Create non-superuser app role (RLS enforcement)
+        env:
+          PGPASSWORD: hits
+        run: |
+          which psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          psql -h localhost -U hits -d hits_os -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='hits_app') THEN
+              CREATE ROLE hits_app LOGIN PASSWORD 'hits_app' NOSUPERUSER NOBYPASSRLS;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO hits_app;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hits_app;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO hits_app;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hits_app;
+          SQL
+
+      - name: Integration tests (RLS / tenant isolation / concurrency / purchasing)
+        env:
+          DATABASE_URL: postgresql://hits_app:hits_app@localhost:5432/hits_os?schema=public
+          DIRECT_URL: postgresql://hits_app:hits_app@localhost:5432/hits_os?schema=public
         run: pnpm --filter @24hits/api test:integration
