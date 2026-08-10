@@ -117,12 +117,14 @@ export class OrganizationService {
   }
 
   private async ensureUniqueSlug(base: string): Promise<string> {
-    const candidate = base || `org-${newId().slice(0, 8)}`;
+    // Cola aleatoria del UUID v7 (los primeros hex son el timestamp y colisionan).
+    const rand = (n: number) => newId().replace(/-/g, "").slice(-n);
+    const candidate = base || `org-${rand(8)}`;
     const existing = await this.prisma.client.organization.findUnique({
       where: { slug: candidate },
       select: { id: true },
     });
     if (!existing) return candidate;
-    return `${candidate}-${newId().slice(0, 6)}`;
+    return `${candidate}-${rand(6)}`;
   }
 }
