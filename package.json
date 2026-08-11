@@ -9,6 +9,7 @@
     "pnpm": ">=9"
   },
   "scripts": {
+    "postinstall": "pnpm --filter @24hits/database db:generate",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "eslint .",
