@@ -17,6 +17,7 @@ import {
   MapPin,
   Monitor,
   Package,
+  Receipt,
   ScrollText,
   Shield,
   ShoppingCart,
@@ -77,6 +78,7 @@ const sections: NavSection[] = [
     items: [
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare },
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck },
+      { href: "/app/sales/notes", label: "Notas de venta", icon: Receipt },
     ],
   },
   {

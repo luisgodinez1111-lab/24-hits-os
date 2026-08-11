@@ -1169,8 +1169,9 @@ model Order {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  items    OrderItem[]
-  payments Payment[]
+  items     OrderItem[]
+  payments  Payment[]
+  saleNotes SaleNote[]
 
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
@@ -1323,4 +1324,82 @@ model CashMovement {
 
   @@index([cashSessionId])
   @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Notas de venta (Prompt 7) — ADR-024 (comprobante inmutable + folio consecutivo)
+// ---------------------------------------------------------------------------
+
+enum SaleNoteStatus {
+  ISSUED
+  CANCELLED
+}
+
+// Contador de folios por serie. El consecutivo se asigna con UPDATE ... RETURNING
+// (bloqueo de fila), de modo que dos notas concurrentes nunca repiten folio.
+model DocumentSequence {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  series         String
+  nextValue      Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, series])
+}
+
+// Comprobante de venta INMUTABLE: fotografía del pedido al emitirse (cliente,
+// renglones, totales, pagado). No se edita; se cancela (nunca se borra).
+model SaleNote {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String         @db.Uuid
+  branchId          String         @db.Uuid
+  orderId           String?        @db.Uuid
+  order             Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId        String?        @db.Uuid
+  series            String
+  folio             Int
+  number            String
+  status            SaleNoteStatus @default(ISSUED)
+  currency          String         @default("MXN") @db.Char(3)
+  customerName      String?
+  customerTaxId     String?
+  subtotal          Decimal        @db.Decimal(18, 4)
+  discountTotal     Decimal        @db.Decimal(18, 4)
+  taxTotal          Decimal        @db.Decimal(18, 4)
+  total             Decimal        @db.Decimal(18, 4)
+  paidTotal         Decimal        @default(0) @db.Decimal(18, 4)
+  notes             String?
+  issuedByUserId    String         @db.Uuid
+  issuedAt          DateTime       @default(now())
+  cancelledByUserId String?        @db.Uuid
+  cancelledAt       DateTime?
+  cancelledReason   String?
+  correlationId     String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  items SaleNoteItem[]
+
+  @@unique([organizationId, series, folio])
+  @@index([organizationId, status])
+  @@index([orderId])
+}
+
+// Renglón fotografiado (descripción/precios copiados; no referencia viva a la variante).
+model SaleNoteItem {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @db.Uuid
+  saleNoteId     String   @db.Uuid
+  saleNote       SaleNote @relation(fields: [saleNoteId], references: [id], onDelete: Cascade)
+  variantId      String?  @db.Uuid
+  sku            String?
+  description    String
+  quantity       Decimal  @db.Decimal(18, 6)
+  unitPrice      Decimal  @db.Decimal(18, 4)
+  discount       Decimal  @default(0) @db.Decimal(18, 4)
+  taxRate        Decimal  @default(0) @db.Decimal(5, 4)
+  lineTotal      Decimal  @db.Decimal(18, 4)
+
+  @@index([saleNoteId])
 }

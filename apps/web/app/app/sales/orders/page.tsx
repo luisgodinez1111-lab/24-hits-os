@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, Plus } from "lucide-react";
+import { ClipboardCheck, CreditCard, Plus, Receipt } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -36,6 +36,12 @@ export default function SalesOrdersPage() {
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
+  const issueNote = useMutation({
+    mutationFn: (orderId: string) => api.post("/sale-notes", { orderId }),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["sale-notes"] }); toast.push("Nota de venta emitida", "success"); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -66,6 +72,7 @@ export default function SalesOrdersPage() {
                     {o.status === "DRAFT" && <Button size="sm" variant="outline" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "confirm" })}>Confirmar</Button>}
                     {(o.status === "CONFIRMED" || o.status === "PARTIALLY_FULFILLED") && <Button size="sm" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "fulfill" })}>Entregar</Button>}
                     {o.status !== "CANCELLED" && o.paymentStatus !== "PAID" && <Button size="sm" variant="outline" onClick={() => setPaying(o)}><CreditCard className="h-4 w-4" /> Cobrar</Button>}
+                    {o.status !== "CANCELLED" && o.status !== "DRAFT" && <Button size="sm" variant="outline" loading={issueNote.isPending} onClick={() => issueNote.mutate(o.id)}><Receipt className="h-4 w-4" /> Nota</Button>}
                     {(o.status === "DRAFT" || o.status === "CONFIRMED") && <Button size="sm" variant="ghost" onClick={() => action.mutate({ id: o.id, verb: "cancel" })}>Cancelar</Button>}
                   </div>
                 </TD>

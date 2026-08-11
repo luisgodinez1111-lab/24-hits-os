@@ -242,3 +242,34 @@ export interface ProfitByProductRow {
   grossProfit: string;
   margin: string;
 }
+
+export interface SaleNote {
+  id: string;
+  orderId: string | null;
+  series: string;
+  folio: number;
+  number: string;
+  status: "ISSUED" | "CANCELLED";
+  currency: string;
+  customerName: string | null;
+  customerTaxId: string | null;
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  total: string;
+  paidTotal: string;
+  notes: string | null;
+  issuedAt: string;
+  cancelledAt: string | null;
+  cancelledReason: string | null;
+  items?: Array<{
+    id: string;
+    sku: string | null;
+    description: string;
+    quantity: string;
+    unitPrice: string;
+    discount: string;
+    taxRate: string;
+    lineTotal: string;
+  }>;
+}
