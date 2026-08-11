@@ -12,6 +12,8 @@
     "JWT_REFRESH_TTL",
     "APP_URL",
     "API_URL",
+    "COOKIE_SAMESITE",
+    "COOKIE_DOMAIN",
     "S3_ENDPOINT",
     "S3_REGION",
     "S3_BUCKET",

@@ -24,6 +24,11 @@ export const envSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   API_URL: z.string().url().default("http://localhost:4000"),
 
+  // Cookies de sesión. En despliegues con frontend y API en dominios distintos
+  // (p.ej. *.vercel.app), el navegador solo manda la cookie con SameSite=None+Secure.
+  COOKIE_SAMESITE: z.enum(["lax", "none", "strict"]).default("lax"),
+  COOKIE_DOMAIN: z.string().optional(),
+
   // Almacenamiento (S3/MinIO)
   S3_ENDPOINT: z.string().url().default("http://localhost:9000"),
   S3_REGION: z.string().default("us-east-1"),

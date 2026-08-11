@@ -161,10 +161,13 @@ export class AuthController {
   // --- Helpers de cookies ---
 
   private cookieBase() {
+    const sameSite = this.env.COOKIE_SAMESITE;
     return {
       httpOnly: true,
-      secure: this.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
+      // SameSite=None exige Secure (requisito del navegador para cookies cross-site).
+      secure: this.env.NODE_ENV === "production" || sameSite === "none",
+      sameSite,
+      domain: this.env.COOKIE_DOMAIN,
       path: "/",
     };
   }
