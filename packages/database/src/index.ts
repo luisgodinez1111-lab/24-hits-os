@@ -14,3 +14,4 @@ export {
   type BalanceBuckets,
   type BalanceKeyLite,
 } from "./inventory-compute.js";
+export { scanLowStockForOrg } from "./notifications.js";

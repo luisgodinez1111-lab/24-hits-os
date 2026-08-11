@@ -1477,3 +1477,41 @@ model CreditNoteItem {
   @@index([creditNoteId])
   @@index([organizationId, saleNoteItemId])
 }
+
+// ---------------------------------------------------------------------------
+// Notificaciones (Prompt 9) — ADR-026 (centro de notificaciones in-app)
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  LOW_STOCK
+  INVENTORY_DRIFT
+  PAYMENT_PENDING
+  SYSTEM
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// Notificación in-app. recipientUserId nulo = difusión a toda la organización.
+// dedupeKey evita repetir una misma alerta recurrente (ver ADR-026).
+model Notification {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String               @db.Uuid
+  recipientUserId String?              @db.Uuid
+  type            NotificationType
+  severity        NotificationSeverity @default(INFO)
+  title           String
+  body            String
+  entityType      String?
+  entityId        String?
+  dedupeKey       String?
+  readAt          DateTime?
+  createdAt       DateTime             @default(now())
+
+  @@index([organizationId, recipientUserId, readAt])
+  @@index([organizationId, readAt])
+  @@index([organizationId, dedupeKey])
+}

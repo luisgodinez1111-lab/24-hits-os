@@ -274,6 +274,18 @@ export interface SaleNote {
   }>;
 }
 
+export interface AppNotification {
+  id: string;
+  type: "LOW_STOCK" | "INVENTORY_DRIFT" | "PAYMENT_PENDING" | "SYSTEM";
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  title: string;
+  body: string;
+  entityType: string | null;
+  entityId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export interface CreditNote {
   id: string;
   saleNoteId: string | null;

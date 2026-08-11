@@ -19,6 +19,7 @@ import { PurchasingModule } from "./purchasing/purchasing.module.js";
 import { SalesModule } from "./sales/sales.module.js";
 import { CashModule } from "./cash/cash.module.js";
 import { ReportsModule } from "./reports/reports.module.js";
+import { NotificationModule } from "./notifications/notification.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { RequestContextMiddleware } from "./common/middleware/request-context.middleware.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
@@ -47,6 +48,7 @@ import { PermissionsGuard } from "./common/guards/permissions.guard.js";
     SalesModule,
     CashModule,
     ReportsModule,
+    NotificationModule,
     HealthModule,
   ],
   providers: [

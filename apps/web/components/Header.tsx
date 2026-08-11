@@ -6,6 +6,7 @@ import { ChevronDown, LogOut, Monitor } from "lucide-react";
 import { Badge, Dropdown, DropdownItem } from "@24hits/ui";
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/me";
+import { NotificationBell } from "./NotificationBell";
 
 export function Header({ me }: { me: Me | undefined }) {
   const router = useRouter();
@@ -32,28 +33,31 @@ export function Header({ me }: { me: Me | undefined }) {
         )}
       </div>
 
-      <Dropdown
-        trigger={
-          <span className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-100">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-              {(me?.user?.name ?? me?.user?.email ?? "?").slice(0, 1).toUpperCase()}
+      <div className="flex items-center gap-2">
+        <NotificationBell />
+        <Dropdown
+          trigger={
+            <span className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-100">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+                {(me?.user?.name ?? me?.user?.email ?? "?").slice(0, 1).toUpperCase()}
+              </span>
+              {me?.user?.name ?? me?.user?.email ?? "Cuenta"}
+              <ChevronDown className="h-4 w-4 text-gray-400" />
             </span>
-            {me?.user?.name ?? me?.user?.email ?? "Cuenta"}
-            <ChevronDown className="h-4 w-4 text-gray-400" />
-          </span>
-        }
-      >
+          }
+        >
         <DropdownItem onClick={() => router.push("/app/settings/sessions")}>
           <span className="flex items-center gap-2">
             <Monitor className="h-4 w-4" /> Dispositivos
           </span>
         </DropdownItem>
-        <DropdownItem onClick={logout}>
-          <span className="flex items-center gap-2">
-            <LogOut className="h-4 w-4" /> Cerrar sesión
-          </span>
-        </DropdownItem>
-      </Dropdown>
+          <DropdownItem onClick={logout}>
+            <span className="flex items-center gap-2">
+              <LogOut className="h-4 w-4" /> Cerrar sesión
+            </span>
+          </DropdownItem>
+        </Dropdown>
+      </div>
     </header>
   );
 }
