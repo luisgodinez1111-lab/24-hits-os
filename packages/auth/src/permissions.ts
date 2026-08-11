@@ -78,6 +78,16 @@ export const PERMISSIONS = [
   { key: "customers.manage", category: "sales", description: "Gestionar clientes" },
   { key: "orders.confirm", category: "sales", description: "Confirmar pedidos (reservar stock)" },
   { key: "orders.fulfill", category: "sales", description: "Entregar pedidos (consumir stock)" },
+
+  // --- Pagos y caja (Prompt 5) ---
+  { key: "payments.read", category: "payments", description: "Ver pagos" },
+  { key: "payments.record", category: "payments", description: "Registrar cobros" },
+  { key: "payments.reverse", category: "payments", description: "Anular cobros (sensible)" },
+  { key: "cash.read", category: "cash", description: "Ver cajas y turnos" },
+  { key: "cash.manage", category: "cash", description: "Administrar cajas (alta/baja)" },
+  { key: "cash.session.open", category: "cash", description: "Abrir turno de caja" },
+  { key: "cash.session.close", category: "cash", description: "Cerrar turno de caja (arqueo)" },
+  { key: "cash.movement", category: "cash", description: "Registrar movimientos de efectivo" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];

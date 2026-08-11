@@ -59,11 +59,11 @@ enum WarehouseType {
 // Usuario = persona. Es GLOBAL: no pertenece a una sola organización.
 // La pertenencia se modela con OrganizationMembership (N:M).
 model User {
-  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email          String     @unique
-  name           String?
-  passwordHash   String
-  status         UserStatus @default(ACTIVE)
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String     @unique
+  name            String?
+  passwordHash    String
+  status          UserStatus @default(ACTIVE)
   emailVerifiedAt DateTime?
 
   // 2FA (TOTP) — preparado; UI se difiere (ADR-005).
@@ -73,56 +73,56 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships            OrganizationMembership[]
-  sessions               Session[]
+  memberships             OrganizationMembership[]
+  sessions                Session[]
   emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens    PasswordResetToken[]
-  auditEvents            AuditEvent[]             @relation("AuditActor")
+  passwordResetTokens     PasswordResetToken[]
+  auditEvents             AuditEvent[]             @relation("AuditActor")
 
   @@index([status])
 }
 
 model EmailVerificationToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @db.Uuid
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique // SHA-256 del token enviado por email
-  expiresAt DateTime
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique // SHA-256 del token enviado por email
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
 }
 
 model PasswordResetToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @db.Uuid
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique // SHA-256 del token enviado por email
-  expiresAt DateTime
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique // SHA-256 del token enviado por email
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
 }
 
 // Sesión con estado → permite revocación fina, dispositivos activos, etc. (ADR-005).
 model Session {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId           String   @db.Uuid
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String        @db.Uuid
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Organización activa de la sesión (contexto de tenant del token de acceso).
-  organizationId   String?  @db.Uuid
+  organizationId   String?       @db.Uuid
   organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // Hash SHA-256 del refresh token (nunca en texto plano).
-  refreshTokenHash String   @unique
+  refreshTokenHash String        @unique
   // Familia para rotación con detección de reuso.
-  familyId         String   @db.Uuid
+  familyId         String        @db.Uuid
   ip               String?
   userAgent        String?
   device           String?
-  createdAt        DateTime @default(now())
-  lastUsedAt       DateTime @default(now())
+  createdAt        DateTime      @default(now())
+  lastUsedAt       DateTime      @default(now())
   expiresAt        DateTime
   revokedAt        DateTime?
 
@@ -145,31 +145,31 @@ model Organization {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  settings    OrganizationSettings?
-  memberships OrganizationMembership[]
-  branches    Branch[]
-  warehouses  Warehouse[]
-  roles       Role[]
+  settings     OrganizationSettings?
+  memberships  OrganizationMembership[]
+  branches     Branch[]
+  warehouses   Warehouse[]
+  roles        Role[]
   featureFlags FeatureFlag[]
-  sessions    Session[]
-  auditEvents AuditEvent[]
+  sessions     Session[]
+  auditEvents  AuditEvent[]
 
   @@index([status])
 }
 
 // Configuración de negocio por organización (NO constantes en código).
 model OrganizationSettings {
-  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId          String   @unique @db.Uuid
-  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @unique @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  defaultCurrency         String   @default("MXN") @db.Char(3)
-  timezone                String   @default("America/Chihuahua")
+  defaultCurrency          String  @default("MXN") @db.Char(3)
+  timezone                 String  @default("America/Chihuahua")
   // Regla de producto: no se permite inventario negativo por defecto.
   negativeInventoryAllowed Boolean @default(false)
   defaultPaymentCommission Decimal @default(0) @db.Decimal(5, 4) // p.ej. 0.0350 = 3.5%
-  deliveryCutoffTime      String?  // "HH:mm" en timezone de la organización
-  orderNumberPrefix       String   @default("ORD")
+  deliveryCutoffTime       String? // "HH:mm" en timezone de la organización
+  orderNumberPrefix        String  @default("ORD")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -177,13 +177,13 @@ model OrganizationSettings {
 
 // Flags de funcionalidad por organización (estructura inicial).
 model FeatureFlag {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   key            String // p.ej. "wholesale.enabled"
-  enabled        Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  enabled        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, key])
   @@index([organizationId])
@@ -191,15 +191,15 @@ model FeatureFlag {
 
 // Pertenencia usuario ↔ organización (N:M). Los roles se asignan aquí, no al User.
 model OrganizationMembership {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId         String           @db.Uuid
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String           @db.Uuid
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  status         MembershipStatus @default(INVITED)
-  invitedByUserId String?         @db.Uuid
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String           @db.Uuid
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status          MembershipStatus @default(INVITED)
+  invitedByUserId String?          @db.Uuid
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   roles    MembershipRole[]
   branches MembershipBranch[]
@@ -451,22 +451,22 @@ model Product {
 }
 
 model ProductVariant {
-  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId      String        @db.Uuid
-  productId           String        @db.Uuid
-  product             Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  flavorId            String?       @db.Uuid
-  flavor              Flavor?       @relation(fields: [flavorId], references: [id], onDelete: SetNull)
-  sku                 String
-  name                String
-  status              ProductStatus @default(ACTIVE)
-  purchaseUnitId      String        @db.Uuid
-  salesUnitId         String        @db.Uuid
-  unitsPerPurchaseUnit Int          @default(1)
-  trackInventory      Boolean       @default(true)
-  allowBackorder      Boolean       @default(false)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String        @db.Uuid
+  productId            String        @db.Uuid
+  product              Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  flavorId             String?       @db.Uuid
+  flavor               Flavor?       @relation(fields: [flavorId], references: [id], onDelete: SetNull)
+  sku                  String
+  name                 String
+  status               ProductStatus @default(ACTIVE)
+  purchaseUnitId       String        @db.Uuid
+  salesUnitId          String        @db.Uuid
+  unitsPerPurchaseUnit Int           @default(1)
+  trackInventory       Boolean       @default(true)
+  allowBackorder       Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   barcodes ProductBarcode[]
   cost     VariantCost?
@@ -694,20 +694,20 @@ model InventoryMovement {
 }
 
 model InventoryBalance {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId     String   @db.Uuid
-  branchId           String   @db.Uuid
-  warehouseId        String   @db.Uuid
-  variantId          String   @db.Uuid
-  onHand             Decimal  @default(0) @db.Decimal(18, 6)
-  reserved           Decimal  @default(0) @db.Decimal(18, 6)
-  allocated          Decimal  @default(0) @db.Decimal(18, 6)
-  damaged            Decimal  @default(0) @db.Decimal(18, 6)
-  quarantine         Decimal  @default(0) @db.Decimal(18, 6)
-  inTransitIncoming  Decimal  @default(0) @db.Decimal(18, 6)
-  inTransitOutgoing  Decimal  @default(0) @db.Decimal(18, 6)
-  version            Int      @default(0)
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @db.Uuid
+  branchId          String   @db.Uuid
+  warehouseId       String   @db.Uuid
+  variantId         String   @db.Uuid
+  onHand            Decimal  @default(0) @db.Decimal(18, 6)
+  reserved          Decimal  @default(0) @db.Decimal(18, 6)
+  allocated         Decimal  @default(0) @db.Decimal(18, 6)
+  damaged           Decimal  @default(0) @db.Decimal(18, 6)
+  quarantine        Decimal  @default(0) @db.Decimal(18, 6)
+  inTransitIncoming Decimal  @default(0) @db.Decimal(18, 6)
+  inTransitOutgoing Decimal  @default(0) @db.Decimal(18, 6)
+  version           Int      @default(0)
+  updatedAt         DateTime @updatedAt
 
   @@unique([organizationId, warehouseId, variantId])
   @@index([organizationId, variantId])
@@ -799,25 +799,25 @@ enum TransferStatus {
 }
 
 model WarehouseTransfer {
-  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId       String         @db.Uuid
-  sourceWarehouseId    String         @db.Uuid
-  destinationWarehouseId String       @db.Uuid
-  status               TransferStatus @default(DRAFT)
-  requestedByUserId    String?        @db.Uuid
-  approvedByUserId     String?        @db.Uuid
-  shippedByUserId      String?        @db.Uuid
-  receivedByUserId     String?        @db.Uuid
-  requestedAt          DateTime?
-  approvedAt           DateTime?
-  shippedAt            DateTime?
-  receivedAt           DateTime?
-  cancelledAt          DateTime?
-  notes                String?
-  correlationId        String?
-  idempotencyKey       String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String         @db.Uuid
+  sourceWarehouseId      String         @db.Uuid
+  destinationWarehouseId String         @db.Uuid
+  status                 TransferStatus @default(DRAFT)
+  requestedByUserId      String?        @db.Uuid
+  approvedByUserId       String?        @db.Uuid
+  shippedByUserId        String?        @db.Uuid
+  receivedByUserId       String?        @db.Uuid
+  requestedAt            DateTime?
+  approvedAt             DateTime?
+  shippedAt              DateTime?
+  receivedAt             DateTime?
+  cancelledAt            DateTime?
+  notes                  String?
+  correlationId          String?
+  idempotencyKey         String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   items WarehouseTransferItem[]
 
@@ -825,16 +825,16 @@ model WarehouseTransfer {
 }
 
 model WarehouseTransferItem {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId   String            @db.Uuid
-  transferId       String            @db.Uuid
-  transfer         WarehouseTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  variantId        String            @db.Uuid
-  requestedQuantity Decimal          @db.Decimal(18, 6)
-  shippedQuantity  Decimal           @default(0) @db.Decimal(18, 6)
-  receivedQuantity Decimal           @default(0) @db.Decimal(18, 6)
-  unitCostSnapshot Decimal?          @db.Decimal(18, 4)
-  createdAt        DateTime          @default(now())
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String            @db.Uuid
+  transferId        String            @db.Uuid
+  transfer          WarehouseTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  variantId         String            @db.Uuid
+  requestedQuantity Decimal           @db.Decimal(18, 6)
+  shippedQuantity   Decimal           @default(0) @db.Decimal(18, 6)
+  receivedQuantity  Decimal           @default(0) @db.Decimal(18, 6)
+  unitCostSnapshot  Decimal?          @db.Decimal(18, 4)
+  createdAt         DateTime          @default(now())
 
   @@index([transferId])
   @@index([organizationId, variantId])
@@ -863,21 +863,21 @@ enum StockCountStatus {
 }
 
 model StockCount {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String           @db.Uuid
-  branchId        String           @db.Uuid
-  warehouseId     String           @db.Uuid
-  type            StockCountType   @default(CUSTOM)
-  status          StockCountStatus @default(DRAFT)
-  blindCount      Boolean          @default(false)
-  startedByUserId String?          @db.Uuid
-  approvedByUserId String?         @db.Uuid
-  startedAt       DateTime?
-  completedAt     DateTime?
-  approvedAt      DateTime?
-  notes           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String           @db.Uuid
+  branchId         String           @db.Uuid
+  warehouseId      String           @db.Uuid
+  type             StockCountType   @default(CUSTOM)
+  status           StockCountStatus @default(DRAFT)
+  blindCount       Boolean          @default(false)
+  startedByUserId  String?          @db.Uuid
+  approvedByUserId String?          @db.Uuid
+  startedAt        DateTime?
+  completedAt      DateTime?
+  approvedAt       DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   items StockCountItem[]
 
@@ -1053,22 +1053,22 @@ model PurchaseOrderItem {
 }
 
 model PurchaseReceipt {
-  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String                @db.Uuid
-  supplierId      String                @db.Uuid
-  supplier        Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  warehouseId     String                @db.Uuid
-  branchId        String                @db.Uuid
-  purchaseOrderId String?               @db.Uuid
-  number          String
-  status          PurchaseReceiptStatus @default(DRAFT)
-  notes           String?
-  receivedByUserId String               @db.Uuid
-  postedAt        DateTime?
-  correlationId   String?
-  idempotencyKey  String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String                @db.Uuid
+  supplierId       String                @db.Uuid
+  supplier         Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouseId      String                @db.Uuid
+  branchId         String                @db.Uuid
+  purchaseOrderId  String?               @db.Uuid
+  number           String
+  status           PurchaseReceiptStatus @default(DRAFT)
+  notes            String?
+  receivedByUserId String                @db.Uuid
+  postedAt         DateTime?
+  correlationId    String?
+  idempotencyKey   String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   items PurchaseReceiptItem[]
 
@@ -1169,7 +1169,8 @@ model Order {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  items OrderItem[]
+  items    OrderItem[]
+  payments Payment[]
 
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
@@ -1196,4 +1197,130 @@ model OrderItem {
 
   @@index([orderId])
   @@index([organizationId, variantId])
+}
+
+// ---------------------------------------------------------------------------
+// Pagos / Caja (Prompt 5) — ADR-022 (pagos) · ADR-023 (turnos de caja)
+// ---------------------------------------------------------------------------
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum PaymentEntryStatus {
+  COMPLETED
+  REVERSED
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  DEPOSIT
+  WITHDRAWAL
+  EXPENSE
+}
+
+// Caja física/lógica de una sucursal. Configuración estática.
+model CashRegister {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String             @db.Uuid
+  branchId       String             @db.Uuid
+  name           String
+  code           String
+  status         CashRegisterStatus @default(ACTIVE)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  sessions CashSession[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, branchId])
+}
+
+enum CashRegisterStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Turno de caja: apertura con fondo, cierre con arqueo. Solo UNA sesión OPEN por
+// caja (índice único parcial en SQL). El efectivo esperado se deriva de sus pagos
+// en efectivo + movimientos de caja (ADR-023).
+model CashSession {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @db.Uuid
+  branchId       String            @db.Uuid
+  registerId     String            @db.Uuid
+  register       CashRegister      @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  status         CashSessionStatus @default(OPEN)
+  openingFloat   Decimal           @default(0) @db.Decimal(18, 4)
+  openedByUserId String            @db.Uuid
+  openedAt       DateTime          @default(now())
+  closedByUserId String?           @db.Uuid
+  closedAt       DateTime?
+  expectedCash   Decimal?          @db.Decimal(18, 4)
+  countedCash    Decimal?          @db.Decimal(18, 4)
+  difference     Decimal?          @db.Decimal(18, 4)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  payments  Payment[]
+  movements CashMovement[]
+
+  @@index([organizationId, status])
+  @@index([registerId])
+}
+
+// Pago aplicado a un pedido. Ledger inmutable: una anulación marca el pago como
+// REVERSED (no se borra). El neto pagado = suma de amount con status COMPLETED.
+model Payment {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @db.Uuid
+  branchId        String             @db.Uuid
+  orderId         String?            @db.Uuid
+  order           Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  cashSessionId   String?            @db.Uuid
+  cashSession     CashSession?       @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  method          PaymentMethod
+  amount          Decimal            @db.Decimal(18, 4)
+  currency        String             @default("MXN") @db.Char(3)
+  reference       String?
+  status          PaymentEntryStatus @default(COMPLETED)
+  reversalOfId    String?            @unique @db.Uuid
+  reversalOf      Payment?           @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy      Payment?           @relation("PaymentReversal")
+  reversedAt      DateTime?
+  createdByUserId String             @db.Uuid
+  correlationId   String?
+  idempotencyKey  String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([orderId])
+  @@index([organizationId, cashSessionId])
+  @@index([organizationId, status])
+}
+
+// Movimiento de efectivo del cajón NO ligado a una venta: ingreso de fondo,
+// retiro o gasto. Siempre dentro de una sesión abierta.
+model CashMovement {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String           @db.Uuid
+  cashSessionId   String           @db.Uuid
+  cashSession     CashSession      @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  type            CashMovementType
+  amount          Decimal          @db.Decimal(18, 4)
+  reason          String
+  createdByUserId String           @db.Uuid
+  createdAt       DateTime         @default(now())
+
+  @@index([cashSessionId])
+  @@index([organizationId])
 }

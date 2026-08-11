@@ -23,6 +23,7 @@ import {
   Tag,
   Users,
   UserSquare,
+  Wallet,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -75,6 +76,12 @@ const sections: NavSection[] = [
     items: [
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare },
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck },
+    ],
+  },
+  {
+    title: "Caja",
+    items: [
+      { href: "/app/cash/sessions", label: "Turnos de caja", icon: Wallet },
     ],
   },
   {

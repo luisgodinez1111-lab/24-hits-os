@@ -182,3 +182,36 @@ export interface Order {
     unitCostSnapshot: string | null;
   }>;
 }
+
+export interface CashRegister {
+  id: string;
+  branchId: string;
+  name: string;
+  code: string;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+export interface CashSession {
+  id: string;
+  registerId: string;
+  status: "OPEN" | "CLOSED";
+  openingFloat: string;
+  openedAt: string;
+  closedAt: string | null;
+  expectedCash: string | null;
+  countedCash: string | null;
+  difference: string | null;
+  expectedCashLive?: string;
+  movements?: Array<{ id: string; type: "DEPOSIT" | "WITHDRAWAL" | "EXPENSE"; amount: string; reason: string; createdAt: string }>;
+}
+
+export interface Payment {
+  id: string;
+  orderId: string | null;
+  method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+  amount: string;
+  currency: string;
+  reference: string | null;
+  status: "COMPLETED" | "REVERSED";
+  createdAt: string;
+}

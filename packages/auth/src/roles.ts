@@ -14,7 +14,9 @@ export interface SystemRoleDefinition {
 
 // Permisos de lectura SENSIBLES (financieros): no se otorgan a un rol de solo lectura
 // genérico. Costos y utilidades exigen asignación explícita.
-const SENSITIVE_READ: PermissionKey[] = ["costs.read", "profits.read", "finance.read"];
+const SENSITIVE_READ: PermissionKey[] = [
+  "costs.read", "profits.read", "finance.read", "payments.read", "cash.read",
+];
 
 const READ_ONLY_SAFE = READ_PERMISSION_KEYS.filter((k) => !SENSITIVE_READ.includes(k));
 
@@ -55,6 +57,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "purchase.order.create", "purchase.order.approve", "purchase.receipt.post", "purchase.return",
       "customers.read", "customers.manage",
       "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "payments.read", "cash.read", "cash.manage", "cash.session.open", "cash.session.close", "cash.movement",
       "finance.read",
     ],
   },
@@ -74,6 +77,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "inventory.count",
       "customers.read", "customers.manage",
       "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "payments.read", "payments.record", "payments.reverse",
+      "cash.read", "cash.manage", "cash.session.open", "cash.session.close", "cash.movement",
     ],
   },
   {
@@ -113,6 +118,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
       "customers.read", "customers.manage",
       "orders.read", "orders.create", "orders.confirm",
+      "payments.read", "payments.record", "cash.read",
     ],
   },
   {
@@ -123,6 +129,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
       "customers.read", "customers.manage",
       "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "payments.read", "payments.record", "cash.read",
       "finance.read",
     ],
   },
@@ -133,7 +140,10 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     permissions: [
       "catalog.read", "products.read", "pricing.read",
       "customers.read",
-      "orders.read", "orders.create", "orders.confirm", "orders.fulfill", "finance.read",
+      "orders.read", "orders.create", "orders.confirm", "orders.fulfill",
+      "payments.read", "payments.record",
+      "cash.read", "cash.session.open", "cash.session.close", "cash.movement",
+      "finance.read",
     ],
   },
   {
@@ -153,7 +163,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "suppliers.read", "purchasing.read",
       "products.read", "inventory.read", "inventory.movement.read",
       "customers.read",
-      "orders.read", "audit.read",
+      "orders.read", "payments.read", "cash.read", "audit.read",
     ],
   },
   {

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, Plus } from "lucide-react";
+import { ClipboardCheck, CreditCard, Plus } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { Customer, Order, Variant } from "@/lib/catalog-types";
+import type { CashSession, Customer, Order, Variant } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
 
@@ -15,11 +15,15 @@ const tone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
   DRAFT: "gray", CONFIRMED: "blue", PARTIALLY_FULFILLED: "amber",
   FULFILLED: "green", COMPLETED: "green", CANCELLED: "red",
 };
+const payTone: Record<string, "gray" | "amber" | "green"> = {
+  PENDING: "gray", PARTIAL: "amber", PAID: "green",
+};
 
 export default function SalesOrdersPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [paying, setPaying] = useState<Order | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["sales-orders"], queryFn: () => api.get<Order[]>("/orders") });
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
@@ -48,7 +52,7 @@ export default function SalesOrdersPage() {
         <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin pedidos" />
       ) : (
         <Table>
-          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH className="text-right">Acciones</TH></TR></THead>
+          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH className="text-right">Acciones</TH></TR></THead>
           <TBody>
             {data.map((o) => (
               <TR key={o.id}>
@@ -56,10 +60,12 @@ export default function SalesOrdersPage() {
                 <TD className="font-medium">{customerName(o.customerId)}</TD>
                 <TD className="text-right">${Number(o.total).toFixed(2)}</TD>
                 <TD><Badge tone={tone[o.status] ?? "gray"}>{o.status}</Badge></TD>
+                <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{o.paymentStatus}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-2">
                     {o.status === "DRAFT" && <Button size="sm" variant="outline" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "confirm" })}>Confirmar</Button>}
                     {(o.status === "CONFIRMED" || o.status === "PARTIALLY_FULFILLED") && <Button size="sm" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "fulfill" })}>Entregar</Button>}
+                    {o.status !== "CANCELLED" && o.paymentStatus !== "PAID" && <Button size="sm" variant="outline" onClick={() => setPaying(o)}><CreditCard className="h-4 w-4" /> Cobrar</Button>}
                     {(o.status === "DRAFT" || o.status === "CONFIRMED") && <Button size="sm" variant="ghost" onClick={() => action.mutate({ id: o.id, verb: "cancel" })}>Cancelar</Button>}
                   </div>
                 </TD>
@@ -71,7 +77,62 @@ export default function SalesOrdersPage() {
 
       <CreateOrderDialog open={creating} onClose={() => setCreating(false)} customers={customers ?? []}
         onCreated={async () => { setCreating(false); await refresh(); toast.push("Pedido creado", "success"); }} />
+      <PaymentDialog order={paying} onClose={() => setPaying(null)}
+        onDone={async () => { setPaying(null); await refresh(); toast.push("Cobro registrado", "success"); }} />
     </div>
+  );
+}
+
+function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const { data: sessions } = useQuery({
+    queryKey: ["cash-sessions"], enabled: !!order,
+    queryFn: () => api.get<CashSession[]>("/cash-sessions"),
+  });
+  const openSessions = (sessions ?? []).filter((s) => s.status === "OPEN");
+  const [form, setForm] = useState({ method: "CASH", amount: "", reference: "", cashSessionId: "" });
+
+  const pay = useMutation({
+    mutationFn: () => api.post(`/payments`, {
+      orderId: order!.id,
+      method: form.method,
+      amount: Number(form.amount || 0),
+      reference: form.reference || undefined,
+      cashSessionId: form.method === "CASH" ? form.cashSessionId || undefined : undefined,
+    }),
+    onSuccess: () => { setForm({ method: "CASH", amount: "", reference: "", cashSessionId: "" }); onDone(); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  return (
+    <Dialog open={!!order} onClose={onClose} title={`Cobrar pedido ${order?.number ?? ""}`}
+      footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button size="sm" loading={pay.isPending} onClick={() => {
+          if (!(Number(form.amount) > 0)) return toast.push("Ingresa el monto", "error");
+          if (form.method === "CASH" && !form.cashSessionId) return toast.push("Selecciona un turno de caja abierto", "error");
+          pay.mutate();
+        }}>Cobrar</Button></>}>
+      <div className="space-y-3">
+        <p className="text-sm text-gray-500">Total del pedido: <span className="font-semibold text-gray-900">${Number(order?.total ?? 0).toFixed(2)}</span></p>
+        <FormField label="Método">
+          <Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
+            <option value="CASH">Efectivo</option>
+            <option value="CARD">Tarjeta</option>
+            <option value="TRANSFER">Transferencia</option>
+            <option value="OTHER">Otro</option>
+          </Select>
+        </FormField>
+        {form.method === "CASH" && (
+          <FormField label="Turno de caja">
+            <Select value={form.cashSessionId} onChange={(e) => setForm({ ...form, cashSessionId: e.target.value })}>
+              <option value="">…</option>{openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)} · fondo ${Number(s.openingFloat).toFixed(2)}</option>)}
+            </Select>
+          </FormField>
+        )}
+        <FormField label="Monto"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></FormField>
+        <FormField label="Referencia (opcional)"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></FormField>
+      </div>
+    </Dialog>
   );
 }
 
