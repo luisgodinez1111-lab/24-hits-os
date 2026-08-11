@@ -51,6 +51,12 @@ export const ErrorCode = {
   SALE_NOTE_NOT_FOUND: "SALE_NOTE_NOT_FOUND",
   SALE_NOTE_INVALID_STATE: "SALE_NOTE_INVALID_STATE",
   SALE_NOTE_ALREADY_ISSUED: "SALE_NOTE_ALREADY_ISSUED",
+
+  // --- Devoluciones / notas de crédito (Prompt 8) ---
+  CREDIT_NOTE_NOT_FOUND: "CREDIT_NOTE_NOT_FOUND",
+  CREDIT_NOTE_EMPTY: "CREDIT_NOTE_EMPTY",
+  RETURN_EXCEEDS_SOLD: "RETURN_EXCEEDS_SOLD",
+  SALE_NOTE_ITEM_NOT_FOUND: "SALE_NOTE_ITEM_NOT_FOUND",
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

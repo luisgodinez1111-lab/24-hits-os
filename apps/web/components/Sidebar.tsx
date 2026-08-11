@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   Tag,
   TrendingUp,
+  Undo2,
   Users,
   UserSquare,
   Wallet,
@@ -79,6 +80,7 @@ const sections: NavSection[] = [
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare },
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck },
       { href: "/app/sales/notes", label: "Notas de venta", icon: Receipt },
+      { href: "/app/sales/credit-notes", label: "Notas de crédito", icon: Undo2 },
     ],
   },
   {

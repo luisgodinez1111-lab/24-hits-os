@@ -529,6 +529,7 @@ enum CostSourceType {
   MANUAL_COST_INITIALIZATION
   ADJUSTMENT_COST
   PURCHASE_RECEIPT
+  SALE_RETURN
 }
 
 model PriceList {
@@ -1169,9 +1170,10 @@ model Order {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  items     OrderItem[]
-  payments  Payment[]
-  saleNotes SaleNote[]
+  items       OrderItem[]
+  payments    Payment[]
+  saleNotes   SaleNote[]
+  creditNotes CreditNote[]
 
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
@@ -1379,7 +1381,8 @@ model SaleNote {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  items SaleNoteItem[]
+  items       SaleNoteItem[]
+  creditNotes CreditNote[]
 
   @@unique([organizationId, series, folio])
   @@index([organizationId, status])
@@ -1388,18 +1391,89 @@ model SaleNote {
 
 // Renglón fotografiado (descripción/precios copiados; no referencia viva a la variante).
 model SaleNoteItem {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String   @db.Uuid
-  saleNoteId     String   @db.Uuid
-  saleNote       SaleNote @relation(fields: [saleNoteId], references: [id], onDelete: Cascade)
-  variantId      String?  @db.Uuid
-  sku            String?
-  description    String
-  quantity       Decimal  @db.Decimal(18, 6)
-  unitPrice      Decimal  @db.Decimal(18, 4)
-  discount       Decimal  @default(0) @db.Decimal(18, 4)
-  taxRate        Decimal  @default(0) @db.Decimal(5, 4)
-  lineTotal      Decimal  @db.Decimal(18, 4)
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @db.Uuid
+  saleNoteId       String   @db.Uuid
+  saleNote         SaleNote @relation(fields: [saleNoteId], references: [id], onDelete: Cascade)
+  variantId        String?  @db.Uuid
+  sku              String?
+  description      String
+  quantity         Decimal  @db.Decimal(18, 6)
+  unitPrice        Decimal  @db.Decimal(18, 4)
+  discount         Decimal  @default(0) @db.Decimal(18, 4)
+  taxRate          Decimal  @default(0) @db.Decimal(5, 4)
+  lineTotal        Decimal  @db.Decimal(18, 4)
+  unitCostSnapshot Decimal? @db.Decimal(18, 4)
 
   @@index([saleNoteId])
+}
+
+// ---------------------------------------------------------------------------
+// Devoluciones / notas de crédito (Prompt 8) — ADR-025
+// ---------------------------------------------------------------------------
+
+enum CreditNoteStatus {
+  ISSUED
+  CANCELLED
+}
+
+// Nota de crédito = devolución: reingresa mercancía al inventario (CUSTOMER_RETURN),
+// revierte el COGS al costo capturado en la venta y documenta el crédito al cliente.
+// Inmutable; folio consecutivo por serie (ADR-024/025).
+model CreditNote {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String           @db.Uuid
+  branchId            String           @db.Uuid
+  orderId             String?          @db.Uuid
+  order               Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  saleNoteId          String?          @db.Uuid
+  saleNote            SaleNote?        @relation(fields: [saleNoteId], references: [id], onDelete: SetNull)
+  customerId          String?          @db.Uuid
+  series              String
+  folio               Int
+  number              String
+  status              CreditNoteStatus @default(ISSUED)
+  currency            String           @default("MXN") @db.Char(3)
+  customerName        String?
+  customerTaxId       String?
+  subtotal            Decimal          @db.Decimal(18, 4)
+  discountTotal       Decimal          @db.Decimal(18, 4)
+  taxTotal            Decimal          @db.Decimal(18, 4)
+  total               Decimal          @db.Decimal(18, 4)
+  reason              String
+  refundMethod        PaymentMethod?
+  refundCashSessionId String?          @db.Uuid
+  issuedByUserId      String           @db.Uuid
+  issuedAt            DateTime         @default(now())
+  correlationId       String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  items CreditNoteItem[]
+
+  @@unique([organizationId, series, folio])
+  @@index([organizationId, status])
+  @@index([saleNoteId])
+  @@index([orderId])
+}
+
+// Renglón devuelto (snapshot). Referencia el renglón original de la nota de venta
+// para controlar la cantidad acumulada devuelta (no exceder lo vendido).
+model CreditNoteItem {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String     @db.Uuid
+  creditNoteId     String     @db.Uuid
+  creditNote       CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  saleNoteItemId   String?    @db.Uuid
+  variantId        String?    @db.Uuid
+  sku              String?
+  description      String
+  quantity         Decimal    @db.Decimal(18, 6)
+  unitPrice        Decimal    @db.Decimal(18, 4)
+  taxRate          Decimal    @default(0) @db.Decimal(5, 4)
+  lineTotal        Decimal    @db.Decimal(18, 4)
+  unitCostSnapshot Decimal?   @db.Decimal(18, 4)
+
+  @@index([creditNoteId])
+  @@index([organizationId, saleNoteItemId])
 }

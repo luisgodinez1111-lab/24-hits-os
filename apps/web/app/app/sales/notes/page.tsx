@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Printer, Receipt } from "lucide-react";
+import { Ban, Printer, Receipt, Undo2 } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Skeleton,
+  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { SaleNote } from "@/lib/catalog-types";
+import type { CashSession, SaleNote } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 
 const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -17,6 +17,7 @@ export default function SaleNotesPage() {
   const qc = useQueryClient();
   const [viewing, setViewing] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<SaleNote | null>(null);
+  const [returning, setReturning] = useState<SaleNote | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ["sale-notes"], queryFn: () => api.get<SaleNote[]>("/sale-notes") });
   const refresh = () => qc.invalidateQueries({ queryKey: ["sale-notes"] });
@@ -46,6 +47,7 @@ export default function SaleNotesPage() {
                 <TD className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button size="sm" variant="outline" onClick={() => setViewing(n.id)}><Printer className="h-4 w-4" /> Ver</Button>
+                    {n.status === "ISSUED" && <Button size="sm" variant="outline" onClick={() => setReturning(n)}><Undo2 className="h-4 w-4" /> Devolver</Button>}
                     {n.status === "ISSUED" && <Button size="sm" variant="ghost" onClick={() => setCancelling(n)}><Ban className="h-4 w-4" /> Cancelar</Button>}
                   </div>
                 </TD>
@@ -58,7 +60,84 @@ export default function SaleNotesPage() {
       <NoteDetailDialog id={viewing} onClose={() => setViewing(null)} />
       <CancelNoteDialog note={cancelling} onClose={() => setCancelling(null)}
         onDone={async () => { setCancelling(null); await refresh(); toast.push("Nota cancelada", "success"); }} />
+      <ReturnDialog note={returning} onClose={() => setReturning(null)}
+        onDone={async () => { setReturning(null); await qc.invalidateQueries({ queryKey: ["credit-notes"] }); toast.push("Nota de crédito emitida", "success"); }} />
     </div>
+  );
+}
+
+function ReturnDialog({ note, onClose, onDone }: { note: SaleNote | null; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const { data: full } = useQuery({
+    queryKey: ["sale-note", note?.id], enabled: !!note,
+    queryFn: () => api.get<SaleNote>(`/sale-notes/${note!.id}`),
+  });
+  const { data: sessions } = useQuery({ queryKey: ["cash-sessions"], enabled: !!note, queryFn: () => api.get<CashSession[]>("/cash-sessions") });
+  const openSessions = (sessions ?? []).filter((s) => s.status === "OPEN");
+
+  const [qty, setQty] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState("");
+  const [refundMethod, setRefundMethod] = useState("");
+  const [cashSessionId, setCashSessionId] = useState("");
+
+  const issue = useMutation({
+    mutationFn: () => api.post("/credit-notes", {
+      saleNoteId: note!.id,
+      reason,
+      refundMethod: refundMethod || undefined,
+      refundCashSessionId: refundMethod === "CASH" ? cashSessionId || undefined : undefined,
+      items: Object.entries(qty).filter(([, v]) => Number(v) > 0).map(([saleNoteItemId, v]) => ({ saleNoteItemId, quantity: Number(v) })),
+    }),
+    onSuccess: () => { setQty({}); setReason(""); setRefundMethod(""); setCashSessionId(""); onDone(); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  return (
+    <Dialog open={!!note} onClose={onClose} title={`Devolver de ${note?.number ?? ""}`}
+      footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button size="sm" loading={issue.isPending} onClick={() => {
+          if (!Object.values(qty).some((v) => Number(v) > 0)) return toast.push("Indica cantidades a devolver", "error");
+          if (!reason.trim()) return toast.push("Indica el motivo", "error");
+          if (refundMethod === "CASH" && !cashSessionId) return toast.push("Selecciona un turno de caja abierto", "error");
+          issue.mutate();
+        }}>Emitir nota de crédito</Button></>}>
+      <div className="space-y-3">
+        {!full ? <Skeleton className="h-32 w-full" /> : (
+          <Table>
+            <THead><TR><TH>Concepto</TH><TH className="text-right">Vendido</TH><TH className="text-right">Devolver</TH></TR></THead>
+            <TBody>
+              {full.items?.map((it) => (
+                <TR key={it.id}>
+                  <TD>{it.description}</TD>
+                  <TD className="text-right">{Number(it.quantity)}</TD>
+                  <TD className="text-right">
+                    <Input type="number" className="w-20 text-right" value={qty[it.id] ?? ""} max={Number(it.quantity)}
+                      onChange={(e) => setQty({ ...qty, [it.id]: e.target.value })} />
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+        <FormField label="Motivo"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></FormField>
+        <FormField label="Reembolso (opcional)">
+          <Select value={refundMethod} onChange={(e) => setRefundMethod(e.target.value)}>
+            <option value="">Sin reembolso</option>
+            <option value="CASH">Efectivo</option>
+            <option value="CARD">Tarjeta</option>
+            <option value="TRANSFER">Transferencia</option>
+            <option value="OTHER">Otro</option>
+          </Select>
+        </FormField>
+        {refundMethod === "CASH" && (
+          <FormField label="Turno de caja">
+            <Select value={cashSessionId} onChange={(e) => setCashSessionId(e.target.value)}>
+              <option value="">…</option>{openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)}</option>)}
+            </Select>
+          </FormField>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

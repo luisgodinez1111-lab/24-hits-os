@@ -96,6 +96,10 @@ export const PERMISSIONS = [
   { key: "sales.note.read", category: "sales", description: "Ver notas de venta" },
   { key: "sales.note.issue", category: "sales", description: "Emitir notas de venta" },
   { key: "sales.note.cancel", category: "sales", description: "Cancelar notas de venta" },
+
+  // --- Devoluciones / notas de crédito (Prompt 8) ---
+  { key: "sales.credit.read", category: "sales", description: "Ver notas de crédito" },
+  { key: "sales.credit.issue", category: "sales", description: "Emitir devoluciones / notas de crédito" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];

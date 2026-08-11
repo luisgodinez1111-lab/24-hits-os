@@ -108,6 +108,7 @@ export class SaleNoteService {
               discount: i.discount,
               taxRate: i.taxRate,
               lineTotal: i.lineTotal,
+              unitCostSnapshot: i.unitCostSnapshot,
             })),
           },
         },

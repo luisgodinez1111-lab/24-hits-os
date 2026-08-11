@@ -273,3 +273,32 @@ export interface SaleNote {
     lineTotal: string;
   }>;
 }
+
+export interface CreditNote {
+  id: string;
+  saleNoteId: string | null;
+  orderId: string | null;
+  series: string;
+  folio: number;
+  number: string;
+  status: "ISSUED" | "CANCELLED";
+  currency: string;
+  customerName: string | null;
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  total: string;
+  reason: string;
+  refundMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+  issuedAt: string;
+  items?: Array<{
+    id: string;
+    saleNoteItemId: string | null;
+    sku: string | null;
+    description: string;
+    quantity: string;
+    unitPrice: string;
+    taxRate: string;
+    lineTotal: string;
+  }>;
+}
