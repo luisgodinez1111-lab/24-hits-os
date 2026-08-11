@@ -15,7 +15,7 @@ export interface SystemRoleDefinition {
 // Permisos de lectura SENSIBLES (financieros): no se otorgan a un rol de solo lectura
 // genérico. Costos y utilidades exigen asignación explícita.
 const SENSITIVE_READ: PermissionKey[] = [
-  "costs.read", "profits.read", "finance.read", "payments.read", "cash.read",
+  "costs.read", "profits.read", "finance.read", "payments.read", "cash.read", "reports.read",
 ];
 
 const READ_ONLY_SAFE = READ_PERMISSION_KEYS.filter((k) => !SENSITIVE_READ.includes(k));
@@ -58,7 +58,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "customers.read", "customers.manage",
       "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
       "payments.read", "cash.read", "cash.manage", "cash.session.open", "cash.session.close", "cash.movement",
-      "finance.read",
+      "finance.read", "profits.read", "reports.read",
     ],
   },
   {
@@ -79,6 +79,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
       "payments.read", "payments.record", "payments.reverse",
       "cash.read", "cash.manage", "cash.session.open", "cash.session.close", "cash.movement",
+      "profits.read", "reports.read",
     ],
   },
   {
@@ -143,7 +144,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "orders.read", "orders.create", "orders.confirm", "orders.fulfill",
       "payments.read", "payments.record",
       "cash.read", "cash.session.open", "cash.session.close", "cash.movement",
-      "finance.read",
+      "finance.read", "reports.read",
     ],
   },
   {
@@ -163,7 +164,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "suppliers.read", "purchasing.read",
       "products.read", "inventory.read", "inventory.movement.read",
       "customers.read",
-      "orders.read", "payments.read", "cash.read", "audit.read",
+      "orders.read", "payments.read", "cash.read", "reports.read", "audit.read",
     ],
   },
   {

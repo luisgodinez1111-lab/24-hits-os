@@ -98,7 +98,7 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
       method: form.method,
       amount: Number(form.amount || 0),
       reference: form.reference || undefined,
-      cashSessionId: form.method === "CASH" ? form.cashSessionId || undefined : undefined,
+      cashSessionId: form.cashSessionId || undefined,
     }),
     onSuccess: () => { setForm({ method: "CASH", amount: "", reference: "", cashSessionId: "" }); onDone(); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
@@ -122,13 +122,12 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
             <option value="OTHER">Otro</option>
           </Select>
         </FormField>
-        {form.method === "CASH" && (
-          <FormField label="Turno de caja">
-            <Select value={form.cashSessionId} onChange={(e) => setForm({ ...form, cashSessionId: e.target.value })}>
-              <option value="">…</option>{openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)} · fondo ${Number(s.openingFloat).toFixed(2)}</option>)}
-            </Select>
-          </FormField>
-        )}
+        <FormField label={form.method === "CASH" ? "Turno de caja (requerido)" : "Turno de caja (opcional)"}>
+          <Select value={form.cashSessionId} onChange={(e) => setForm({ ...form, cashSessionId: e.target.value })}>
+            <option value="">{form.method === "CASH" ? "…" : "Sin turno"}</option>
+            {openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)} · fondo ${Number(s.openingFloat).toFixed(2)}</option>)}
+          </Select>
+        </FormField>
         <FormField label="Monto"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></FormField>
         <FormField label="Referencia (opcional)"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></FormField>
       </div>

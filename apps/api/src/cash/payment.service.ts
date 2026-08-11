@@ -57,11 +57,13 @@ export class PaymentService {
       }
 
       const amount = new Prisma.Decimal(input.amount);
+      // El efectivo EXIGE turno abierto (va al cajón). Otros métodos pueden ligarse
+      // opcionalmente a la sesión para que el corte de turno los desglose.
       let cashSessionId: string | null = null;
-      if (input.method === "CASH") {
-        if (!input.cashSessionId) {
-          throw new AppException(422, ErrorCode.CASH_SESSION_REQUIRED, "Un cobro en efectivo requiere un turno de caja abierto");
-        }
+      if (input.method === "CASH" && !input.cashSessionId) {
+        throw new AppException(422, ErrorCode.CASH_SESSION_REQUIRED, "Un cobro en efectivo requiere un turno de caja abierto");
+      }
+      if (input.cashSessionId) {
         const session = await tx.cashSession.findFirst({ where: { id: input.cashSessionId }, select: { id: true, status: true } });
         if (!session) throw new AppException(404, ErrorCode.CASH_SESSION_NOT_FOUND, "Turno de caja no encontrado");
         if (session.status !== "OPEN") throw new AppException(409, ErrorCode.CASH_SESSION_NOT_OPEN, "El turno de caja no está abierto");

@@ -88,6 +88,9 @@ export const PERMISSIONS = [
   { key: "cash.session.open", category: "cash", description: "Abrir turno de caja" },
   { key: "cash.session.close", category: "cash", description: "Cerrar turno de caja (arqueo)" },
   { key: "cash.movement", category: "cash", description: "Registrar movimientos de efectivo" },
+
+  // --- Reportes financieros (Prompt 6) ---
+  { key: "reports.read", category: "reports", description: "Ver reportes financieros (ventas, cortes)" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];

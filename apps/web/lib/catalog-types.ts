@@ -215,3 +215,30 @@ export interface Payment {
   status: "COMPLETED" | "REVERSED";
   createdAt: string;
 }
+
+export interface SalesSummary {
+  from: string;
+  to: string;
+  billed: string;
+  collected: string;
+  outstanding: string;
+  orderCount: number;
+  avgTicket: string;
+  byPaymentMethod: Record<"CASH" | "CARD" | "TRANSFER" | "OTHER", string>;
+  // Solo presentes si el usuario tiene profits.read (filtrado en el backend).
+  revenueNet?: string;
+  cogs?: string;
+  grossProfit?: string;
+  margin?: string;
+}
+
+export interface ProfitByProductRow {
+  variantId: string;
+  sku: string | null;
+  name: string | null;
+  quantity: string;
+  revenue: string;
+  cogs: string;
+  grossProfit: string;
+  margin: string;
+}

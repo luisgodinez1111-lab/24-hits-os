@@ -21,6 +21,7 @@ import {
   Shield,
   ShoppingCart,
   Tag,
+  TrendingUp,
   Users,
   UserSquare,
   Wallet,
@@ -82,6 +83,12 @@ const sections: NavSection[] = [
     title: "Caja",
     items: [
       { href: "/app/cash/sessions", label: "Turnos de caja", icon: Wallet },
+    ],
+  },
+  {
+    title: "Reportes",
+    items: [
+      { href: "/app/reports", label: "Financieros", icon: TrendingUp },
     ],
   },
   {
