@@ -81,8 +81,14 @@ export async function withSystem<T>(
   prisma: ExtendedPrismaClient,
   fn: (tx: TenantTx) => Promise<T>
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'on', true)`;
-    return fn(tx as unknown as TenantTx);
-  });
+  // Operaciones de sistema (bootstrap de organización, seed) pueden encadenar varios
+  // pasos contra una BD remota (p.ej. Neon en otra región). Damos margen sobre el
+  // timeout por defecto (5s) de las transacciones interactivas de Prisma.
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'on', true)`;
+      return fn(tx as unknown as TenantTx);
+    },
+    { timeout: 30_000, maxWait: 10_000 }
+  );
 }
