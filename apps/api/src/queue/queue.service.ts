@@ -4,7 +4,7 @@ import {
   type OnApplicationShutdown,
 } from "@nestjs/common";
 import { Queue } from "bullmq";
-import type { Env } from "@24hits/config";
+import { redisConnectionFromUrl, type Env } from "@24hits/config";
 import { ENV } from "../config/app-config.module.js";
 import { RequestContext } from "../common/context/request-context.js";
 
@@ -26,12 +26,9 @@ export class QueueService implements OnApplicationShutdown {
   private readonly emailQueue: Queue;
 
   constructor(@Inject(ENV) env: Env) {
-    const url = new URL(env.REDIS_URL);
+    // Conexión completa (TLS + credenciales) desde REDIS_URL — necesario para Upstash.
     this.emailQueue = new Queue(EMAIL_QUEUE_NAME, {
-      connection: {
-        host: url.hostname,
-        port: url.port ? Number(url.port) : 6379,
-      },
+      connection: redisConnectionFromUrl(env.REDIS_URL),
     });
   }
 

@@ -1,4 +1,4 @@
-import { loadEnv } from "@24hits/config";
+import { loadEnv, redisConnectionFromUrl } from "@24hits/config";
 import { createLogger } from "@24hits/observability";
 import { createPrismaClient } from "@24hits/database";
 import { createEmailProvider } from "./email/factory.js";
@@ -14,8 +14,8 @@ async function main(): Promise<void> {
   });
 
   const emailProvider = createEmailProvider(env, logger);
-  const url = new URL(env.REDIS_URL);
-  const connection = { host: url.hostname, port: url.port ? Number(url.port) : 6379 };
+  // Conexión completa (TLS + credenciales) desde REDIS_URL — necesario para Upstash.
+  const connection = redisConnectionFromUrl(env.REDIS_URL);
 
   const prisma = createPrismaClient(env.DATABASE_URL);
 

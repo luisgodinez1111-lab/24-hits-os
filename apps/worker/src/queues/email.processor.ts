@@ -1,4 +1,5 @@
 import { Worker, type Job } from "bullmq";
+import type { RedisConnectionOptions } from "@24hits/config";
 import type { Logger } from "@24hits/observability";
 import type { EmailProvider } from "../email/email-provider.js";
 
@@ -13,10 +14,8 @@ interface EmailSendData {
   correlationId?: string;
 }
 
-export interface RedisConnection {
-  host: string;
-  port: number;
-}
+// Conexión Redis compartida (soporta TLS/credenciales de Upstash).
+export type RedisConnection = RedisConnectionOptions;
 
 // Arranca el worker de la cola de emails. Procesa jobs `email.send` con el
 // proveedor de correo inyectado. Propaga correlationId a los logs.
