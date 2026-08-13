@@ -19,6 +19,7 @@ import {
   Monitor,
   Package,
   Receipt,
+  ScanLine,
   ScrollText,
   Shield,
   ShoppingCart,
@@ -78,6 +79,7 @@ const sections: NavSection[] = [
   {
     title: "Ventas",
     items: [
+      { href: "/app/sales/pos", label: "Punto de venta", icon: ScanLine },
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare },
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck },
       { href: "/app/sales/notes", label: "Notas de venta", icon: Receipt },

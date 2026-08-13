@@ -10,5 +10,6 @@ import {
 @Module({
   controllers: [CashRegisterController, CashSessionController, PaymentController],
   providers: [CashService, PaymentService],
+  exports: [PaymentService], // consumido por el POS (venta orquestada)
 })
 export class CashModule {}

@@ -232,6 +232,16 @@ export interface SalesSummary {
   margin?: string;
 }
 
+export interface PosLookup {
+  variantId: string;
+  sku: string;
+  name: string;
+  status: string;
+  price: string | null;
+  currency: string;
+  available: string | null;
+}
+
 export interface SalesRegisterRow {
   orderId: string;
   number: string;
