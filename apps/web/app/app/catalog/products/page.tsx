@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Plus } from "lucide-react";
+import { Barcode, ChevronDown, Package, Plus } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Unit, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 
 const statusTone: Record<ProductListItem["status"], "green" | "gray" | "amber" | "red"> = {
   ACTIVE: "green", DRAFT: "amber", INACTIVE: "gray", DISCONTINUED: "red",
@@ -155,6 +156,7 @@ function VariantsDialog({ product, onClose, onChanged }: {
   const { data: units } = useQuery({ queryKey: ["units"], queryFn: () => api.get<Unit[]>("/units"), enabled });
   const { data: flavors } = useQuery({ queryKey: ["flavors"], queryFn: () => api.get<Flavor[]>("/flavors"), enabled });
   const [form, setForm] = useState({ sku: "", name: "", flavorId: "", unitId: "" });
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const create = useMutation({
     mutationFn: () => api.post(`/products/${product!.id}/variants`, {
@@ -171,9 +173,23 @@ function VariantsDialog({ product, onClose, onChanged }: {
         {detail?.variants?.length ? (
           <div className="space-y-1">
             {detail.variants.map((v) => (
-              <div key={v.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                <span><span className="font-mono text-xs">{v.sku}</span> · {v.name}</span>
-                {v.flavor?.name ? <Badge tone="brand">{v.flavor.name}</Badge> : null}
+              <div key={v.id} className="rounded-lg border border-gray-200">
+                <button type="button" onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50">
+                  <span><span className="font-mono text-xs">{v.sku}</span> · {v.name}</span>
+                  <span className="flex items-center gap-2">
+                    {v.flavor?.name ? <Badge tone="brand">{v.flavor.name}</Badge> : null}
+                    <Badge tone={v.barcodes && v.barcodes.length ? "green" : "gray"}>
+                      <Barcode className="mr-1 inline h-3 w-3" />{v.barcodes?.length ?? 0}
+                    </Badge>
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded === v.id ? "rotate-180" : ""}`} />
+                  </span>
+                </button>
+                {expanded === v.id && (
+                  <div className="border-t border-gray-100 px-3 py-3">
+                    <VariantBarcodes variant={v} onChanged={refetch} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -198,5 +214,49 @@ function VariantsDialog({ product, onClose, onChanged }: {
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function VariantBarcodes({ variant, onChanged }: { variant: Variant; onChanged: () => Promise<unknown> }) {
+  const toast = useToast();
+  const [code, setCode] = useState("");
+  const [type, setType] = useState("EAN");
+  const hasCodes = Boolean(variant.barcodes && variant.barcodes.length);
+
+  const add = useMutation({
+    mutationFn: () => api.post(`/variants/${variant.id}/barcodes`, { barcode: code.trim(), type, isPrimary: !hasCodes }),
+    onSuccess: async () => { setCode(""); await onChanged(); toast.push("Código agregado", "success"); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error al guardar el código", "error"),
+  });
+
+  return (
+    <div className="space-y-3">
+      {hasCodes ? (
+        <div className="flex flex-wrap gap-2">
+          {variant.barcodes!.map((b, i) => (
+            <span key={`${b.barcode}-${i}`} className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2 py-1 font-mono text-xs">
+              {b.barcode}<span className="text-[10px] uppercase text-gray-400">{b.type}</span>
+            </span>
+          ))}
+        </div>
+      ) : <p className="text-xs text-gray-400">Sin códigos de barras. Escanéalo con la cámara o tecléalo.</p>}
+
+      <BarcodeScanner autoStopOnScan onScan={(c) => setCode(c)} />
+
+      <div className="flex gap-2">
+        <Input placeholder="Código de barras" value={code} onChange={(e) => setCode(e.target.value)} />
+        <Select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="EAN">EAN</option>
+          <option value="UPC">UPC</option>
+          <option value="CODE128">CODE128</option>
+          <option value="QR_INTERNAL">QR</option>
+          <option value="OTHER">Otro</option>
+        </Select>
+        <Button size="sm" loading={add.isPending}
+          onClick={() => code.trim() ? add.mutate() : toast.push("Escanea o teclea un código", "error")}>
+          Guardar
+        </Button>
+      </div>
+    </div>
   );
 }
