@@ -337,7 +337,8 @@ export class OrderService {
 
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "FULFILLED", fulfilledAt: new Date() },
+        // Cierre de la venta: si ya venía saldado, la entrega la deja COMPLETED.
+        data: { status: order.paymentStatus === "PAID" ? "COMPLETED" : "FULFILLED", fulfilledAt: new Date() },
       });
     });
 

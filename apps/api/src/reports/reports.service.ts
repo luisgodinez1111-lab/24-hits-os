@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PermissionService } from "../iam/permission.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
-import type { ReportRangeInput } from "./reports.dto.js";
+import type { ReportRangeInput, SalesRegisterQuery } from "./reports.dto.js";
 
 const ZERO = new Prisma.Decimal(0);
 const METHODS: PaymentMethod[] = ["CASH", "CARD", "TRANSFER", "OTHER"];
@@ -102,6 +102,102 @@ export class ReportsService {
     const grossProfit = revenueNet.minus(cogs);
     const margin = revenueNet.gt(0) ? grossProfit.dividedBy(revenueNet) : ZERO;
     return { revenueNet, cogs, grossProfit, margin };
+  }
+
+  // REGISTRO DE VENTAS: diario transaccional (una fila por venta) que UNE el pedido con
+  // sus pagos, su nota de venta y su COGS. Excluye DRAFT por defecto. Los campos de
+  // costo/utilidad solo se incluyen si la membresía tiene profits.read (filtro backend).
+  async salesRegister(organizationId: string, query: SalesRegisterQuery, membershipId?: string) {
+    const { from, to } = this.resolveRange(query);
+    const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
+
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const orders = await tx.order.findMany({
+        where: {
+          createdAt: { gte: from, lte: to },
+          status: query.status ?? { not: "DRAFT" },
+          ...(query.branchId ? { branchId: query.branchId } : {}),
+          ...(query.customerId ? { customerId: query.customerId } : {}),
+          ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+        },
+        select: {
+          id: true, number: true, status: true, paymentStatus: true, total: true, currency: true,
+          branchId: true, createdByUserId: true, createdAt: true, confirmedAt: true, fulfilledAt: true,
+          customer: { select: { name: true } },
+          items: { select: { fulfilledQuantity: true, unitPrice: true, discount: true, unitCostSnapshot: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 300,
+      });
+
+      const ids = orders.map((o) => o.id);
+      const [payments, notes] = await Promise.all([
+        ids.length ? tx.payment.findMany({ where: { orderId: { in: ids }, status: "COMPLETED" }, select: { orderId: true, method: true, amount: true } }) : [],
+        ids.length ? tx.saleNote.findMany({ where: { orderId: { in: ids }, status: "ISSUED" }, select: { orderId: true, number: true } }) : [],
+      ]);
+
+      const paidByOrder = new Map<string, Prisma.Decimal>();
+      const methodsByOrder = new Map<string, Set<string>>();
+      for (const p of payments) {
+        if (!p.orderId) continue;
+        paidByOrder.set(p.orderId, (paidByOrder.get(p.orderId) ?? ZERO).plus(p.amount));
+        const set = methodsByOrder.get(p.orderId) ?? new Set<string>();
+        set.add(p.method);
+        methodsByOrder.set(p.orderId, set);
+      }
+      const noteByOrder = new Map<string, string>();
+      for (const n of notes) if (n.orderId) noteByOrder.set(n.orderId, n.number);
+
+      let tBilled = ZERO;
+      let tCollected = ZERO;
+      let tCogs = ZERO;
+      let tProfit = ZERO;
+
+      const rows = orders.map((o) => {
+        const total = new Prisma.Decimal(o.total);
+        const paid = paidByOrder.get(o.id) ?? ZERO;
+        let cogs = ZERO;
+        let revenueNet = ZERO;
+        for (const it of o.items) {
+          const q = new Prisma.Decimal(it.fulfilledQuantity);
+          revenueNet = revenueNet.plus(new Prisma.Decimal(it.unitPrice).times(q).minus(it.discount));
+          cogs = cogs.plus(new Prisma.Decimal(it.unitCostSnapshot ?? 0).times(q));
+        }
+        const grossProfit = revenueNet.minus(cogs);
+        tBilled = tBilled.plus(total);
+        tCollected = tCollected.plus(paid);
+        tCogs = tCogs.plus(cogs);
+        tProfit = tProfit.plus(grossProfit);
+
+        return {
+          orderId: o.id,
+          number: o.number,
+          date: (o.fulfilledAt ?? o.confirmedAt ?? o.createdAt).toISOString(),
+          status: o.status,
+          paymentStatus: o.paymentStatus,
+          customerName: o.customer?.name ?? null,
+          branchId: o.branchId,
+          currency: o.currency,
+          total: total.toString(),
+          paid: paid.toString(),
+          balance: total.minus(paid).toString(),
+          methods: [...(methodsByOrder.get(o.id) ?? [])],
+          saleNoteNumber: noteByOrder.get(o.id) ?? null,
+          createdByUserId: o.createdByUserId,
+          ...(includeCost ? { cogs: cogs.toString(), grossProfit: grossProfit.toString() } : {}),
+        };
+      });
+
+      const totals = {
+        count: rows.length,
+        billed: tBilled.toString(),
+        collected: tCollected.toString(),
+        outstanding: tBilled.minus(tCollected).toString(),
+        ...(includeCost ? { cogs: tCogs.toString(), grossProfit: tProfit.toString() } : {}),
+      };
+
+      return { rows, totals };
+    });
   }
 
   // Utilidad por producto (requiere profits.read en el controller). Top 50 por utilidad.

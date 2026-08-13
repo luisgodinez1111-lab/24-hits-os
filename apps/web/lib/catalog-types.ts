@@ -232,6 +232,33 @@ export interface SalesSummary {
   margin?: string;
 }
 
+export interface SalesRegisterRow {
+  orderId: string;
+  number: string;
+  date: string;
+  status: string;
+  paymentStatus: "PENDING" | "PARTIAL" | "PAID";
+  customerName: string | null;
+  total: string;
+  paid: string;
+  balance: string;
+  methods: string[];
+  saleNoteNumber: string | null;
+  cogs?: string;
+  grossProfit?: string;
+}
+export interface SalesRegister {
+  rows: SalesRegisterRow[];
+  totals: {
+    count: number;
+    billed: string;
+    collected: string;
+    outstanding: string;
+    cogs?: string;
+    grossProfit?: string;
+  };
+}
+
 export interface ProfitByProductRow {
   variantId: string;
   sku: string | null;

@@ -7,3 +7,11 @@ export const reportRangeSchema = z.object({
   branchId: z.string().uuid().optional(),
 });
 export type ReportRangeInput = z.infer<typeof reportRangeSchema>;
+
+// Registro de ventas (diario transaccional). Rango + filtros por cliente y estado.
+export const salesRegisterQuerySchema = reportRangeSchema.extend({
+  customerId: z.string().uuid().optional(),
+  status: z.enum(["DRAFT", "CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED", "COMPLETED", "CANCELLED"]).optional(),
+  paymentStatus: z.enum(["PENDING", "PARTIAL", "PAID"]).optional(),
+});
+export type SalesRegisterQuery = z.infer<typeof salesRegisterQuerySchema>;

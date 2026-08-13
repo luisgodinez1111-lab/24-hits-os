@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  BookText,
   Boxes,
   Building2,
   ClipboardCheck,
@@ -93,6 +94,7 @@ const sections: NavSection[] = [
     title: "Reportes",
     items: [
       { href: "/app/reports", label: "Financieros", icon: TrendingUp },
+      { href: "/app/reports/register", label: "Registro de ventas", icon: BookText },
     ],
   },
   {

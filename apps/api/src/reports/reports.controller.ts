@@ -5,7 +5,7 @@ import { RequirePermissions } from "../common/decorators/require-permissions.dec
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { ReportsService } from "./reports.service.js";
-import { reportRangeSchema, type ReportRangeInput } from "./reports.dto.js";
+import { reportRangeSchema, salesRegisterQuerySchema, type ReportRangeInput, type SalesRegisterQuery } from "./reports.dto.js";
 
 @ApiTags("reports")
 @Controller("reports")
@@ -24,6 +24,13 @@ export class ReportsController {
   @RequirePermissions("reports.read", "profits.read")
   profitByProduct(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(reportRangeSchema)) q: ReportRangeInput) {
     return this.reports.profitByProduct(u.organizationId!, q);
+  }
+
+  // Registro de ventas (diario transaccional). Costo/utilidad se añaden si hay profits.read.
+  @Get("sales-register")
+  @RequirePermissions("reports.read")
+  salesRegister(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(salesRegisterQuerySchema)) q: SalesRegisterQuery) {
+    return this.reports.salesRegister(u.organizationId!, q, u.membershipId);
   }
 
   @Get("cash-cut/:sessionId")

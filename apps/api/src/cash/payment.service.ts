@@ -93,9 +93,15 @@ export class PaymentService {
         },
       });
 
+      // Cierre de la venta: si el pedido ya está entregado y queda saldado → COMPLETED.
+      const nextPaymentStatus = this.statusFor(net.plus(amount), total);
+      const completes = nextPaymentStatus === "PAID" && order.status === "FULFILLED";
       await tx.order.update({
         where: { id: order.id },
-        data: { paymentStatus: this.statusFor(net.plus(amount), total) },
+        data: {
+          paymentStatus: nextPaymentStatus,
+          ...(completes ? { status: "COMPLETED" } : {}),
+        },
       });
       return created;
     });
@@ -151,12 +157,18 @@ export class PaymentService {
       });
 
       if (original.orderId) {
-        const order = await tx.order.findFirst({ where: { id: original.orderId }, select: { id: true, total: true } });
+        const order = await tx.order.findFirst({ where: { id: original.orderId }, select: { id: true, total: true, status: true } });
         if (order) {
           const net = await this.netPaid(tx, order.id);
+          const nextPaymentStatus = this.statusFor(net, new Prisma.Decimal(order.total));
+          // Si el pedido estaba cerrado y ya no queda saldado, reabre a FULFILLED.
+          const reopens = order.status === "COMPLETED" && nextPaymentStatus !== "PAID";
           await tx.order.update({
             where: { id: order.id },
-            data: { paymentStatus: this.statusFor(net, new Prisma.Decimal(order.total)) },
+            data: {
+              paymentStatus: nextPaymentStatus,
+              ...(reopens ? { status: "FULFILLED" } : {}),
+            },
           });
         }
       }
