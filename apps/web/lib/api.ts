@@ -1,5 +1,6 @@
-// Cliente HTTP único del frontend. Habla con la API (NestJS) enviando cookies.
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Cliente HTTP único del frontend. Habla con la API (NestJS) por MISMO ORIGEN:
+// las rutas /api/v1/* las reenvía Next (rewrite en next.config) al despliegue de la
+// API. Así la cookie de sesión es de primera parte y funciona en móvil.
 
 export class ApiError extends Error {
   constructor(
@@ -14,7 +15,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}/api/v1${path}`, {
+  const res = await fetch(`/api/v1${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     credentials: "include",
