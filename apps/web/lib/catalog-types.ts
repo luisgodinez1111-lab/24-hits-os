@@ -252,6 +252,7 @@ export interface SalesRegisterRow {
   total: string;
   paid: string;
   balance: string;
+  credited: string;
   methods: string[];
   saleNoteNumber: string | null;
   cogs?: string;
@@ -264,9 +265,19 @@ export interface SalesRegister {
     billed: string;
     collected: string;
     outstanding: string;
+    credited: string;
     cogs?: string;
     grossProfit?: string;
   };
+}
+
+export interface CustomerAccount {
+  customer: { id: string; name: string; type: string; status: string };
+  creditLimit: string | null;
+  creditAvailable: string | null;
+  summary: { orderCount: number; charges: string; paid: string; credited: string; creditInFavor: string; balance: string };
+  orders: Array<{ id: string; number: string; total: string; status: string; paymentStatus: string; date: string }>;
+  creditNotes: Array<{ id: string; number: string; total: string; refundMethod: string | null; date: string }>;
 }
 
 export interface ProfitByProductRow {

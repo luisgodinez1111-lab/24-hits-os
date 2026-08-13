@@ -131,9 +131,10 @@ export class ReportsService {
       });
 
       const ids = orders.map((o) => o.id);
-      const [payments, notes] = await Promise.all([
+      const [payments, notes, credits] = await Promise.all([
         ids.length ? tx.payment.findMany({ where: { orderId: { in: ids }, status: "COMPLETED" }, select: { orderId: true, method: true, amount: true } }) : [],
         ids.length ? tx.saleNote.findMany({ where: { orderId: { in: ids }, status: "ISSUED" }, select: { orderId: true, number: true } }) : [],
+        ids.length ? tx.creditNote.findMany({ where: { orderId: { in: ids }, status: "ISSUED" }, select: { orderId: true, total: true } }) : [],
       ]);
 
       const paidByOrder = new Map<string, Prisma.Decimal>();
@@ -147,9 +148,15 @@ export class ReportsService {
       }
       const noteByOrder = new Map<string, string>();
       for (const n of notes) if (n.orderId) noteByOrder.set(n.orderId, n.number);
+      const creditedByOrder = new Map<string, Prisma.Decimal>();
+      for (const c of credits) {
+        if (!c.orderId) continue;
+        creditedByOrder.set(c.orderId, (creditedByOrder.get(c.orderId) ?? ZERO).plus(c.total));
+      }
 
       let tBilled = ZERO;
       let tCollected = ZERO;
+      let tCredited = ZERO;
       let tCogs = ZERO;
       let tProfit = ZERO;
 
@@ -164,8 +171,10 @@ export class ReportsService {
           cogs = cogs.plus(new Prisma.Decimal(it.unitCostSnapshot ?? 0).times(q));
         }
         const grossProfit = revenueNet.minus(cogs);
+        const credited = creditedByOrder.get(o.id) ?? ZERO;
         tBilled = tBilled.plus(total);
         tCollected = tCollected.plus(paid);
+        tCredited = tCredited.plus(credited);
         tCogs = tCogs.plus(cogs);
         tProfit = tProfit.plus(grossProfit);
 
@@ -181,6 +190,7 @@ export class ReportsService {
           total: total.toString(),
           paid: paid.toString(),
           balance: total.minus(paid).toString(),
+          credited: credited.toString(),
           methods: [...(methodsByOrder.get(o.id) ?? [])],
           saleNoteNumber: noteByOrder.get(o.id) ?? null,
           createdByUserId: o.createdByUserId,
@@ -193,6 +203,7 @@ export class ReportsService {
         billed: tBilled.toString(),
         collected: tCollected.toString(),
         outstanding: tBilled.minus(tCollected).toString(),
+        credited: tCredited.toString(),
         ...(includeCost ? { cogs: tCogs.toString(), grossProfit: tProfit.toString() } : {}),
       };
 

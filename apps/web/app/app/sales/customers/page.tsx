@@ -2,18 +2,21 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserSquare } from "lucide-react";
+import { Plus, UserSquare, Wallet } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { Customer } from "@/lib/catalog-types";
+import type { Customer, CustomerAccount } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+
+const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 export default function CustomersPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [account, setAccount] = useState<Customer | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
   const setStatus = useMutation({
@@ -49,10 +52,13 @@ export default function CustomersPage() {
                 <TD className="font-mono text-xs text-gray-500">{c.taxId ?? "—"}</TD>
                 <TD><Badge tone={c.status === "ACTIVE" ? "green" : "gray"}>{c.status}</Badge></TD>
                 <TD className="text-right">
-                  <Button size="sm" variant="outline"
-                    onClick={() => setStatus.mutate({ id: c.id, status: c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })}>
-                    {c.status === "ACTIVE" ? "Desactivar" : "Activar"}
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setAccount(c)}><Wallet className="h-4 w-4" /> Estado de cuenta</Button>
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setStatus.mutate({ id: c.id, status: c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })}>
+                      {c.status === "ACTIVE" ? "Desactivar" : "Activar"}
+                    </Button>
+                  </div>
                 </TD>
               </TR>
             ))}
@@ -62,6 +68,83 @@ export default function CustomersPage() {
 
       <CreateCustomerDialog open={creating} onClose={() => setCreating(false)}
         onCreated={async () => { setCreating(false); await qc.invalidateQueries({ queryKey: ["customers"] }); toast.push("Cliente creado", "success"); }} />
+      <AccountDialog customer={account} onClose={() => setAccount(null)} />
+    </div>
+  );
+}
+
+function AccountDialog({ customer, onClose }: { customer: Customer | null; onClose: () => void }) {
+  const { data } = useQuery({
+    queryKey: ["customer-account", customer?.id], enabled: !!customer,
+    queryFn: () => api.get<CustomerAccount>(`/customers/${customer!.id}/account`),
+  });
+  return (
+    <Dialog open={!!customer} onClose={onClose} title={`Estado de cuenta — ${customer?.name ?? ""}`}
+      footer={<Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>}>
+      {!data ? <Skeleton className="h-48 w-full" /> : (
+        <div className="space-y-4 text-sm">
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Comprado" value={money(data.summary.charges)} />
+            <Stat label="Pagado" value={money(data.summary.paid)} />
+            <Stat label="Devuelto" value={money(data.summary.credited)} />
+            <Stat label="Crédito a favor" value={money(data.summary.creditInFavor)} />
+            <Stat label="Saldo" value={money(data.summary.balance)} accent />
+            {data.creditLimit != null && <Stat label="Crédito disponible" value={money(data.creditAvailable)} />}
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Pedidos ({data.orders.length})</p>
+            {data.orders.length === 0 ? <p className="text-gray-400">Sin pedidos.</p> : (
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200">
+                <Table>
+                  <THead><TR><TH>Folio</TH><TH>Fecha</TH><TH>Estado</TH><TH>Pago</TH><TH className="text-right">Total</TH></TR></THead>
+                  <TBody>
+                    {data.orders.map((o) => (
+                      <TR key={o.id}>
+                        <TD className="font-mono text-xs">{o.number}</TD>
+                        <TD className="text-gray-500">{new Date(o.date).toLocaleDateString("es-MX")}</TD>
+                        <TD><Badge tone={o.status === "COMPLETED" ? "green" : "gray"}>{o.status}</Badge></TD>
+                        <TD><Badge tone={o.paymentStatus === "PAID" ? "green" : o.paymentStatus === "PARTIAL" ? "amber" : "gray"}>{o.paymentStatus}</Badge></TD>
+                        <TD className="text-right">{money(o.total)}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {data.creditNotes.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Notas de crédito ({data.creditNotes.length})</p>
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-gray-200">
+                <Table>
+                  <THead><TR><TH>Folio</TH><TH>Fecha</TH><TH>Reembolso</TH><TH className="text-right">Total</TH></TR></THead>
+                  <TBody>
+                    {data.creditNotes.map((c) => (
+                      <TR key={c.id}>
+                        <TD className="font-mono text-xs">{c.number}</TD>
+                        <TD className="text-gray-500">{new Date(c.date).toLocaleDateString("es-MX")}</TD>
+                        <TD>{c.refundMethod ? <Badge tone="blue">{c.refundMethod}</Badge> : <span className="text-gray-400">crédito a favor</span>}</TD>
+                        <TD className="text-right">{money(c.total)}</TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-lg border p-3 ${accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white"}`}>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-900">{value}</p>
     </div>
   );
 }

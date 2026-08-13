@@ -83,7 +83,7 @@ export default function SalesRegisterPage() {
                 <TR>
                   <TH>Folio</TH><TH>Fecha</TH><TH>Cliente</TH><TH>Estado</TH><TH>Pago</TH>
                   <TH className="text-right">Total</TH><TH className="text-right">Pagado</TH><TH className="text-right">Saldo</TH>
-                  <TH>Métodos</TH><TH>Nota</TH>
+                  <TH className="text-right">Devuelto</TH><TH>Métodos</TH><TH>Nota</TH>
                   {showProfit && <TH className="text-right">Costo</TH>}
                   {showProfit && <TH className="text-right">Utilidad</TH>}
                 </TR>
@@ -99,6 +99,7 @@ export default function SalesRegisterPage() {
                     <TD className="text-right">{money(r.total)}</TD>
                     <TD className="text-right text-gray-500">{money(r.paid)}</TD>
                     <TD className="text-right">{Number(r.balance) > 0 ? <span className="text-amber-600">{money(r.balance)}</span> : money(r.balance)}</TD>
+                    <TD className="text-right">{Number(r.credited) > 0 ? <span className="text-red-600">{money(r.credited)}</span> : "—"}</TD>
                     <TD className="text-xs text-gray-500">{r.methods.map((m) => methodLabel[m] ?? m).join(", ") || "—"}</TD>
                     <TD className="font-mono text-xs text-gray-500">{r.saleNoteNumber ?? "—"}</TD>
                     {showProfit && <TD className="text-right text-gray-500">{money(r.cogs)}</TD>}
