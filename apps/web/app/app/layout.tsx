@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Spinner } from "@24hits/ui";
 import { useMe } from "@/lib/me";
@@ -11,6 +11,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: me, isLoading, isError } = useMe();
+  const [navOpen, setNavOpen] = useState(false);
+
+  // Cierra el cajón móvil al cambiar de ruta.
+  useEffect(() => setNavOpen(false), [pathname]);
 
   useEffect(() => {
     if (isError) {
@@ -34,10 +38,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header me={me} />
-        <main className="flex-1 overflow-y-auto p-8">{children}</main>
+        <Header me={me} onMenu={() => setNavOpen(true)} />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

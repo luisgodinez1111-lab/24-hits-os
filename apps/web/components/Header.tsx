@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, LogOut, Monitor } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Monitor } from "lucide-react";
 import { Badge, Dropdown, DropdownItem } from "@24hits/ui";
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/me";
 import { NotificationBell } from "./NotificationBell";
 
-export function Header({ me }: { me: Me | undefined }) {
+export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -19,8 +19,16 @@ export function Header({ me }: { me: Me | undefined }) {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
+    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
       <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onMenu}
+          aria-label="Abrir menú"
+          className="grid h-9 w-9 place-items-center rounded-lg text-gray-600 hover:bg-gray-100 lg:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         {me?.activeOrganization ? (
           <>
             <span className="text-sm font-semibold text-gray-900">
