@@ -201,10 +201,37 @@ export class OrderService {
     return lines;
   }
 
+  // Saldo comprometido del cliente: Σ pedidos comprometidos (CONFIRMED..COMPLETED) −
+  // pagos − crédito a favor (notas de crédito SIN reembolso). Espeja CustomerService.
+  private async customerOutstanding(tx: TenantTx, customerId: string): Promise<Prisma.Decimal> {
+    const ZERO = new Prisma.Decimal(0);
+    const committed = await tx.order.findMany({
+      where: { customerId, status: { in: ["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED", "COMPLETED"] } },
+      select: { id: true, total: true },
+    });
+    const ids = committed.map((o) => o.id);
+    let charges = ZERO;
+    for (const o of committed) charges = charges.plus(o.total);
+    const paid = ids.length
+      ? new Prisma.Decimal((await tx.payment.aggregate({ where: { orderId: { in: ids }, status: "COMPLETED" }, _sum: { amount: true } }))._sum.amount ?? 0)
+      : ZERO;
+    const credits = await tx.creditNote.findMany({ where: { customerId, status: "ISSUED", refundMethod: null }, select: { total: true } });
+    let creditInFavor = ZERO;
+    for (const c of credits) creditInFavor = creditInFavor.plus(c.total);
+    return charges.minus(paid).minus(creditInFavor);
+  }
+
   // CONFIRM (ADR-021): reserva inventario por renglón vía ReservationService
   // (bloqueo FOR UPDATE, idempotente por key). Si un renglón falla, libera las
   // reservas ya creadas (compensación) y propaga el error. Baja `available`, no `onHand`.
-  async confirm(organizationId: string, userId: string, orderId: string) {
+  // Valida el límite de crédito del cliente (salvo skipCreditCheck, p.ej. POS que cobra
+  // el total y no extiende crédito).
+  async confirm(
+    organizationId: string,
+    userId: string,
+    orderId: string,
+    opts?: { skipCreditCheck?: boolean }
+  ) {
     const order = await this.prisma.withTenant(organizationId, (tx) =>
       tx.order.findFirst({ where: { id: orderId }, include: { items: true } })
     );
@@ -214,6 +241,24 @@ export class OrderService {
     }
     if (order.items.length === 0) {
       throw new AppException(422, ErrorCode.ORDER_EMPTY, "El pedido no tiene renglones");
+    }
+
+    // Límite de crédito: proyecta saldo + total del pedido contra el límite del cliente.
+    if (!opts?.skipCreditCheck && order.customerId) {
+      await this.prisma.withTenant(organizationId, async (tx) => {
+        const customer = await tx.customer.findFirst({ where: { id: order.customerId! }, select: { creditLimit: true } });
+        if (!customer?.creditLimit) return;
+        const limit = new Prisma.Decimal(customer.creditLimit);
+        const balance = await this.customerOutstanding(tx, order.customerId!);
+        const projected = balance.plus(order.total);
+        if (projected.gt(limit)) {
+          throw new AppException(
+            409,
+            ErrorCode.CREDIT_LIMIT_EXCEEDED,
+            `El pedido excede el crédito del cliente: saldo ${balance.toString()} + ${new Prisma.Decimal(order.total).toString()} supera el límite ${limit.toString()}`
+          );
+        }
+      });
     }
 
     const created: { itemId: string; reservationId: string }[] = [];

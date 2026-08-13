@@ -93,7 +93,8 @@ export class PosService {
       items: input.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: i.unitPrice, discount: i.discount, taxRate: 0 })),
     });
 
-    await this.orders.confirm(organizationId, userId, order.id);
+    // El POS cobra el total en el acto → no extiende crédito, omite el límite.
+    await this.orders.confirm(organizationId, userId, order.id, { skipCreditCheck: true });
     await this.orders.fulfill(organizationId, userId, order.id);
 
     const total = new Prisma.Decimal(order.total);
