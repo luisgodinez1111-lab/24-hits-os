@@ -77,8 +77,7 @@ export default function SalesRegisterPage() {
             {showProfit && <Kpi label="Utilidad bruta" value={money(data.totals.grossProfit)} accent />}
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <Table>
+          <Table>
               <THead>
                 <TR>
                   <TH>Folio</TH><TH>Fecha</TH><TH>Cliente</TH><TH>Estado</TH><TH>Pago</TH>
@@ -108,7 +107,6 @@ export default function SalesRegisterPage() {
                 ))}
               </TBody>
             </Table>
-          </div>
         </>
       )}
     </div>

@@ -30,9 +30,12 @@ export function CardBody({ className, children }: { className?: string; children
 }
 
 // ---------------------------------------------------------------- Table
+// El contenedor scrollea en horizontal (móvil): en pantallas chicas la tabla se
+// desliza dentro de su caja en vez de empujar la página. `-webkit-overflow-scrolling`
+// da scroll con inercia en iOS.
 export function Table({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white [-webkit-overflow-scrolling:touch]">
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
@@ -51,8 +54,8 @@ export function TR({ children, className }: { children: ReactNode; className?: s
   return <tr className={cn("hover:bg-gray-50", className)}>{children}</tr>;
 }
 export function TH({ children, className }: { children: ReactNode; className?: string }) {
-  return <th className={cn("px-4 py-3 font-medium", className)}>{children}</th>;
+  return <th className={cn("whitespace-nowrap px-4 py-3 font-medium", className)}>{children}</th>;
 }
 export function TD({ children, className }: { children: ReactNode; className?: string }) {
-  return <td className={cn("px-4 py-3", className)}>{children}</td>;
+  return <td className={cn("whitespace-nowrap px-4 py-3 align-middle", className)}>{children}</td>;
 }
