@@ -5,7 +5,7 @@ import { RequirePermissions } from "../common/decorators/require-permissions.dec
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { ReportsService } from "./reports.service.js";
-import { reportRangeSchema, salesRegisterQuerySchema, type ReportRangeInput, type SalesRegisterQuery } from "./reports.dto.js";
+import { reportRangeSchema, salesRegisterQuerySchema, topSellersQuerySchema, type ReportRangeInput, type SalesRegisterQuery, type TopSellersQuery } from "./reports.dto.js";
 
 @ApiTags("reports")
 @Controller("reports")
@@ -31,6 +31,13 @@ export class ReportsController {
   @RequirePermissions("reports.read")
   salesRegister(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(salesRegisterQuerySchema)) q: SalesRegisterQuery) {
     return this.reports.salesRegister(u.organizationId!, q, u.membershipId);
+  }
+
+  // Más vendidos por modelo/marca/sabor + devoluciones. Costo/utilidad si hay profits.read.
+  @Get("top-sellers")
+  @RequirePermissions("reports.read")
+  topSellers(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(topSellersQuerySchema)) q: TopSellersQuery) {
+    return this.reports.topSellers(u.organizationId!, q, u.membershipId);
   }
 
   @Get("cash-cut/:sessionId")

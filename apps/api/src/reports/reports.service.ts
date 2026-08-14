@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PermissionService } from "../iam/permission.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
-import type { ReportRangeInput, SalesRegisterQuery } from "./reports.dto.js";
+import type { ReportRangeInput, SalesRegisterQuery, TopSellersQuery } from "./reports.dto.js";
 
 const ZERO = new Prisma.Decimal(0);
 const METHODS: PaymentMethod[] = ["CASH", "CARD", "TRANSFER", "OTHER"];
@@ -263,6 +263,110 @@ export class ReportsService {
         .sort((a, b) => b._sort - a._sort)
         .slice(0, 50)
         .map(({ _sort, ...row }) => row);
+    });
+  }
+
+  // MÁS VENDIDOS por dimensión (modelo/marca/sabor) con devoluciones. Une los
+  // renglones ENTREGADOS (unidades vendidas, ingreso, COGS) con las devoluciones
+  // (unidades devueltas) y agrega por la dimensión pedida. Costo/utilidad gated.
+  async topSellers(organizationId: string, query: TopSellersQuery, membershipId?: string) {
+    const { from, to } = this.resolveRange(query);
+    const { dimension, branchId, productId, sort, limit } = query;
+    const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
+
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      // Filtro opcional por modelo (p.ej. "sabores de este modelo").
+      let variantFilter: { in: string[] } | undefined;
+      if (productId) {
+        const vs = await tx.productVariant.findMany({ where: { productId }, select: { id: true } });
+        variantFilter = { in: vs.map((v) => v.id) };
+      }
+
+      const [sold, returned] = await Promise.all([
+        tx.orderItem.findMany({
+          where: {
+            fulfilledQuantity: { gt: 0 },
+            ...(variantFilter ? { variantId: variantFilter } : {}),
+            order: { fulfilledAt: { gte: from, lte: to }, status: { not: "CANCELLED" }, ...(branchId ? { branchId } : {}) },
+          },
+          select: { variantId: true, fulfilledQuantity: true, unitPrice: true, discount: true, unitCostSnapshot: true },
+        }),
+        tx.creditNoteItem.findMany({
+          where: {
+            ...(variantFilter ? { variantId: variantFilter } : {}),
+            creditNote: { status: "ISSUED", issuedAt: { gte: from, lte: to }, ...(branchId ? { branchId } : {}) },
+          },
+          select: { variantId: true, quantity: true },
+        }),
+      ]);
+
+      const variantIds = [...new Set([...sold, ...returned].map((r) => r.variantId).filter((id): id is string => !!id))];
+      const variants = variantIds.length
+        ? await tx.productVariant.findMany({
+            where: { id: { in: variantIds } },
+            select: {
+              id: true, name: true,
+              flavor: { select: { id: true, name: true } },
+              product: { select: { id: true, name: true, brand: { select: { id: true, name: true } } } },
+            },
+          })
+        : [];
+      const vById = new Map(variants.map((v) => [v.id, v]));
+
+      // Clave/etiqueta según la dimensión.
+      const keyOf = (variantId: string | null): { key: string; label: string; sublabel: string | null } => {
+        const v = variantId ? vById.get(variantId) : undefined;
+        if (dimension === "brand") {
+          const b = v?.product.brand;
+          return { key: b?.id ?? "none", label: b?.name ?? "Sin marca", sublabel: null };
+        }
+        if (dimension === "flavor") {
+          const f = v?.flavor;
+          return { key: f?.id ?? "none", label: f?.name ?? "Sin sabor", sublabel: v?.product.name ?? null };
+        }
+        return { key: v?.product.id ?? "none", label: v?.product.name ?? "—", sublabel: v?.product.brand?.name ?? null };
+      };
+
+      interface Agg { label: string; sublabel: string | null; units: Prisma.Decimal; revenue: Prisma.Decimal; cogs: Prisma.Decimal; returned: Prisma.Decimal }
+      const acc = new Map<string, Agg>();
+      const bucket = (key: string, label: string, sublabel: string | null): Agg => {
+        let a = acc.get(key);
+        if (!a) { a = { label, sublabel, units: ZERO, revenue: ZERO, cogs: ZERO, returned: ZERO }; acc.set(key, a); }
+        return a;
+      };
+      for (const s of sold) {
+        const { key, label, sublabel } = keyOf(s.variantId);
+        const a = bucket(key, label, sublabel);
+        const q = new Prisma.Decimal(s.fulfilledQuantity);
+        a.units = a.units.plus(q);
+        a.revenue = a.revenue.plus(new Prisma.Decimal(s.unitPrice).times(q).minus(s.discount));
+        a.cogs = a.cogs.plus(new Prisma.Decimal(s.unitCostSnapshot ?? 0).times(q));
+      }
+      for (const r of returned) {
+        const { key, label, sublabel } = keyOf(r.variantId);
+        const a = bucket(key, label, sublabel);
+        a.returned = a.returned.plus(r.quantity);
+      }
+
+      const rows = [...acc.entries()].map(([key, a]) => {
+        const profit = a.revenue.minus(a.cogs);
+        const returnRate = a.units.gt(0) ? a.returned.dividedBy(a.units) : ZERO;
+        return {
+          key,
+          label: a.label,
+          sublabel: a.sublabel,
+          units: a.units.toString(),
+          revenue: a.revenue.toString(),
+          returnedUnits: a.returned.toString(),
+          returnRate: returnRate.toString(),
+          ...(includeCost ? { cogs: a.cogs.toString(), grossProfit: profit.toString(), margin: a.revenue.gt(0) ? profit.dividedBy(a.revenue).toString() : "0" } : {}),
+          _u: Number(a.units),
+          _r: Number(a.returned),
+        };
+      });
+
+      rows.sort((x, y) => (sort === "returns" ? y._r - x._r : y._u - x._u));
+      return { dimension, rows: rows.slice(0, limit).map(({ _u, _r, ...row }) => row) };
     });
   }
 

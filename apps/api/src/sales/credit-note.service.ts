@@ -74,11 +74,9 @@ export class CreditNoteService {
       if (!saleNote.order) throw new AppException(409, ErrorCode.SALE_NOTE_INVALID_STATE, "La nota no tiene pedido asociado para reingresar stock");
       const warehouseId = saleNote.order.warehouseId;
 
-      // Reembolso en efectivo: validar turno abierto antes de mover nada.
-      if (input.refundMethod === "CASH") {
-        if (!input.refundCashSessionId) {
-          throw new AppException(422, ErrorCode.CASH_SESSION_REQUIRED, "Un reembolso en efectivo requiere un turno de caja abierto");
-        }
+      // Reembolso en efectivo: turno OPCIONAL. Si se indica uno, validar que esté
+      // abierto (el retiro se registra en el cajón); si no, el reembolso se documenta igual.
+      if (input.refundMethod === "CASH" && input.refundCashSessionId) {
         const session = await tx.cashSession.findFirst({ where: { id: input.refundCashSessionId }, select: { status: true } });
         if (!session) throw new AppException(404, ErrorCode.CASH_SESSION_NOT_FOUND, "Turno de caja no encontrado");
         if (session.status !== "OPEN") throw new AppException(409, ErrorCode.CASH_SESSION_NOT_OPEN, "El turno de caja no está abierto");

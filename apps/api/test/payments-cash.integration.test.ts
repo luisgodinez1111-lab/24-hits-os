@@ -114,10 +114,11 @@ describe("Pagos/Caja — cobros, arqueo y concurrencia (ADR-022/023)", () => {
       .rejects.toMatchObject({ code: "PAYMENT_EXCEEDS_TOTAL" });
   });
 
-  it("cobro en efectivo exige turno de caja abierto", async () => {
+  it("cobro en efectivo SIN turno de caja se registra igual (turno opcional)", async () => {
     const orderId = await createOrder(50);
-    await expect(payments.record(orgId, userId, { orderId, method: "CASH", amount: 50 }))
-      .rejects.toMatchObject({ code: "CASH_SESSION_REQUIRED" });
+    const p = await payments.record(orgId, userId, { orderId, method: "CASH", amount: 50 });
+    expect(p.method).toBe("CASH");
+    expect((await orderStatus(orderId))?.paymentStatus).toBe("PAID");
   });
 
   it("anular un pago lo saca del neto y revierte el paymentStatus", async () => {

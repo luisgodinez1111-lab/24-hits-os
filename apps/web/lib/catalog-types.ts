@@ -271,6 +271,23 @@ export interface SalesRegister {
   };
 }
 
+export interface TopSellerRow {
+  key: string;
+  label: string;
+  sublabel: string | null;
+  units: string;
+  revenue: string;
+  returnedUnits: string;
+  returnRate: string;
+  cogs?: string;
+  grossProfit?: string;
+  margin?: string;
+}
+export interface TopSellers {
+  dimension: "product" | "brand" | "flavor";
+  rows: TopSellerRow[];
+}
+
 export interface CustomerAccount {
   customer: { id: string; name: string; type: string; status: string };
   creditLimit: string | null;

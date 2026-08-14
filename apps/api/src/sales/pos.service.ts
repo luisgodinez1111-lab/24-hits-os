@@ -81,10 +81,6 @@ export class PosService {
   // (consume stock + captura COGS), cobra el total y emite la nota. Reutiliza los
   // servicios ya probados; el pedido termina COMPLETED (ver cierre en pagos/entrega).
   async sale(organizationId: string, userId: string, input: PosSaleInput) {
-    if (input.payment.method === "CASH" && !input.payment.cashSessionId) {
-      throw new AppException(422, ErrorCode.CASH_SESSION_REQUIRED, "Un cobro en efectivo requiere un turno de caja abierto");
-    }
-
     const order = await this.orders.create(organizationId, userId, {
       warehouseId: input.warehouseId,
       customerId: input.customerId,

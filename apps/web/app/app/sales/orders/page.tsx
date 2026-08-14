@@ -7,7 +7,7 @@ import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { CashSession, Customer, Order, Variant } from "@/lib/catalog-types";
+import type { Customer, Order, Variant } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
 
@@ -92,12 +92,7 @@ export default function SalesOrdersPage() {
 
 function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
-  const { data: sessions } = useQuery({
-    queryKey: ["cash-sessions"], enabled: !!order,
-    queryFn: () => api.get<CashSession[]>("/cash-sessions"),
-  });
-  const openSessions = (sessions ?? []).filter((s) => s.status === "OPEN");
-  const [form, setForm] = useState({ method: "CASH", amount: "", reference: "", cashSessionId: "" });
+  const [form, setForm] = useState({ method: "CASH", amount: "", reference: "" });
 
   const pay = useMutation({
     mutationFn: () => api.post(`/payments`, {
@@ -105,9 +100,8 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
       method: form.method,
       amount: Number(form.amount || 0),
       reference: form.reference || undefined,
-      cashSessionId: form.cashSessionId || undefined,
     }),
-    onSuccess: () => { setForm({ method: "CASH", amount: "", reference: "", cashSessionId: "" }); onDone(); },
+    onSuccess: () => { setForm({ method: "CASH", amount: "", reference: "" }); onDone(); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
@@ -116,7 +110,6 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
       footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
         <Button size="sm" loading={pay.isPending} onClick={() => {
           if (!(Number(form.amount) > 0)) return toast.push("Ingresa el monto", "error");
-          if (form.method === "CASH" && !form.cashSessionId) return toast.push("Selecciona un turno de caja abierto", "error");
           pay.mutate();
         }}>Cobrar</Button></>}>
       <div className="space-y-3">
@@ -127,12 +120,6 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
             <option value="CARD">Tarjeta</option>
             <option value="TRANSFER">Transferencia</option>
             <option value="OTHER">Otro</option>
-          </Select>
-        </FormField>
-        <FormField label={form.method === "CASH" ? "Turno de caja (requerido)" : "Turno de caja (opcional)"}>
-          <Select value={form.cashSessionId} onChange={(e) => setForm({ ...form, cashSessionId: e.target.value })}>
-            <option value="">{form.method === "CASH" ? "…" : "Sin turno"}</option>
-            {openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)} · fondo ${Number(s.openingFloat).toFixed(2)}</option>)}
           </Select>
         </FormField>
         <FormField label="Monto"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></FormField>

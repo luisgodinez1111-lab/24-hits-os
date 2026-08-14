@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  BarChart3,
   BookText,
   Boxes,
   Building2,
@@ -29,7 +30,6 @@ import {
   Undo2,
   Users,
   UserSquare,
-  Wallet,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -67,12 +67,6 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: "Caja",
-    items: [
-      { href: "/app/cash/sessions", label: "Turnos de caja", icon: Wallet, perm: "cash.read" },
-    ],
-  },
-  {
     title: "Inventario",
     items: [
       { href: "/app/inventory", label: "Existencias", icon: Boxes, exact: true, perm: "inventory.read" },
@@ -102,6 +96,7 @@ const sections: NavSection[] = [
     title: "Reportes",
     items: [
       { href: "/app/reports", label: "Financieros", icon: TrendingUp, perm: "reports.read" },
+      { href: "/app/reports/analysis", label: "Más vendidos", icon: BarChart3, perm: "reports.read" },
       { href: "/app/reports/register", label: "Registro de ventas", icon: BookText, perm: "reports.read" },
     ],
   },

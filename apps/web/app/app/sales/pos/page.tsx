@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Camera, CameraOff, Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button, FormField, Input, Select, useToast } from "@24hits/ui";
-import type { CashSession, Customer, PosLookup } from "@/lib/catalog-types";
+import type { Customer, PosLookup } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
 
@@ -15,14 +15,11 @@ export default function PosPage() {
   const toast = useToast();
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
-  const { data: sessions } = useQuery({ queryKey: ["cash-sessions"], queryFn: () => api.get<CashSession[]>("/cash-sessions") });
-  const openSessions = (sessions ?? []).filter((s) => s.status === "OPEN");
 
   const [warehouseId, setWarehouseId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [method, setMethod] = useState("CASH");
-  const [cashSessionId, setCashSessionId] = useState("");
   const [manual, setManual] = useState("");
 
   const total = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
@@ -88,7 +85,7 @@ export default function PosPage() {
       warehouseId,
       customerId: customerId || undefined,
       items: cart.map((l) => ({ variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice })),
-      payment: { method, cashSessionId: method === "CASH" ? cashSessionId || undefined : undefined },
+      payment: { method },
       issueSaleNote: true,
     }),
     onSuccess: (res) => {
@@ -101,7 +98,6 @@ export default function PosPage() {
   function checkout() {
     if (!warehouseId) return toast.push("Selecciona el almacén", "error");
     if (cart.length === 0) return toast.push("El carrito está vacío", "error");
-    if (method === "CASH" && !cashSessionId) return toast.push("Selecciona un turno de caja abierto", "error");
     sale.mutate();
   }
 
@@ -198,15 +194,6 @@ export default function PosPage() {
                 <option value="OTHER">Otro</option>
               </Select>
             </FormField>
-            {method === "CASH" && (
-              <FormField label="Turno de caja">
-                <Select value={cashSessionId} onChange={(e) => setCashSessionId(e.target.value)}>
-                  <option value="">Selecciona…</option>
-                  {openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)} · fondo ${Number(s.openingFloat).toFixed(2)}</option>)}
-                </Select>
-              </FormField>
-            )}
-            {method === "CASH" && openSessions.length === 0 && <p className="text-xs text-amber-600">No hay turno de caja abierto. Ábrelo en Caja → Turnos.</p>}
             <Button className="w-full" loading={sale.isPending} onClick={checkout}><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
           </div>
         </div>

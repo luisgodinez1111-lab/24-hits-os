@@ -125,12 +125,14 @@ describe("POS — escaneo de código de barras + venta orquestada", () => {
     expect((await balanceOf(variantId))?.onHand.toString()).toBe("18");
   });
 
-  it("efectivo sin turno de caja → CASH_SESSION_REQUIRED", async () => {
-    await expect(pos.sale(orgId, userId, {
+  it("venta POS en efectivo SIN turno de caja se registra igual (turno opcional)", async () => {
+    const res = await pos.sale(orgId, userId, {
       warehouseId, currency: "MXN",
       items: [{ variantId, quantity: 1, unitPrice: 150, discount: 0 }],
       payment: { method: "CASH" },
       issueSaleNote: false,
-    })).rejects.toMatchObject({ code: "CASH_SESSION_REQUIRED" });
+    });
+    expect(res.order.status).toBe("COMPLETED");
+    expect(res.order.paymentStatus).toBe("PAID");
   });
 });
