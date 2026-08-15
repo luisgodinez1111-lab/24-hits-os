@@ -7,7 +7,6 @@ import {
   BarChart3,
   BookText,
   Boxes,
-  Building2,
   ClipboardCheck,
   ClipboardList,
   Contact,
@@ -16,21 +15,16 @@ import {
   FolderTree,
   Home,
   Layers,
-  MapPin,
-  Monitor,
   Package,
   Receipt,
   ScanLine,
-  ScrollText,
-  Shield,
+  Settings,
   ShoppingCart,
   Tag,
   TrendingUp,
   Truck,
   Undo2,
-  Users,
   UserSquare,
-  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
@@ -102,15 +96,9 @@ const sections: NavSection[] = [
   },
   {
     title: "Administración",
-    items: [
-      { href: "/app/settings/organization", label: "Organización", icon: Building2, perm: "organization.manage" },
-      { href: "/app/settings/branches", label: "Sucursales", icon: MapPin, perm: "branches.read" },
-      { href: "/app/settings/warehouses", label: "Almacenes", icon: Warehouse, perm: "warehouses.read" },
-      { href: "/app/settings/users", label: "Usuarios", icon: Users, perm: "users.read" },
-      { href: "/app/settings/roles", label: "Roles", icon: Shield, perm: "roles.read" },
-      { href: "/app/settings/audit", label: "Auditoría", icon: ScrollText, perm: "audit.read" },
-      { href: "/app/settings/sessions", label: "Dispositivos", icon: Monitor }, // propios, sin permiso
-    ],
+    // Todo (organización, sucursales, almacenes, usuarios, roles, auditoría,
+    // dispositivos) vive dentro de una sola ventana con pestañas.
+    items: [{ href: "/app/settings", label: "Configuración", icon: Settings }],
   },
 ];
 
