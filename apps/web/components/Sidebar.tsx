@@ -50,8 +50,9 @@ const sections: NavSection[] = [
   },
   {
     title: "Inventario",
-    // Existencias, movimientos, transferencias y conteos en una sola ventana con pestañas.
-    items: [{ href: "/app/inventory", label: "Inventario", icon: Boxes, perm: "inventory.read" }],
+    // Acceso directo a Existencias (uso diario); movimientos, transferencias y
+    // conteos viven en las pestañas de la ventana de Inventario.
+    items: [{ href: "/app/inventory", label: "Existencias", icon: Boxes, exact: true, perm: "inventory.read" }],
   },
   {
     title: "Compras",
