@@ -5,6 +5,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
 import type { CreateCustomerInput, UpdateCustomerInput } from "./sales.dto.js";
+import { classifyZone } from "./zone-classifier.js";
 
 @Injectable()
 export class CustomerService {
@@ -114,7 +115,8 @@ export class CustomerService {
             email: input.email ?? null,
             phone: input.phone ?? null,
             address: input.address ?? null,
-            zone: input.zone ?? null,
+            // Zona: la indicada; si no, se deriva de la dirección (autoridad backend).
+            zone: input.zone ?? (input.address ? classifyZone(input.address) : null),
             taxId: input.taxId ?? null,
             type: input.type,
             creditLimit: input.creditLimit != null ? new Prisma.Decimal(input.creditLimit) : null,
@@ -186,7 +188,14 @@ export class CustomerService {
             email: input.email === undefined ? undefined : input.email,
             phone: input.phone === undefined ? undefined : input.phone,
             address: input.address === undefined ? undefined : input.address,
-            zone: input.zone === undefined ? undefined : input.zone,
+            // Si se cambia la dirección sin indicar zona, se reclasifica (autoridad
+            // backend); si la clasificación no reconoce nada, se deja la zona actual.
+            zone:
+              input.zone !== undefined
+                ? input.zone
+                : input.address
+                  ? classifyZone(input.address) ?? undefined
+                  : undefined,
             taxId: input.taxId === undefined ? undefined : input.taxId,
             type: input.type ?? undefined,
             creditLimit:

@@ -121,6 +121,16 @@ describe("CRM de clientes: número autogenerado + analítica", () => {
     expect(codes.every((c) => /^C-\d{4,}$/.test(c ?? ""))).toBe(true);
   });
 
+  it("clasifica la zona desde la dirección cuando no se indica (autoridad backend)", async () => {
+    const c = await customers.create(orgId, { name: "Dir", type: "RETAIL", address: "Calle 20 #100, Col. Santo Niño" });
+    expect(c.zone).toBe("CENTRO");
+    const n = await customers.create(orgId, { name: "Dir2", type: "RETAIL", address: "Parcela 5, zona norte" });
+    expect(n.zone).toBe("NORTE");
+    // La zona explícita gana sobre la derivada de la dirección.
+    const o = await customers.create(orgId, { name: "Dir3", type: "RETAIL", address: "Col. Santo Niño", zone: "SUR" });
+    expect(o.zone).toBe("SUR");
+  });
+
   it("rechaza un número de cliente duplicado", async () => {
     await customers.create(orgId, { name: "Uno", type: "RETAIL", code: "DUP-1" });
     await expect(customers.create(orgId, { name: "Dos", type: "RETAIL", code: "DUP-1" }))
