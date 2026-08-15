@@ -15,9 +15,9 @@ import {
   Checkbox,
   Dialog,
   EmptyState,
+  Combobox,
   FormField,
   Input,
-  Select,
   Skeleton,
   Table,
   TBody,
@@ -190,19 +190,14 @@ export default function UsersPage() {
                   </div>
                 </TD>
                 <TD>
-                  <Select
+                  <Combobox
                     className="min-w-[11rem]"
                     value={m.defaultWarehouse?.id ?? ""}
                     disabled={setWarehouse.isPending}
-                    onChange={(e) =>
-                      setWarehouse.mutate({ id: m.id, defaultWarehouseId: e.target.value || null })
-                    }
-                  >
-                    <option value="">Sin asignar</option>
-                    {warehouses?.map((w) => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </Select>
+                    placeholder="Sin asignar"
+                    options={[{ value: "", label: "Sin asignar" }, ...(warehouses ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+                    onChange={(v) => setWarehouse.mutate({ id: m.id, defaultWarehouseId: v || null })}
+                  />
                 </TD>
                 <TD>
                   <Badge tone={statusTone[m.status]}>{m.status}</Badge>

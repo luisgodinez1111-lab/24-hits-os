@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes } from "lucide-react";
 import {
-  Badge, Card, CardBody, EmptyState, Select, Skeleton, Table, TBody, TD, TH, THead, TR,
+  Badge, Card, CardBody, Combobox, EmptyState, Skeleton, Table, TBody, TD, TH, THead, TR,
 } from "@24hits/ui";
 import type { InventoryBalanceRow } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
@@ -39,10 +39,8 @@ export default function InventoryPage() {
         <CardBody className="flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-gray-600">Almacén</span>
-            <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">Todos</option>
-              {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </Select>
+            <Combobox className="w-48" value={warehouseId} onChange={setWarehouseId} placeholder="Todos"
+              options={[{ value: "", label: "Todos" }, ...(warehouses ?? []).map((w) => ({ value: w.id, label: w.name }))]} />
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"

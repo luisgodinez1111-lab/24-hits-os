@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, ChevronDown, Package, Plus, ScanLine } from "lucide-react";
 import {
-  Badge, Button, Card, CardBody, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Unit, Variant } from "@/lib/catalog-types";
@@ -60,10 +60,12 @@ export default function ProductsPage() {
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Hyper Bar…" />
           </FormField>
           <FormField label="Marca">
-            <Select value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-              <option value="">Todas</option>
-              {brands?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
+            <Combobox
+              value={brandId}
+              onChange={setBrandId}
+              placeholder="Todas"
+              options={[{ value: "", label: "Todas" }, ...(brands ?? []).map((b) => ({ value: b.id, label: b.name }))]}
+            />
           </FormField>
           <FormField label="Estado">
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -117,6 +119,7 @@ function CreateProductDialog({ open, onClose, brands, onCreated }: {
   open: boolean; onClose: () => void; brands: Brand[]; onCreated: () => void;
 }) {
   const toast = useToast();
+  const qc = useQueryClient();
   const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => api.get<Category[]>("/categories") });
   const [form, setForm] = useState({ name: "", brandId: "", categoryId: "", status: "DRAFT" });
   const create = useMutation({
@@ -133,14 +136,32 @@ function CreateProductDialog({ open, onClose, brands, onCreated }: {
       <div className="space-y-3">
         <FormField label="Nombre"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
         <FormField label="Marca">
-          <Select value={form.brandId} onChange={(e) => setForm({ ...form, brandId: e.target.value })}>
-            <option value="">Sin marca</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
+          <Combobox
+            value={form.brandId}
+            onChange={(v) => setForm({ ...form, brandId: v })}
+            placeholder="Sin marca"
+            options={[{ value: "", label: "Sin marca" }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+            allowCreate
+            onCreate={async (name) => {
+              const b = await api.post<Brand>("/brands", { name });
+              await qc.invalidateQueries({ queryKey: ["brands"] });
+              return b.id;
+            }}
+          />
         </FormField>
         <FormField label="Categoría">
-          <Select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-            <option value="">Sin categoría</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </Select>
+          <Combobox
+            value={form.categoryId}
+            onChange={(v) => setForm({ ...form, categoryId: v })}
+            placeholder="Sin categoría"
+            options={[{ value: "", label: "Sin categoría" }, ...(categories ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+            allowCreate
+            onCreate={async (name) => {
+              const c = await api.post<Category>("/categories", { name });
+              await qc.invalidateQueries({ queryKey: ["categories"] });
+              return c.id;
+            }}
+          />
         </FormField>
         <FormField label="Estado">
           <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -156,6 +177,7 @@ function VariantsDialog({ product, onClose, onChanged }: {
   product: ProductListItem | null; onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast();
+  const qc = useQueryClient();
   const enabled = Boolean(product);
   const { data: detail, refetch } = useQuery({
     queryKey: ["product", product?.id],
@@ -209,12 +231,30 @@ function VariantsDialog({ product, onClose, onChanged }: {
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
             <Input placeholder="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <Select value={form.flavorId} onChange={(e) => setForm({ ...form, flavorId: e.target.value })}>
-              <option value="">Sin sabor</option>{flavors?.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </Select>
-            <Select value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>
-              <option value="">Unidad…</option>{units?.map((u) => <option key={u.id} value={u.id}>{u.code}</option>)}
-            </Select>
+            <Combobox
+              value={form.flavorId}
+              onChange={(v) => setForm({ ...form, flavorId: v })}
+              placeholder="Sin sabor"
+              options={[{ value: "", label: "Sin sabor" }, ...(flavors ?? []).map((f) => ({ value: f.id, label: f.name }))]}
+              allowCreate
+              onCreate={async (name) => {
+                const f = await api.post<Flavor>("/flavors", { name });
+                await qc.invalidateQueries({ queryKey: ["flavors"] });
+                return f.id;
+              }}
+            />
+            <Combobox
+              value={form.unitId}
+              onChange={(v) => setForm({ ...form, unitId: v })}
+              placeholder="Unidad…"
+              options={(units ?? []).map((u) => ({ value: u.id, label: u.code }))}
+              allowCreate
+              onCreate={async (code) => {
+                const u = await api.post<Unit>("/units", { code: code.toUpperCase().slice(0, 20), name: code });
+                await qc.invalidateQueries({ queryKey: ["units"] });
+                return u.id;
+              }}
+            />
           </div>
           <Button size="sm" className="mt-2" loading={create.isPending}
             onClick={() => form.sku && form.name && form.unitId ? create.mutate() : toast.push("SKU, nombre y unidad requeridos", "error")}>

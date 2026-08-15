@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Combobox,
   EmptyState,
   FormField,
   Input,
@@ -55,6 +56,7 @@ export default function WarehousesPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -87,14 +89,18 @@ export default function WarehousesPage() {
             className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5"
           >
             <FormField label="Sucursal" error={errors.branchId?.message}>
-              <Select {...register("branchId")}>
-                <option value="">Selecciona…</option>
-                {branches?.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
+              <Controller
+                name="branchId"
+                control={control}
+                render={({ field }) => (
+                  <Combobox
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Selecciona…"
+                    options={(branches ?? []).map((b) => ({ value: b.id, label: b.name }))}
+                  />
+                )}
+              />
             </FormField>
             <FormField label="Nombre" error={errors.name?.message}>
               <Input {...register("name")} />

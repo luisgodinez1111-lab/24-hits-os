@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DollarSign, Plus } from "lucide-react";
 import {
-  Badge, Button, Card, CardBody, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { PriceList, Variant } from "@/lib/catalog-types";
@@ -100,9 +100,9 @@ function PriceListDialog({ listId, onClose }: { listId: string | null; onClose: 
         <div className="rounded-lg border border-gray-200 p-3">
           <p className="mb-2 text-xs font-semibold text-gray-600">Fijar precio</p>
           <div className="grid grid-cols-3 gap-2">
-            <Select value={form.variantId} onChange={(e) => setForm({ ...form, variantId: e.target.value })}>
-              <option value="">Variante…</option>{variants?.map((v) => <option key={v.id} value={v.id}>{v.sku}</option>)}
-            </Select>
+            <Combobox value={form.variantId} placeholder="Variante…"
+              onChange={(v) => setForm({ ...form, variantId: v })}
+              options={(variants ?? []).map((v) => ({ value: v.id, label: `${v.sku} · ${v.name}` }))} />
             <Input type="number" placeholder="Precio" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
             <Input type="number" placeholder="Mínimo" value={form.minimumPrice} onChange={(e) => setForm({ ...form, minimumPrice: e.target.value })} />
           </div>

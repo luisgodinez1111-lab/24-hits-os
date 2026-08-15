@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Truck } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Transfer, Variant } from "@/lib/catalog-types";
@@ -111,22 +111,19 @@ function CreateTransferDialog({ open, onClose, warehouses, onCreated }: {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <FormField label="Origen">
-            <Select value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="">…</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </Select>
+            <Combobox value={source} onChange={setSource} placeholder="Almacén…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
           </FormField>
           <FormField label="Destino">
-            <Select value={dest} onChange={(e) => setDest(e.target.value)}>
-              <option value="">…</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </Select>
+            <Combobox value={dest} onChange={setDest} placeholder="Almacén…"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
           </FormField>
         </div>
         {rows.map((r, idx) => (
           <div key={idx} className="grid grid-cols-2 gap-2">
-            <Select value={r.variantId} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, variantId: e.target.value } : x))}>
-              <option value="">Variante…</option>
-              {variants?.map((v) => <option key={v.id} value={v.id}>{v.sku} · {v.name}</option>)}
-            </Select>
+            <Combobox value={r.variantId} placeholder="Variante…"
+              onChange={(v) => setRows(rows.map((x, i) => (i === idx ? { ...x, variantId: v } : x)))}
+              options={(variants ?? []).map((v) => ({ value: v.id, label: `${v.sku} · ${v.name}` }))} />
             <Input type="number" placeholder="Cantidad" value={r.qty}
               onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, qty: e.target.value } : x))} />
           </div>

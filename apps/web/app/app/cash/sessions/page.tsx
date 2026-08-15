@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownUp, LockKeyhole, Plus, Wallet } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { CashRegister, CashSession } from "@/lib/catalog-types";
@@ -98,9 +98,8 @@ function OpenSessionDialog({ open, onClose, registers, onDone }: {
         <Button size="sm" loading={mut.isPending} onClick={() => registerId ? mut.mutate() : toast.push("Selecciona una caja", "error")}>Abrir</Button></>}>
       <div className="space-y-3">
         <FormField label="Caja">
-          <Select value={registerId} onChange={(e) => setRegisterId(e.target.value)}>
-            <option value="">…</option>{registers.filter((r) => r.status === "ACTIVE").map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </Select>
+          <Combobox value={registerId} onChange={setRegisterId} placeholder="Caja…"
+            options={registers.filter((r) => r.status === "ACTIVE").map((r) => ({ value: r.id, label: r.name }))} />
         </FormField>
         <FormField label="Fondo de apertura"><Input type="number" value={openingFloat} onChange={(e) => setOpeningFloat(e.target.value)} /></FormField>
       </div>
@@ -183,9 +182,8 @@ function RegistersDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
           {registers && registers.length === 0 && <p className="text-sm text-gray-400">Aún no hay cajas.</p>}
         </div>
         <div className="grid grid-cols-3 gap-2 border-t border-gray-200 pt-3">
-          <Select value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
-            <option value="">Sucursal…</option>{branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
+          <Combobox value={form.branchId} onChange={(v) => setForm({ ...form, branchId: v })} placeholder="Sucursal…"
+            options={(branches ?? []).map((b) => ({ value: b.id, label: b.name }))} />
           <Input placeholder="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Input placeholder="Código" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
         </div>

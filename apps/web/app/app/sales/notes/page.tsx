@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Printer, Receipt, Undo2 } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { CashSession, SaleNote } from "@/lib/catalog-types";
@@ -131,9 +131,8 @@ function ReturnDialog({ note, onClose, onDone }: { note: SaleNote | null; onClos
         </FormField>
         {refundMethod === "CASH" && (
           <FormField label="Turno de caja">
-            <Select value={cashSessionId} onChange={(e) => setCashSessionId(e.target.value)}>
-              <option value="">…</option>{openSessions.map((s) => <option key={s.id} value={s.id}>{s.id.slice(0, 8)}</option>)}
-            </Select>
+            <Combobox value={cashSessionId} onChange={setCashSessionId} placeholder="Turno…"
+              options={openSessions.map((s) => ({ value: s.id, label: s.id.slice(0, 8) }))} />
           </FormField>
         )}
       </div>

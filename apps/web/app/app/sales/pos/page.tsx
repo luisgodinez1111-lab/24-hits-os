@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
-import { Button, FormField, Input, Select, useToast } from "@24hits/ui";
+import { Button, Combobox, FormField, Input, Select, useToast } from "@24hits/ui";
 import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { useMe } from "@/lib/me";
@@ -96,10 +96,12 @@ export default function PosPage() {
                 : <div className="flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs text-amber-700">Sin almacén asignado</div>}
             </FormField>
             <FormField label="Cliente (opcional)">
-              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="">Mostrador</option>
-                {customers?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
+              <Combobox
+                value={customerId}
+                onChange={setCustomerId}
+                placeholder="Mostrador"
+                options={[{ value: "", label: "Mostrador" }, ...(customers ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+              />
             </FormField>
           </div>
 

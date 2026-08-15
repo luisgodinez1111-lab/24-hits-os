@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Plus } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { StockCount, Variant } from "@/lib/catalog-types";
@@ -101,9 +101,8 @@ function CreateCountDialog({ open, onClose, warehouses, onCreated }: {
         }}>Crear</Button></>}>
       <div className="space-y-3">
         <FormField label="Almacén">
-          <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            <option value="">…</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </Select>
+          <Combobox value={warehouseId} onChange={setWarehouseId} placeholder="Almacén…"
+            options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
         </FormField>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" checked={blind} onChange={(e) => setBlind(e.target.checked)} />

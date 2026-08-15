@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ShoppingCart } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { PurchaseOrder, Supplier, Variant } from "@/lib/catalog-types";
@@ -126,21 +126,19 @@ function CreatePODialog({ open, onClose, suppliers, onCreated }: {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <FormField label="Proveedor">
-            <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">…</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
+            <Combobox value={supplierId} onChange={setSupplierId} placeholder="Proveedor…"
+              options={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
           </FormField>
           <FormField label="Almacén destino">
-            <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">…</option>{warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </Select>
+            <Combobox value={warehouseId} onChange={setWarehouseId} placeholder="Almacén…"
+              options={(warehouses ?? []).map((w) => ({ value: w.id, label: w.name }))} />
           </FormField>
         </div>
         {rows.map((r, idx) => (
           <div key={idx} className="grid grid-cols-3 gap-2">
-            <Select value={r.variantId} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, variantId: e.target.value } : x))}>
-              <option value="">Variante…</option>{variants?.map((v) => <option key={v.id} value={v.id}>{v.sku}</option>)}
-            </Select>
+            <Combobox value={r.variantId} placeholder="Variante…"
+              onChange={(v) => setRows(rows.map((x, i) => (i === idx ? { ...x, variantId: v } : x)))}
+              options={(variants ?? []).map((v) => ({ value: v.id, label: `${v.sku} · ${v.name}` }))} />
             <Input type="number" placeholder="Cantidad" value={r.qty} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, qty: e.target.value } : x))} />
             <Input type="number" placeholder="Costo unit." value={r.cost} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, cost: e.target.value } : x))} />
           </div>

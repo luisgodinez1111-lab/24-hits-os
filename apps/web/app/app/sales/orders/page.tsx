@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, CreditCard, Plus, Receipt } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
@@ -183,9 +183,12 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <FormField label="Cliente (opcional)">
-            <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">Mostrador</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            <Combobox
+              value={customerId}
+              onChange={setCustomerId}
+              placeholder="Mostrador"
+              options={[{ value: "", label: "Mostrador" }, ...customers.map((c) => ({ value: c.id, label: c.name }))]}
+            />
           </FormField>
           <FormField label="Almacén">
             <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">{me?.defaultWarehouse?.name ?? "Sin almacén asignado"}</div>
@@ -193,9 +196,12 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
         </div>
         {rows.map((r, idx) => (
           <div key={idx} className="grid grid-cols-3 gap-2">
-            <Select value={r.variantId} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, variantId: e.target.value } : x))}>
-              <option value="">Variante…</option>{variants?.map((v) => <option key={v.id} value={v.id}>{v.sku}</option>)}
-            </Select>
+            <Combobox
+              value={r.variantId}
+              onChange={(v) => setRows(rows.map((x, i) => (i === idx ? { ...x, variantId: v } : x)))}
+              placeholder="Variante…"
+              options={(variants ?? []).map((v) => ({ value: v.id, label: `${v.sku} · ${v.name}` }))}
+            />
             <Input type="number" placeholder="Cantidad" value={r.qty} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, qty: e.target.value } : x))} />
             <Input type="number" placeholder="Precio (opc.)" value={r.price} onChange={(e) => setRows(rows.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))} />
           </div>
