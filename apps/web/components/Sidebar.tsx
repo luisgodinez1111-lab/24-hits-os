@@ -4,13 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Boxes,
+  ClipboardCheck,
   Home,
   Layers,
   Package,
+  ScanLine,
   Settings,
   ShoppingCart,
-  Store,
   TrendingUp,
+  UserSquare,
   type LucideIcon,
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
@@ -38,8 +40,13 @@ const sections: NavSection[] = [
   },
   {
     title: "Ventas",
-    // POS, pedidos, notas de venta/crédito y clientes en una sola ventana con pestañas.
-    items: [{ href: "/app/sales", label: "Ventas", icon: Store, perm: "orders.read" }],
+    // Accesos directos a lo de uso diario; Notas de venta/crédito viven en las
+    // pestañas de la ventana de Ventas.
+    items: [
+      { href: "/app/sales/pos", label: "Punto de venta", icon: ScanLine, perm: "orders.create" },
+      { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
+      { href: "/app/sales/customers", label: "Clientes", icon: UserSquare, perm: "customers.read" },
+    ],
   },
   {
     title: "Inventario",
