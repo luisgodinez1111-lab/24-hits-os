@@ -5,6 +5,7 @@ import { PermissionService } from "../iam/permission.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
 import type { ReportRangeInput, SalesRegisterQuery, TopSellersQuery } from "./reports.dto.js";
+import { zonedDayEnd, zonedDayStart } from "./zoned-range.js";
 
 const ZERO = new Prisma.Decimal(0);
 const METHODS: PaymentMethod[] = ["CASH", "CARD", "TRANSFER", "OTHER"];
@@ -19,9 +20,17 @@ export class ReportsService {
     private readonly permissions: PermissionService
   ) {}
 
-  private resolveRange(range: ReportRangeInput): { from: Date; to: Date } {
-    const to = range.to ?? new Date();
-    const from = range.from ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  // Rango tz-aware: los días indicados (from/to) se interpretan como días de
+  // CALENDARIO en la zona horaria de la organización (Chihuahua por defecto), no
+  // en UTC. Así "hoy" y los cortes cuadran con el día local. Sin rango: últimos
+  // 30 días móviles hasta ahora.
+  private async resolveRange(organizationId: string, range: ReportRangeInput): Promise<{ from: Date; to: Date }> {
+    const org = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } })
+    );
+    const tz = org?.timezone ?? "America/Chihuahua";
+    const to = range.to ? zonedDayEnd(range.to, tz) : new Date();
+    const from = range.from ? zonedDayStart(range.from, tz) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { from, to };
   }
 
@@ -32,7 +41,7 @@ export class ReportsService {
   // KPIs de ventas. Los campos de costo/utilidad SOLO se incluyen si la membresía
   // tiene `profits.read` (filtro en el BACKEND, no en la UI).
   async salesSummary(organizationId: string, range: ReportRangeInput, membershipId?: string) {
-    const { from, to } = this.resolveRange(range);
+    const { from, to } = await this.resolveRange(organizationId, range);
     const branchId = range.branchId;
 
     const result = await this.prisma.withTenant(organizationId, async (tx) => {
@@ -108,7 +117,7 @@ export class ReportsService {
   // sus pagos, su nota de venta y su COGS. Excluye DRAFT por defecto. Los campos de
   // costo/utilidad solo se incluyen si la membresía tiene profits.read (filtro backend).
   async salesRegister(organizationId: string, query: SalesRegisterQuery, membershipId?: string) {
-    const { from, to } = this.resolveRange(query);
+    const { from, to } = await this.resolveRange(organizationId, query);
     const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
 
     return this.prisma.withTenant(organizationId, async (tx) => {
@@ -213,7 +222,7 @@ export class ReportsService {
 
   // Utilidad por producto (requiere profits.read en el controller). Top 50 por utilidad.
   async profitByProduct(organizationId: string, range: ReportRangeInput) {
-    const { from, to } = this.resolveRange(range);
+    const { from, to } = await this.resolveRange(organizationId, range);
     const branchId = range.branchId;
 
     return this.prisma.withTenant(organizationId, async (tx) => {
@@ -270,7 +279,7 @@ export class ReportsService {
   // renglones ENTREGADOS (unidades vendidas, ingreso, COGS) con las devoluciones
   // (unidades devueltas) y agrega por la dimensión pedida. Costo/utilidad gated.
   async topSellers(organizationId: string, query: TopSellersQuery, membershipId?: string) {
-    const { from, to } = this.resolveRange(query);
+    const { from, to } = await this.resolveRange(organizationId, query);
     const { dimension, branchId, productId, sort, limit } = query;
     const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
 
