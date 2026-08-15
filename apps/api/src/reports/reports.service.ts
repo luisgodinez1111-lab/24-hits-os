@@ -4,8 +4,8 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { PermissionService } from "../iam/permission.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
-import type { ReportRangeInput, SalesRegisterQuery, TopSellersQuery } from "./reports.dto.js";
-import { zonedDayEnd, zonedDayStart } from "./zoned-range.js";
+import type { ReportRangeInput, SalesRegisterQuery, TimeseriesQuery, TopSellersQuery } from "./reports.dto.js";
+import { zonedDateKey, zonedDayEnd, zonedDayStart } from "./zoned-range.js";
 
 const ZERO = new Prisma.Decimal(0);
 const METHODS: PaymentMethod[] = ["CASH", "CARD", "TRANSFER", "OTHER"];
@@ -24,11 +24,15 @@ export class ReportsService {
   // CALENDARIO en la zona horaria de la organización (Chihuahua por defecto), no
   // en UTC. Así "hoy" y los cortes cuadran con el día local. Sin rango: últimos
   // 30 días móviles hasta ahora.
-  private async resolveRange(organizationId: string, range: ReportRangeInput): Promise<{ from: Date; to: Date }> {
+  private async orgTimezone(organizationId: string): Promise<string> {
     const org = await this.prisma.withTenant(organizationId, (tx) =>
       tx.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } })
     );
-    const tz = org?.timezone ?? "America/Chihuahua";
+    return org?.timezone ?? "America/Chihuahua";
+  }
+
+  private async resolveRange(organizationId: string, range: ReportRangeInput): Promise<{ from: Date; to: Date }> {
+    const tz = await this.orgTimezone(organizationId);
     const to = range.to ? zonedDayEnd(range.to, tz) : new Date();
     const from = range.from ? zonedDayStart(range.from, tz) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { from, to };
@@ -376,6 +380,108 @@ export class ReportsService {
 
       rows.sort((x, y) => (sort === "returns" ? y._r - x._r : y._u - x._u));
       return { dimension, rows: rows.slice(0, limit).map(({ _u, _r, ...row }) => row) };
+    });
+  }
+
+  // Serie temporal de ventas: cuánto se vendió por día (o mes) en cualquier rango
+  // histórico. Bucketiza por el día/mes LOCAL del negocio (no UTC). Incluye
+  // utilidad por bucket solo si la membresía tiene profits.read.
+  async salesTimeseries(organizationId: string, query: TimeseriesQuery, membershipId?: string) {
+    const { from, to } = await this.resolveRange(organizationId, query);
+    const tz = await this.orgTimezone(organizationId);
+    const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
+
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const orders = await tx.order.findMany({
+        where: { createdAt: { gte: from, lte: to }, status: { not: "CANCELLED" }, ...(query.branchId ? { branchId: query.branchId } : {}) },
+        select: {
+          total: true,
+          createdAt: true,
+          items: { select: { quantity: true, fulfilledQuantity: true, unitPrice: true, discount: true, unitCostSnapshot: true } },
+        },
+      });
+
+      interface Bucket { orders: number; billed: Prisma.Decimal; units: Prisma.Decimal; revenueNet: Prisma.Decimal; cogs: Prisma.Decimal }
+      const acc = new Map<string, Bucket>();
+      for (const o of orders) {
+        const key = zonedDateKey(o.createdAt, tz, query.granularity);
+        const b = acc.get(key) ?? { orders: 0, billed: ZERO, units: ZERO, revenueNet: ZERO, cogs: ZERO };
+        b.orders += 1;
+        b.billed = b.billed.plus(o.total);
+        for (const it of o.items) {
+          b.units = b.units.plus(it.quantity);
+          const fq = new Prisma.Decimal(it.fulfilledQuantity);
+          b.revenueNet = b.revenueNet.plus(new Prisma.Decimal(it.unitPrice).times(fq).minus(it.discount));
+          b.cogs = b.cogs.plus(new Prisma.Decimal(it.unitCostSnapshot ?? 0).times(fq));
+        }
+        acc.set(key, b);
+      }
+
+      const points = [...acc.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(([date, b]) => {
+          const profit = b.revenueNet.minus(b.cogs);
+          return {
+            date,
+            orders: b.orders,
+            billed: b.billed.toString(),
+            units: b.units.toString(),
+            ...(includeCost ? { grossProfit: profit.toString(), margin: b.revenueNet.gt(0) ? profit.dividedBy(b.revenueNet).toString() : "0" } : {}),
+          };
+        });
+
+      return { granularity: query.granularity, from: from.toISOString(), to: to.toISOString(), points };
+    });
+  }
+
+  // Ventas por zona de la ciudad (Chihuahua): dónde se vende más y dónde se gana
+  // más. Los clientes sin zona / mostrador caen en "SIN_ZONA". Utilidad gated.
+  async salesByZone(organizationId: string, range: ReportRangeInput, membershipId?: string) {
+    const { from, to } = await this.resolveRange(organizationId, range);
+    const includeCost = membershipId ? await this.permissions.can(membershipId, ["profits.read"]) : false;
+
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const orders = await tx.order.findMany({
+        where: { createdAt: { gte: from, lte: to }, status: { not: "CANCELLED" }, ...(range.branchId ? { branchId: range.branchId } : {}) },
+        select: {
+          total: true,
+          customer: { select: { zone: true } },
+          items: { select: { quantity: true, fulfilledQuantity: true, unitPrice: true, discount: true, unitCostSnapshot: true } },
+        },
+      });
+
+      interface Zone { orders: number; billed: Prisma.Decimal; units: Prisma.Decimal; revenueNet: Prisma.Decimal; cogs: Prisma.Decimal }
+      const acc = new Map<string, Zone>();
+      for (const o of orders) {
+        const key = o.customer?.zone ?? "SIN_ZONA";
+        const z = acc.get(key) ?? { orders: 0, billed: ZERO, units: ZERO, revenueNet: ZERO, cogs: ZERO };
+        z.orders += 1;
+        z.billed = z.billed.plus(o.total);
+        for (const it of o.items) {
+          z.units = z.units.plus(it.quantity);
+          const fq = new Prisma.Decimal(it.fulfilledQuantity);
+          z.revenueNet = z.revenueNet.plus(new Prisma.Decimal(it.unitPrice).times(fq).minus(it.discount));
+          z.cogs = z.cogs.plus(new Prisma.Decimal(it.unitCostSnapshot ?? 0).times(fq));
+        }
+        acc.set(key, z);
+      }
+
+      const rows = [...acc.entries()]
+        .map(([zone, z]) => {
+          const profit = z.revenueNet.minus(z.cogs);
+          return {
+            zone,
+            orders: z.orders,
+            billed: z.billed.toString(),
+            units: z.units.toString(),
+            ...(includeCost ? { grossProfit: profit.toString(), margin: z.revenueNet.gt(0) ? profit.dividedBy(z.revenueNet).toString() : "0" } : {}),
+            _b: Number(z.billed),
+          };
+        })
+        .sort((a, b) => b._b - a._b)
+        .map(({ _b, ...r }) => r);
+
+      return { from: from.toISOString(), to: to.toISOString(), rows };
     });
   }
 

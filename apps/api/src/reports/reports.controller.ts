@@ -5,7 +5,7 @@ import { RequirePermissions } from "../common/decorators/require-permissions.dec
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { ReportsService } from "./reports.service.js";
-import { reportRangeSchema, salesRegisterQuerySchema, topSellersQuerySchema, type ReportRangeInput, type SalesRegisterQuery, type TopSellersQuery } from "./reports.dto.js";
+import { reportRangeSchema, salesRegisterQuerySchema, timeseriesQuerySchema, topSellersQuerySchema, type ReportRangeInput, type SalesRegisterQuery, type TimeseriesQuery, type TopSellersQuery } from "./reports.dto.js";
 
 @ApiTags("reports")
 @Controller("reports")
@@ -38,6 +38,20 @@ export class ReportsController {
   @RequirePermissions("reports.read")
   topSellers(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(topSellersQuerySchema)) q: TopSellersQuery) {
     return this.reports.topSellers(u.organizationId!, q, u.membershipId);
+  }
+
+  // Serie temporal: cuánto se vendió por día/mes en cualquier rango histórico.
+  @Get("timeseries")
+  @RequirePermissions("reports.read")
+  timeseries(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(timeseriesQuerySchema)) q: TimeseriesQuery) {
+    return this.reports.salesTimeseries(u.organizationId!, q, u.membershipId);
+  }
+
+  // Ventas y utilidad por zona de la ciudad.
+  @Get("by-zone")
+  @RequirePermissions("reports.read")
+  byZone(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(reportRangeSchema)) q: ReportRangeInput) {
+    return this.reports.salesByZone(u.organizationId!, q, u.membershipId);
   }
 
   @Get("cash-cut/:sessionId")

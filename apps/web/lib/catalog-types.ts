@@ -322,6 +322,35 @@ export interface TopSellers {
   rows: TopSellerRow[];
 }
 
+export interface TimeseriesPoint {
+  date: string;
+  orders: number;
+  billed: string;
+  units: string;
+  grossProfit?: string;
+  margin?: string;
+}
+export interface SalesTimeseries {
+  granularity: "day" | "month";
+  from: string;
+  to: string;
+  points: TimeseriesPoint[];
+}
+
+export interface ZoneRow {
+  zone: string;
+  orders: number;
+  billed: string;
+  units: string;
+  grossProfit?: string;
+  margin?: string;
+}
+export interface SalesByZone {
+  from: string;
+  to: string;
+  rows: ZoneRow[];
+}
+
 export interface CustomerAccount {
   customer: { id: string; name: string; type: string; status: string };
   creditLimit: string | null;

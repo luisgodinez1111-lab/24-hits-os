@@ -39,3 +39,13 @@ export function zonedDayStart(calendar: Date, timeZone: string): Date {
 export function zonedDayEnd(calendar: Date, timeZone: string): Date {
   return wallTimeToUtc(calendar.getUTCFullYear(), calendar.getUTCMonth() + 1, calendar.getUTCDate(), 23, 59, 59, 999, timeZone);
 }
+
+// Clave de agrupación de un instante en la zona del negocio: "YYYY-MM-DD" (día)
+// o "YYYY-MM" (mes). Se usa para bucketizar la serie temporal en hora local.
+export function zonedDateKey(instant: Date, timeZone: string, granularity: "day" | "month"): string {
+  const dtf = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const p = dtf.formatToParts(instant);
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "00";
+  const ym = `${g("year")}-${g("month")}`;
+  return granularity === "month" ? ym : `${ym}-${g("day")}`;
+}

@@ -24,3 +24,10 @@ export const topSellersQuerySchema = reportRangeSchema.extend({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type TopSellersQuery = z.infer<typeof topSellersQuerySchema>;
+
+// Serie temporal de ventas: cuánto se vendió por día (o mes) en cualquier rango
+// histórico. Granularidad "day" para el detalle diario, "month" para tendencias.
+export const timeseriesQuerySchema = reportRangeSchema.extend({
+  granularity: z.enum(["day", "month"]).default("day"),
+});
+export type TimeseriesQuery = z.infer<typeof timeseriesQuerySchema>;
