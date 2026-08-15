@@ -4,15 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
-  BarChart3,
-  BookText,
   Boxes,
   ClipboardCheck,
   ClipboardList,
   Contact,
-  DollarSign,
-  Droplet,
-  FolderTree,
   Home,
   Layers,
   Package,
@@ -20,7 +15,6 @@ import {
   ScanLine,
   Settings,
   ShoppingCart,
-  Tag,
   TrendingUp,
   Truck,
   Undo2,
@@ -78,21 +72,13 @@ const sections: NavSection[] = [
   },
   {
     title: "Catálogo",
-    items: [
-      { href: "/app/catalog/products", label: "Productos", icon: Package, perm: "products.read" },
-      { href: "/app/catalog/brands", label: "Marcas", icon: Tag, perm: "brands.read" },
-      { href: "/app/catalog/categories", label: "Categorías", icon: FolderTree, perm: "categories.read" },
-      { href: "/app/catalog/flavors", label: "Sabores", icon: Droplet, perm: "flavors.read" },
-      { href: "/app/catalog/pricing", label: "Precios", icon: DollarSign, perm: "pricing.read" },
-    ],
+    // Productos, marcas, categorías, sabores y precios en una sola ventana con pestañas.
+    items: [{ href: "/app/catalog", label: "Catálogo", icon: Package, perm: "products.read" }],
   },
   {
     title: "Reportes",
-    items: [
-      { href: "/app/reports", label: "Financieros", icon: TrendingUp, perm: "reports.read" },
-      { href: "/app/reports/analysis", label: "Más vendidos", icon: BarChart3, perm: "reports.read" },
-      { href: "/app/reports/register", label: "Registro de ventas", icon: BookText, perm: "reports.read" },
-    ],
+    // Financieros, más vendidos y registro de ventas en una sola ventana con pestañas.
+    items: [{ href: "/app/reports", label: "Reportes", icon: TrendingUp, perm: "reports.read" }],
   },
   {
     title: "Administración",
