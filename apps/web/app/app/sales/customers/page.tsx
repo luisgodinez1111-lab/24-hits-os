@@ -9,6 +9,7 @@ import {
 } from "@24hits/ui";
 import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+import { classifyZone } from "@/lib/zone";
 
 const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
@@ -97,7 +98,7 @@ function CustomerFormDialog({ customer, open, onClose, onSaved }: {
 }) {
   const toast = useToast();
   const editing = Boolean(customer);
-  const empty = { code: "", name: "", type: "RETAIL", phone: "", zone: "", address: "", email: "", taxId: "", creditLimit: "" };
+  const empty = { code: "", name: "", type: "RETAIL", phone: "", zone: "", address: "", email: "", creditLimit: "" };
   const [f, setF] = useState(empty);
 
   // Sincroniza el formulario al abrir (con los datos del cliente o vacío).
@@ -107,10 +108,15 @@ function CustomerFormDialog({ customer, open, onClose, onSaved }: {
       ? {
           code: customer.code ?? "", name: customer.name, type: customer.type, phone: customer.phone ?? "",
           zone: customer.zone ?? "", address: customer.address ?? "", email: customer.email ?? "",
-          taxId: customer.taxId ?? "", creditLimit: customer.creditLimit ?? "",
+          creditLimit: customer.creditLimit ?? "",
         }
       : empty);
   }, [open, customer]);
+
+  // Al escribir la dirección, clasifica la zona automáticamente (editable).
+  function onAddressChange(value: string) {
+    setF((prev) => ({ ...prev, address: value, zone: classifyZone(value) ?? prev.zone }));
+  }
 
   const save = useMutation({
     mutationFn: () => {
@@ -122,7 +128,6 @@ function CustomerFormDialog({ customer, open, onClose, onSaved }: {
         zone: f.zone || undefined,
         address: f.address.trim() || undefined,
         email: f.email.trim() || undefined,
-        taxId: f.taxId.trim() || undefined,
         creditLimit: f.creditLimit ? Number(f.creditLimit) : undefined,
       };
       return editing ? api.patch(`/customers/${customer!.id}`, body) : api.post("/customers", body);
@@ -148,9 +153,13 @@ function CustomerFormDialog({ customer, open, onClose, onSaved }: {
           </FormField>
         </div>
         <FormField label="Nombre"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></FormField>
+        <FormField label="Dirección (calle y colonia)">
+          <Input value={f.address} onChange={(e) => onAddressChange(e.target.value)} placeholder="Ej. Calle 20 #1200, Col. Santo Niño" />
+          <p className="mt-1 text-xs text-gray-400">La zona se asigna automáticamente según la colonia/calle. Puedes corregirla abajo.</p>
+        </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Celular"><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="614…" /></FormField>
-          <FormField label="Zona (Chihuahua)">
+          <FormField label="Zona (automática)">
             <Select value={f.zone} onChange={(e) => setF({ ...f, zone: e.target.value })}>
               <option value="">Sin zona</option>
               <option value="NORTE">Norte</option>
@@ -161,12 +170,10 @@ function CustomerFormDialog({ customer, open, onClose, onSaved }: {
             </Select>
           </FormField>
         </div>
-        <FormField label="Dirección (opcional)"><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} placeholder="Calle, número, colonia…" /></FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Correo (opcional)"><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></FormField>
-          <FormField label="RFC (opcional)"><Input value={f.taxId} onChange={(e) => setF({ ...f, taxId: e.target.value })} /></FormField>
+          <FormField label="Límite de crédito (opcional)"><Input type="number" value={f.creditLimit} onChange={(e) => setF({ ...f, creditLimit: e.target.value })} /></FormField>
         </div>
-        <FormField label="Límite de crédito (opcional)"><Input type="number" value={f.creditLimit} onChange={(e) => setF({ ...f, creditLimit: e.target.value })} /></FormField>
       </div>
     </Dialog>
   );
