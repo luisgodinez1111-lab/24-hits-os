@@ -14,6 +14,16 @@ const pct = (v?: string | null) => (v == null ? "—" : `${(Number(v) * 100).toF
 // Fecha local en formato YYYY-MM-DD (no UTC).
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const parseLocal = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y!, m! - 1, d!); };
+
+// Variación relativa vs. el periodo anterior. hasPrev=false marca "nuevo"
+// (antes 0, ahora >0). Devuelve null si no hay nada que comparar.
+function deltaOf(cur?: string | number | null, prev?: string | number | null): { pct: number; hasPrev: boolean } | null {
+  if (cur == null || prev == null) return null;
+  const c = Number(cur), p = Number(prev);
+  if (p === 0) return c > 0 ? { pct: 0, hasPrev: false } : null;
+  return { pct: (c - p) / p, hasPrev: true };
+}
 
 const zoneLabel: Record<string, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro", SIN_ZONA: "Sin zona / Mostrador" };
 
@@ -40,7 +50,13 @@ export default function DashboardPage() {
     setFrom(r.from); setTo(r.to); setGranularity(r.granularity); setActive(p.key);
   };
 
+  // Periodo anterior de igual duración, para el comparativo.
+  const days = Math.round((parseLocal(to).getTime() - parseLocal(from).getTime()) / 86400000) + 1;
+  const prevTo = isoLocal(addDays(parseLocal(from), -1));
+  const prevFrom = isoLocal(addDays(parseLocal(from), -days));
+
   const { data: summary } = useQuery({ queryKey: ["dash-sales", from, to], queryFn: () => api.get<SalesSummary>(`/reports/sales?${qs}`) });
+  const { data: summaryPrev } = useQuery({ queryKey: ["dash-sales-prev", prevFrom, prevTo], queryFn: () => api.get<SalesSummary>(`/reports/sales?from=${prevFrom}&to=${prevTo}`) });
   const { data: series, isLoading: loadingSeries } = useQuery({ queryKey: ["dash-ts", from, to, granularity], queryFn: () => api.get<SalesTimeseries>(`/reports/timeseries?${qs}&granularity=${granularity}`) });
   const { data: models } = useQuery({ queryKey: ["dash-models", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=product&limit=8`) });
   const { data: flavors } = useQuery({ queryKey: ["dash-flavors", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=flavor&limit=8`) });
@@ -72,15 +88,18 @@ export default function DashboardPage() {
         <FormField label="Hasta"><Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setActive(""); }} /></FormField>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi label="Ventas" value={money(summary?.billed)} />
-        <Kpi label="Cobrado" value={money(summary?.collected)} />
-        <Kpi label="Pedidos" value={summary ? String(summary.orderCount) : "—"} />
-        <Kpi label="Ticket prom." value={money(summary?.avgTicket)} />
-        {summary?.grossProfit != null
-          ? <Kpi label="Utilidad" value={money(summary.grossProfit)} sub={`margen ${pct(summary.margin)}`} accent />
-          : <Kpi label="Utilidad" value="—" sub="sin permiso" />}
+      {/* KPIs con comparativo vs. periodo anterior */}
+      <div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Kpi label="Ventas" value={money(summary?.billed)} delta={deltaOf(summary?.billed, summaryPrev?.billed)} />
+          <Kpi label="Cobrado" value={money(summary?.collected)} delta={deltaOf(summary?.collected, summaryPrev?.collected)} />
+          <Kpi label="Pedidos" value={summary ? String(summary.orderCount) : "—"} delta={deltaOf(summary?.orderCount, summaryPrev?.orderCount)} />
+          <Kpi label="Ticket prom." value={money(summary?.avgTicket)} delta={deltaOf(summary?.avgTicket, summaryPrev?.avgTicket)} />
+          {summary?.grossProfit != null
+            ? <Kpi label="Utilidad" value={money(summary.grossProfit)} sub={`margen ${pct(summary.margin)}`} delta={deltaOf(summary.grossProfit, summaryPrev?.grossProfit)} accent />
+            : <Kpi label="Utilidad" value="—" sub="sin permiso" />}
+        </div>
+        <p className="mt-1.5 text-[11px] text-gray-400">▲▼ comparado con el periodo anterior ({prevFrom} → {prevTo})</p>
       </div>
 
       {/* Serie temporal */}
@@ -128,11 +147,18 @@ export default function DashboardPage() {
   );
 }
 
-function Kpi({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function Kpi({ label, value, sub, accent, delta }: { label: string; value: string; sub?: string; accent?: boolean; delta?: { pct: number; hasPrev: boolean } | null }) {
   return (
     <div className={`rounded-lg border p-3 ${accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white"}`}>
       <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-900">{value}</p>
+      <div className="mt-0.5 flex items-baseline gap-2">
+        <p className="text-lg font-bold tabular-nums text-gray-900">{value}</p>
+        {delta && (
+          delta.hasPrev
+            ? <span className={`text-[11px] font-semibold ${delta.pct >= 0 ? "text-green-600" : "text-red-600"}`}>{delta.pct >= 0 ? "▲" : "▼"} {Math.abs(delta.pct * 100).toFixed(1)}%</span>
+            : <span className="text-[11px] font-semibold text-green-600">nuevo</span>
+        )}
+      </div>
       {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
     </div>
   );
