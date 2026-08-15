@@ -192,15 +192,18 @@ model FeatureFlag {
 
 // Pertenencia usuario ↔ organización (N:M). Los roles se asignan aquí, no al User.
 model OrganizationMembership {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId          String           @db.Uuid
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId  String           @db.Uuid
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  status          MembershipStatus @default(INVITED)
-  invitedByUserId String?          @db.Uuid
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String           @db.Uuid
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId     String           @db.Uuid
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status             MembershipStatus @default(INVITED)
+  invitedByUserId    String?          @db.Uuid
+  // Almacén fijo del usuario: sus ventas salen de aquí (operación por usuario).
+  defaultWarehouseId String?          @db.Uuid
+  defaultWarehouse   Warehouse?       @relation("MembershipDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   roles    MembershipRole[]
   branches MembershipBranch[]
@@ -244,6 +247,8 @@ model Warehouse {
   status         WarehouseStatus @default(ACTIVE)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+
+  defaultForMemberships OrganizationMembership[] @relation("MembershipDefaultWarehouse")
 
   @@unique([branchId, code])
   @@index([organizationId])
@@ -1125,6 +1130,13 @@ enum PaymentStatus {
   PAID
 }
 
+// Estado de entrega para el modelo por pedido/domicilio.
+enum DeliveryStatus {
+  PENDING
+  DISPATCHED
+  DELIVERED
+}
+
 model Customer {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String         @db.Uuid
@@ -1145,31 +1157,37 @@ model Customer {
 }
 
 model Order {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId  String        @db.Uuid
-  branchId        String        @db.Uuid
-  warehouseId     String        @db.Uuid
-  customerId      String?       @db.Uuid
-  customer        Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  number          String
-  status          OrderStatus   @default(DRAFT)
-  channel         String?
-  currency        String        @default("MXN") @db.Char(3)
-  priceListId     String?       @db.Uuid
-  subtotal        Decimal       @default(0) @db.Decimal(18, 4)
-  discountTotal   Decimal       @default(0) @db.Decimal(18, 4)
-  taxTotal        Decimal       @default(0) @db.Decimal(18, 4)
-  total           Decimal       @default(0) @db.Decimal(18, 4)
-  paymentStatus   PaymentStatus @default(PENDING)
-  notes           String?
-  confirmedAt     DateTime?
-  fulfilledAt     DateTime?
-  cancelledAt     DateTime?
-  createdByUserId String        @db.Uuid
-  correlationId   String?
-  idempotencyKey  String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String          @db.Uuid
+  branchId            String          @db.Uuid
+  warehouseId         String          @db.Uuid
+  customerId          String?         @db.Uuid
+  customer            Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  number              String
+  status              OrderStatus     @default(DRAFT)
+  channel             String?
+  currency            String          @default("MXN") @db.Char(3)
+  priceListId         String?         @db.Uuid
+  subtotal            Decimal         @default(0) @db.Decimal(18, 4)
+  discountTotal       Decimal         @default(0) @db.Decimal(18, 4)
+  taxTotal            Decimal         @default(0) @db.Decimal(18, 4)
+  total               Decimal         @default(0) @db.Decimal(18, 4)
+  paymentStatus       PaymentStatus   @default(PENDING)
+  notes               String?
+  // Entrega a domicilio (pedidos por WhatsApp → domicilio/ubicación).
+  deliveryAddress     String?
+  deliveryPhone       String?
+  deliveryNotes       String?
+  deliveryLocationUrl String?
+  deliveryStatus      DeliveryStatus?
+  confirmedAt         DateTime?
+  fulfilledAt         DateTime?
+  cancelledAt         DateTime?
+  createdByUserId     String          @db.Uuid
+  correlationId       String?
+  idempotencyKey      String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   items       OrderItem[]
   payments    Payment[]

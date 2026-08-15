@@ -11,6 +11,7 @@ import { ENV } from "../config/app-config.module.js";
 import type {
   InviteMemberInput,
   SetMemberStatusInput,
+  SetMemberWarehouseInput,
   UpdateMemberRolesInput,
 } from "./member.dto.js";
 
@@ -36,8 +37,36 @@ export class MemberService {
         createdAt: true,
         user: { select: { id: true, email: true, name: true, status: true } },
         roles: { select: { role: { select: { id: true, key: true, name: true } } } },
+        defaultWarehouse: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "asc" },
+    });
+  }
+
+  // Asigna (o quita) el almacén fijo del usuario. Valida que el almacén sea de la org.
+  async setDefaultWarehouse(
+    organizationId: string,
+    membershipId: string,
+    input: SetMemberWarehouseInput
+  ): Promise<void> {
+    await this.getMembershipInOrg(organizationId, membershipId);
+    if (input.defaultWarehouseId) {
+      const wh = await this.prisma.client.warehouse.findFirst({
+        where: { id: input.defaultWarehouseId, organizationId },
+        select: { id: true },
+      });
+      if (!wh) throw AppException.badRequest("El almacén no pertenece a la organización");
+    }
+    await this.prisma.client.organizationMembership.update({
+      where: { id: membershipId },
+      data: { defaultWarehouseId: input.defaultWarehouseId },
+    });
+    await this.audit.record({
+      action: "membership.warehouse_changed",
+      organizationId,
+      entityType: "OrganizationMembership",
+      entityId: membershipId,
+      after: { defaultWarehouseId: input.defaultWarehouseId },
     });
   }
 

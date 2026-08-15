@@ -9,6 +9,7 @@ export interface Me {
   organizationId: string | null;
   membershipId: string | null;
   activeOrganization: { id: string; name: string; slug: string; status: string } | null;
+  defaultWarehouse: { id: string; name: string } | null;
   memberships: Membership[];
   permissions: PermissionKey[];
 }

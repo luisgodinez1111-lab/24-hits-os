@@ -27,8 +27,14 @@ export class MeController {
     const memberships = await this.organizations.getUserMemberships(user.userId);
 
     let permissions: string[] = [];
+    let defaultWarehouse: { id: string; name: string } | null = null;
     if (user.membershipId) {
       permissions = [...(await this.permissions.getPermissionKeys(user.membershipId))];
+      const membership = await this.prisma.client.organizationMembership.findUnique({
+        where: { id: user.membershipId },
+        select: { defaultWarehouse: { select: { id: true, name: true } } },
+      });
+      defaultWarehouse = membership?.defaultWarehouse ?? null;
     }
     const activeOrganization =
       memberships.find((m) => m.organization.id === user.organizationId)?.organization ??
@@ -39,6 +45,7 @@ export class MeController {
       organizationId: user.organizationId ?? null,
       membershipId: user.membershipId ?? null,
       activeOrganization,
+      defaultWarehouse,
       memberships,
       permissions,
     };

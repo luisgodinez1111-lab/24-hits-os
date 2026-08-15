@@ -14,7 +14,7 @@ import { LedgerService } from "../inventory/ledger.service.js";
 import { CostService } from "../inventory/cost.service.js";
 import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
-import type { CreateOrderInput } from "./sales.dto.js";
+import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
 interface ResolvedLine {
@@ -51,6 +51,26 @@ export class OrderService {
     return order;
   }
 
+  // Actualiza la entrega del pedido (estado y/o datos de domicilio).
+  async updateDelivery(organizationId: string, orderId: string, input: UpdateDeliveryInput) {
+    await this.prisma.withTenant(organizationId, async (tx) => {
+      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true } });
+      if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          ...(input.status !== undefined ? { deliveryStatus: input.status } : {}),
+          ...(input.deliveryAddress !== undefined ? { deliveryAddress: input.deliveryAddress } : {}),
+          ...(input.deliveryPhone !== undefined ? { deliveryPhone: input.deliveryPhone } : {}),
+          ...(input.deliveryNotes !== undefined ? { deliveryNotes: input.deliveryNotes } : {}),
+          ...(input.deliveryLocationUrl !== undefined ? { deliveryLocationUrl: input.deliveryLocationUrl } : {}),
+        },
+      });
+    });
+    await this.audit.record({ action: "order.delivery_updated", organizationId, entityType: "Order", entityId: orderId, after: { status: input.status } });
+    return this.get(organizationId, orderId);
+  }
+
   // Crea un pedido en DRAFT. Resuelve precio por renglón (override o lista de
   // precios vigente) y calcula totales en Decimal. NO toca inventario (ADR-020).
   async create(organizationId: string, userId: string, input: CreateOrderInput) {
@@ -64,7 +84,17 @@ export class OrderService {
         if (existing) return existing;
       }
 
-      const wh = await tx.warehouse.findFirst({ where: { id: input.warehouseId }, select: { branchId: true } });
+      // Almacén: el indicado, o el fijo del usuario (operación por usuario).
+      let warehouseId = input.warehouseId ?? null;
+      if (!warehouseId) {
+        const membership = await tx.organizationMembership.findFirst({
+          where: { organizationId, userId },
+          select: { defaultWarehouseId: true },
+        });
+        warehouseId = membership?.defaultWarehouseId ?? null;
+      }
+      if (!warehouseId) throw AppException.badRequest("Sin almacén: configura el almacén fijo del usuario o indícalo");
+      const wh = await tx.warehouse.findFirst({ where: { id: warehouseId }, select: { branchId: true } });
       if (!wh) throw AppException.badRequest("Almacén no encontrado");
 
       let customerType: PriceListType = "RETAIL";
@@ -106,7 +136,7 @@ export class OrderService {
         data: {
           organizationId,
           branchId: wh.branchId,
-          warehouseId: input.warehouseId,
+          warehouseId,
           customerId: input.customerId ?? null,
           number: `SO-${newId().replace(/-/g, "").slice(-12).toUpperCase()}`,
           status: "DRAFT",
@@ -118,6 +148,11 @@ export class OrderService {
           taxTotal,
           total,
           notes: input.notes ?? null,
+          deliveryAddress: input.deliveryAddress ?? null,
+          deliveryPhone: input.deliveryPhone ?? null,
+          deliveryNotes: input.deliveryNotes ?? null,
+          deliveryLocationUrl: input.deliveryLocationUrl ?? null,
+          deliveryStatus: input.deliveryAddress ? "PENDING" : null,
           createdByUserId: userId,
           correlationId: RequestContext.correlationId(),
           idempotencyKey: input.idempotencyKey ?? null,

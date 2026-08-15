@@ -16,3 +16,9 @@ export const setMemberStatusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED"]),
 });
 export type SetMemberStatusInput = z.infer<typeof setMemberStatusSchema>;
+
+// Almacén fijo del usuario (null = sin almacén asignado).
+export const setMemberWarehouseSchema = z.object({
+  defaultWarehouseId: z.string().uuid().nullable(),
+});
+export type SetMemberWarehouseInput = z.infer<typeof setMemberWarehouseSchema>;

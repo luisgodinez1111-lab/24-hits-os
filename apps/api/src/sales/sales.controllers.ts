@@ -10,9 +10,11 @@ import {
   createCustomerSchema,
   updateCustomerSchema,
   createOrderSchema,
+  updateDeliverySchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type CreateOrderInput,
+  type UpdateDeliveryInput,
 } from "./sales.dto.js";
 
 @ApiTags("customers")
@@ -94,5 +96,11 @@ export class OrderController {
   @RequirePermissions("orders.cancel")
   cancel(@CurrentUser() u: AuthContext, @Param("id") id: string) {
     return this.orders.cancel(u.organizationId!, id);
+  }
+
+  @Patch(":id/delivery")
+  @RequirePermissions("orders.create")
+  updateDelivery(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateDeliverySchema)) b: UpdateDeliveryInput) {
+    return this.orders.updateDelivery(u.organizationId!, id, b);
   }
 }

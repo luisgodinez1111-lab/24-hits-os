@@ -8,8 +8,8 @@ import {
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
-import type { Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
+import { useMe } from "@/lib/me";
 
 const tone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
   DRAFT: "gray", CONFIRMED: "blue", PARTIALLY_FULFILLED: "amber",
@@ -18,6 +18,8 @@ const tone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
 const payTone: Record<string, "gray" | "amber" | "green"> = {
   PENDING: "gray", PARTIAL: "amber", PAID: "green",
 };
+const deliveryTone: Record<string, "gray" | "amber" | "green"> = { PENDING: "gray", DISPATCHED: "amber", DELIVERED: "green" };
+const deliveryLabel: Record<string, string> = { PENDING: "Por enviar", DISPATCHED: "Enviado", DELIVERED: "Entregado" };
 
 export default function SalesOrdersPage() {
   const toast = useToast();
@@ -42,6 +44,12 @@ export default function SalesOrdersPage() {
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
+  const delivery = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/orders/${id}/delivery`, { status }),
+    onSuccess: async () => { await refresh(); toast.push("Entrega actualizada", "success"); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -58,7 +66,7 @@ export default function SalesOrdersPage() {
         <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin pedidos" />
       ) : (
         <Table>
-          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH className="text-right">Acciones</TH></TR></THead>
+          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH>Entrega</TH><TH className="text-right">Acciones</TH></TR></THead>
           <TBody>
             {data.map((o) => (
               <TR key={o.id}>
@@ -67,6 +75,16 @@ export default function SalesOrdersPage() {
                 <TD className="text-right">${Number(o.total).toFixed(2)}</TD>
                 <TD><Badge tone={tone[o.status] ?? "gray"}>{o.status}</Badge></TD>
                 <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{o.paymentStatus}</Badge></TD>
+                <TD>
+                  {o.deliveryStatus ? (
+                    <div className="flex items-center gap-2">
+                      <Badge tone={deliveryTone[o.deliveryStatus] ?? "gray"}>{deliveryLabel[o.deliveryStatus] ?? o.deliveryStatus}</Badge>
+                      {o.deliveryStatus === "PENDING" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}>Enviar</Button>}
+                      {o.deliveryStatus === "DISPATCHED" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}>Entregado</Button>}
+                      {o.deliveryLocationUrl && <a href={o.deliveryLocationUrl} target="_blank" rel="noreferrer" className="text-xs text-brand underline">ubicación</a>}
+                    </div>
+                  ) : <span className="text-gray-300">—</span>}
+                </TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-2">
                     {o.status === "DRAFT" && <Button size="sm" variant="outline" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "confirm" })}>Confirmar</Button>}
@@ -133,21 +151,24 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
   open: boolean; onClose: () => void; customers: Customer[]; onCreated: () => void;
 }) {
   const toast = useToast();
-  const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses"), enabled: open });
+  const { data: me } = useMe();
   const { data: variants } = useQuery({ queryKey: ["variants"], queryFn: () => api.get<Variant[]>("/variants"), enabled: open });
   const [customerId, setCustomerId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
   const [rows, setRows] = useState<Array<{ variantId: string; qty: string; price: string }>>([{ variantId: "", qty: "", price: "" }]);
+  const [delivery, setDelivery] = useState({ address: "", phone: "", locationUrl: "", notes: "" });
 
   const create = useMutation({
     mutationFn: () => api.post("/orders", {
-      warehouseId,
       customerId: customerId || undefined,
+      deliveryAddress: delivery.address || undefined,
+      deliveryPhone: delivery.phone || undefined,
+      deliveryLocationUrl: delivery.locationUrl || undefined,
+      deliveryNotes: delivery.notes || undefined,
       items: rows
         .filter((r) => r.variantId && Number(r.qty) > 0)
         .map((r) => ({ variantId: r.variantId, quantity: Number(r.qty), unitPrice: r.price ? Number(r.price) : undefined })),
     }),
-    onSuccess: () => { setRows([{ variantId: "", qty: "", price: "" }]); setCustomerId(""); setWarehouseId(""); onCreated(); },
+    onSuccess: () => { setRows([{ variantId: "", qty: "", price: "" }]); setCustomerId(""); setDelivery({ address: "", phone: "", locationUrl: "", notes: "" }); onCreated(); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
@@ -155,10 +176,10 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
     <Dialog open={open} onClose={onClose} title="Nuevo pedido"
       footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
         <Button size="sm" loading={create.isPending} onClick={() => {
-          if (!warehouseId) return toast.push("Selecciona el almacén de origen", "error");
+          if (!me?.defaultWarehouse) return toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error");
           if (!rows.some((r) => r.variantId && Number(r.qty) > 0)) return toast.push("Agrega al menos un renglón", "error");
           create.mutate();
-        }}>Crear</Button></>}>
+        }}>Crear pedido</Button></>}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <FormField label="Cliente (opcional)">
@@ -166,10 +187,8 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
               <option value="">Mostrador</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </FormField>
-          <FormField label="Almacén origen">
-            <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">…</option>{warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </Select>
+          <FormField label="Almacén">
+            <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">{me?.defaultWarehouse?.name ?? "Sin almacén asignado"}</div>
           </FormField>
         </div>
         {rows.map((r, idx) => (
@@ -182,7 +201,17 @@ function CreateOrderDialog({ open, onClose, customers, onCreated }: {
           </div>
         ))}
         <Button size="sm" variant="ghost" onClick={() => setRows([...rows, { variantId: "", qty: "", price: "" }])}>+ Renglón</Button>
-        <p className="text-xs text-gray-400">Si dejas el precio vacío se toma de la lista de precios vigente según el tipo de cliente.</p>
+        <p className="text-xs text-gray-400">Si dejas el precio vacío se toma de la lista de precios vigente.</p>
+
+        <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+          <p className="text-xs font-semibold text-gray-600">Entrega a domicilio (opcional)</p>
+          <FormField label="Dirección"><Input value={delivery.address} onChange={(e) => setDelivery({ ...delivery, address: e.target.value })} /></FormField>
+          <div className="grid grid-cols-2 gap-2">
+            <FormField label="Teléfono"><Input value={delivery.phone} onChange={(e) => setDelivery({ ...delivery, phone: e.target.value })} /></FormField>
+            <FormField label="Ubicación (link)"><Input placeholder="https://maps…" value={delivery.locationUrl} onChange={(e) => setDelivery({ ...delivery, locationUrl: e.target.value })} /></FormField>
+          </div>
+          <FormField label="Notas de entrega"><Input value={delivery.notes} onChange={(e) => setDelivery({ ...delivery, notes: e.target.value })} /></FormField>
+        </div>
       </div>
     </Dialog>
   );

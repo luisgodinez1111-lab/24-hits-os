@@ -8,9 +8,11 @@ import { MemberService } from "./member.service.js";
 import {
   inviteMemberSchema,
   setMemberStatusSchema,
+  setMemberWarehouseSchema,
   updateMemberRolesSchema,
   type InviteMemberInput,
   type SetMemberStatusInput,
+  type SetMemberWarehouseInput,
   type UpdateMemberRolesInput,
 } from "./member.dto.js";
 
@@ -53,6 +55,17 @@ export class MemberController {
     @Body(new ZodValidationPipe(setMemberStatusSchema)) body: SetMemberStatusInput
   ): Promise<{ ok: boolean }> {
     await this.members.setStatus(user.organizationId!, id, body);
+    return { ok: true };
+  }
+
+  @Patch(":id/warehouse")
+  @RequirePermissions("users.manage")
+  async setWarehouse(
+    @CurrentUser() user: AuthContext,
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(setMemberWarehouseSchema)) body: SetMemberWarehouseInput
+  ): Promise<{ ok: boolean }> {
+    await this.members.setDefaultWarehouse(user.organizationId!, id, body);
     return { ok: true };
   }
 }

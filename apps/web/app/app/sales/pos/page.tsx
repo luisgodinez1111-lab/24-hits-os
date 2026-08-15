@@ -5,18 +5,19 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Camera, CameraOff, Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button, FormField, Input, Select, useToast } from "@24hits/ui";
 import type { Customer, PosLookup } from "@/lib/catalog-types";
-import type { Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
+import { useMe } from "@/lib/me";
 
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
 const money = (v: number) => `$${v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function PosPage() {
   const toast = useToast();
-  const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
+  const { data: me } = useMe();
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
-  const [warehouseId, setWarehouseId] = useState("");
+  // Almacén fijo del usuario (operación por usuario).
+  const warehouseId = me?.defaultWarehouse?.id ?? "";
   const [customerId, setCustomerId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [method, setMethod] = useState("CASH");
@@ -26,7 +27,7 @@ export default function PosPage() {
 
   // --- Agregar por código de barras ---
   const addByBarcode = useCallback(async (code: string) => {
-    if (!warehouseId) { toast.push("Selecciona primero el almacén", "error"); return; }
+    if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
     try {
       const v = await api.get<PosLookup>(`/pos/lookup?barcode=${encodeURIComponent(code)}&warehouseId=${warehouseId}`);
       setCart((prev) => {
@@ -53,7 +54,7 @@ export default function PosPage() {
   }, []);
 
   const startScan = useCallback(async () => {
-    if (!warehouseId) { toast.push("Selecciona primero el almacén", "error"); return; }
+    if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
     try {
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const reader = new BrowserMultiFormatReader();
@@ -96,7 +97,7 @@ export default function PosPage() {
   });
 
   function checkout() {
-    if (!warehouseId) return toast.push("Selecciona el almacén", "error");
+    if (!warehouseId) return toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error");
     if (cart.length === 0) return toast.push("El carrito está vacío", "error");
     sale.mutate();
   }
@@ -112,11 +113,10 @@ export default function PosPage() {
         {/* Columna izquierda: origen + escáner */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Almacén (origen del stock)">
-              <Select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                <option value="">Selecciona…</option>
-                {warehouses?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </Select>
+            <FormField label="Almacén">
+              {me?.defaultWarehouse
+                ? <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">{me.defaultWarehouse.name}</div>
+                : <div className="flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs text-amber-700">Sin almacén asignado</div>}
             </FormField>
             <FormField label="Cliente (opcional)">
               <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>

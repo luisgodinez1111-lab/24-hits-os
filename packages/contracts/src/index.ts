@@ -55,6 +55,7 @@ export interface Member {
   createdAt: string;
   user: { id: string; email: string; name: string | null; status: "ACTIVE" | "DISABLED" };
   roles: Array<{ role: { id: string; key: string; name: string } }>;
+  defaultWarehouse: { id: string; name: string } | null;
 }
 
 export interface RoleSummary {

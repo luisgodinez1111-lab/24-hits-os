@@ -17,6 +17,7 @@ import {
   EmptyState,
   FormField,
   Input,
+  Select,
   Skeleton,
   Table,
   TBody,
@@ -26,7 +27,7 @@ import {
   TR,
   useToast,
 } from "@24hits/ui";
-import type { Member, RoleSummary } from "@24hits/contracts";
+import type { Member, RoleSummary, Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
 
 const inviteSchema = z.object({
@@ -54,6 +55,10 @@ export default function UsersPage() {
   const { data: roles } = useQuery({
     queryKey: ["roles"],
     queryFn: () => api.get<RoleSummary[]>("/roles"),
+  });
+  const { data: warehouses } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => api.get<Warehouse[]>("/warehouses"),
   });
 
   const {
@@ -83,6 +88,16 @@ export default function UsersPage() {
     onSuccess: async () => {
       await invalidateMembers();
       toast.push("Estado actualizado", "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  const setWarehouse = useMutation({
+    mutationFn: ({ id, defaultWarehouseId }: { id: string; defaultWarehouseId: string | null }) =>
+      api.patch(`/members/${id}/warehouse`, { defaultWarehouseId }),
+    onSuccess: async () => {
+      await invalidateMembers();
+      toast.push("Almacén asignado", "success");
     },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
@@ -153,6 +168,7 @@ export default function UsersPage() {
             <TR>
               <TH>Usuario</TH>
               <TH>Roles</TH>
+              <TH>Almacén de entrega</TH>
               <TH>Estado</TH>
               <TH className="text-right">Acciones</TH>
             </TR>
@@ -172,6 +188,21 @@ export default function UsersPage() {
                       </Badge>
                     ))}
                   </div>
+                </TD>
+                <TD>
+                  <Select
+                    className="min-w-[11rem]"
+                    value={m.defaultWarehouse?.id ?? ""}
+                    disabled={setWarehouse.isPending}
+                    onChange={(e) =>
+                      setWarehouse.mutate({ id: m.id, defaultWarehouseId: e.target.value || null })
+                    }
+                  >
+                    <option value="">Sin asignar</option>
+                    {warehouses?.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </Select>
                 </TD>
                 <TD>
                   <Badge tone={statusTone[m.status]}>{m.status}</Badge>

@@ -169,6 +169,11 @@ export interface Order {
   taxTotal: string;
   total: string;
   paymentStatus: "PENDING" | "PARTIAL" | "PAID";
+  deliveryAddress: string | null;
+  deliveryPhone: string | null;
+  deliveryNotes: string | null;
+  deliveryLocationUrl: string | null;
+  deliveryStatus: "PENDING" | "DISPATCHED" | "DELIVERED" | null;
   createdAt: string;
   items: Array<{
     id: string;

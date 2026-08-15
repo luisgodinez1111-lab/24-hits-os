@@ -26,13 +26,19 @@ export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
 // --- Pedidos ---
 export const createOrderSchema = z.object({
-  warehouseId: z.string().uuid(),
+  // Opcional: si se omite se usa el almacén fijo del usuario (operación por usuario).
+  warehouseId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   channel: z.string().max(40).optional(),
   currency: z.string().length(3).default("MXN"),
   // Lista de precios explícita; si se omite se resuelve por tipo de cliente.
   priceListId: z.string().uuid().optional(),
   notes: z.string().max(500).optional(),
+  // Entrega a domicilio (pedidos por WhatsApp).
+  deliveryAddress: z.string().max(500).optional(),
+  deliveryPhone: z.string().max(40).optional(),
+  deliveryNotes: z.string().max(500).optional(),
+  deliveryLocationUrl: z.string().url().max(500).optional(),
   idempotencyKey: z.string().min(8).max(128).optional(),
   items: z
     .array(
@@ -48,3 +54,13 @@ export const createOrderSchema = z.object({
     .min(1, "Agrega al menos un renglón"),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+// Actualiza la entrega del pedido (estado y/o datos de domicilio).
+export const updateDeliverySchema = z.object({
+  status: z.enum(["PENDING", "DISPATCHED", "DELIVERED"]).optional(),
+  deliveryAddress: z.string().max(500).optional(),
+  deliveryPhone: z.string().max(40).optional(),
+  deliveryNotes: z.string().max(500).optional(),
+  deliveryLocationUrl: z.string().url().max(500).optional(),
+});
+export type UpdateDeliveryInput = z.infer<typeof updateDeliverySchema>;
