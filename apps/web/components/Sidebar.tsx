@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ArrowLeftRight,
   Boxes,
   ClipboardCheck,
-  ClipboardList,
   Contact,
   Home,
   Layers,
@@ -16,7 +14,6 @@ import {
   Settings,
   ShoppingCart,
   TrendingUp,
-  Truck,
   Undo2,
   UserSquare,
   type LucideIcon,
@@ -56,12 +53,8 @@ const sections: NavSection[] = [
   },
   {
     title: "Inventario",
-    items: [
-      { href: "/app/inventory", label: "Existencias", icon: Boxes, exact: true, perm: "inventory.read" },
-      { href: "/app/inventory/movements", label: "Movimientos", icon: ArrowLeftRight, perm: "inventory.movement.read" },
-      { href: "/app/inventory/transfers", label: "Transferencias", icon: Truck, perm: "inventory.read" },
-      { href: "/app/inventory/counts", label: "Conteos", icon: ClipboardList, perm: "inventory.read" },
-    ],
+    // Existencias, movimientos, transferencias y conteos en una sola ventana con pestañas.
+    items: [{ href: "/app/inventory", label: "Inventario", icon: Boxes, perm: "inventory.read" }],
   },
   {
     title: "Compras",
