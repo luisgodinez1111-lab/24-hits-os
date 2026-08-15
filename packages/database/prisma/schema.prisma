@@ -1115,6 +1115,15 @@ enum CustomerStatus {
   INACTIVE
 }
 
+// Zona del estado de Chihuahua para segmentar entregas y analítica.
+enum CustomerZone {
+  NORTE
+  SUR
+  ESTE
+  OESTE
+  CENTRO
+}
+
 enum OrderStatus {
   DRAFT
   CONFIRMED
@@ -1140,10 +1149,13 @@ enum DeliveryStatus {
 model Customer {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String         @db.Uuid
+  code           String? // número de cliente (autogenerado C-0001, editable)
   name           String
   legalName      String?
   email          String?
   phone          String?
+  address        String?
+  zone           CustomerZone?
   taxId          String?
   type           CustomerType   @default(RETAIL)
   creditLimit    Decimal?       @db.Decimal(18, 4)
@@ -1153,7 +1165,9 @@ model Customer {
 
   orders Order[]
 
+  @@unique([organizationId, code])
   @@index([organizationId, status])
+  @@index([organizationId, zone])
 }
 
 model Order {

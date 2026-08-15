@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@24hits/database";
+import { Prisma, type TenantTx } from "@24hits/database";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { AppException } from "../common/errors/app-exception.js";
@@ -13,10 +13,26 @@ export class CustomerService {
     private readonly audit: AuditService
   ) {}
 
+  // Lista con métricas de pedidos por cliente (nº de pedidos y última compra),
+  // para el registro/CRM. Excluye pedidos cancelados del conteo.
   list(organizationId: string) {
-    return this.prisma.withTenant(organizationId, (tx) =>
-      tx.customer.findMany({ orderBy: { createdAt: "desc" }, take: 200 })
-    );
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const customers = await tx.customer.findMany({ orderBy: { createdAt: "desc" }, take: 500 });
+      const ids = customers.map((c) => c.id);
+      const grouped = ids.length
+        ? await tx.order.groupBy({
+            by: ["customerId"],
+            where: { customerId: { in: ids }, status: { not: "CANCELLED" } },
+            _count: { _all: true },
+            _max: { createdAt: true },
+          })
+        : [];
+      const byId = new Map(grouped.map((g) => [g.customerId, g]));
+      return customers.map((c) => {
+        const g = byId.get(c.id);
+        return { ...c, orderCount: g?._count._all ?? 0, lastOrderAt: g?._max.createdAt?.toISOString() ?? null };
+      });
+    });
   }
 
   async get(organizationId: string, id: string) {
@@ -85,59 +101,186 @@ export class CustomerService {
   }
 
   async create(organizationId: string, input: CreateCustomerInput) {
-    const customer = await this.prisma.withTenant(organizationId, (tx) =>
-      tx.customer.create({
-        data: {
-          organizationId,
-          name: input.name,
-          legalName: input.legalName ?? null,
-          email: input.email ?? null,
-          phone: input.phone ?? null,
-          taxId: input.taxId ?? null,
-          type: input.type,
-          creditLimit: input.creditLimit != null ? new Prisma.Decimal(input.creditLimit) : null,
-        },
-      })
-    );
-    await this.audit.record({
-      action: "customer.created",
-      organizationId,
-      entityType: "Customer",
-      entityId: customer.id,
-      after: { name: customer.name, type: customer.type },
-    });
-    return customer;
+    try {
+      const customer = await this.prisma.withTenant(organizationId, async (tx) => {
+        // Número de cliente: el indicado o autogenerado secuencial (C-0001).
+        const code = input.code?.trim() || (await this.nextCustomerCode(tx));
+        return tx.customer.create({
+          data: {
+            organizationId,
+            code,
+            name: input.name,
+            legalName: input.legalName ?? null,
+            email: input.email ?? null,
+            phone: input.phone ?? null,
+            address: input.address ?? null,
+            zone: input.zone ?? null,
+            taxId: input.taxId ?? null,
+            type: input.type,
+            creditLimit: input.creditLimit != null ? new Prisma.Decimal(input.creditLimit) : null,
+          },
+        });
+      });
+      await this.audit.record({
+        action: "customer.created",
+        organizationId,
+        entityType: "Customer",
+        entityId: customer.id,
+        after: { code: customer.code, name: customer.name, type: customer.type },
+      });
+      return customer;
+    } catch (e) {
+      throw this.mapCodeConflict(e);
+    }
+  }
+
+  // Siguiente número de cliente (C-0001, C-0002…). Toma el máximo existente con
+  // el patrón C-#### y suma 1. Se ejecuta dentro de la transacción del alta.
+  private async nextCustomerCode(tx: TenantTx): Promise<string> {
+    const rows = await tx.customer.findMany({ where: { code: { startsWith: "C-" } }, select: { code: true } });
+    let max = 0;
+    for (const r of rows) {
+      const m = /^C-(\d+)$/.exec(r.code ?? "");
+      if (m) max = Math.max(max, Number.parseInt(m[1]!, 10));
+    }
+    return `C-${String(max + 1).padStart(4, "0")}`;
+  }
+
+  private mapCodeConflict(e: unknown): unknown {
+    // Customer solo tiene una restricción única (organizationId, code), así que
+    // cualquier P2002 aquí es un número de cliente repetido.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return new AppException(409, ErrorCode.CONFLICT, "El número de cliente ya existe");
+    }
+    return e;
   }
 
   async update(organizationId: string, id: string, input: UpdateCustomerInput) {
-    const customer = await this.prisma.withTenant(organizationId, async (tx) => {
-      const existing = await tx.customer.findFirst({ where: { id }, select: { id: true } });
-      if (!existing) throw new AppException(404, ErrorCode.CUSTOMER_NOT_FOUND, "Cliente no encontrado");
-      return tx.customer.update({
-        where: { id },
-        data: {
-          name: input.name ?? undefined,
-          legalName: input.legalName === undefined ? undefined : input.legalName,
-          email: input.email === undefined ? undefined : input.email,
-          phone: input.phone === undefined ? undefined : input.phone,
-          taxId: input.taxId === undefined ? undefined : input.taxId,
-          type: input.type ?? undefined,
-          creditLimit:
-            input.creditLimit === undefined
-              ? undefined
-              : input.creditLimit === null
-                ? null
-                : new Prisma.Decimal(input.creditLimit),
-          status: input.status ?? undefined,
-        },
+    try {
+      const customer = await this.prisma.withTenant(organizationId, async (tx) => {
+        const existing = await tx.customer.findFirst({ where: { id }, select: { id: true } });
+        if (!existing) throw new AppException(404, ErrorCode.CUSTOMER_NOT_FOUND, "Cliente no encontrado");
+        return tx.customer.update({
+          where: { id },
+          data: {
+            code: input.code === undefined ? undefined : input.code?.trim() || null,
+            name: input.name ?? undefined,
+            legalName: input.legalName === undefined ? undefined : input.legalName,
+            email: input.email === undefined ? undefined : input.email,
+            phone: input.phone === undefined ? undefined : input.phone,
+            address: input.address === undefined ? undefined : input.address,
+            zone: input.zone === undefined ? undefined : input.zone,
+            taxId: input.taxId === undefined ? undefined : input.taxId,
+            type: input.type ?? undefined,
+            creditLimit:
+              input.creditLimit === undefined
+                ? undefined
+                : input.creditLimit === null
+                  ? null
+                  : new Prisma.Decimal(input.creditLimit),
+            status: input.status ?? undefined,
+          },
+        });
       });
+      await this.audit.record({
+        action: "customer.updated",
+        organizationId,
+        entityType: "Customer",
+        entityId: customer.id,
+      });
+      return customer;
+    } catch (e) {
+      throw this.mapCodeConflict(e);
+    }
+  }
+
+  // Analítica del cliente para maximizar resultados: frecuencia de compra,
+  // recencia, ticket, gasto total y sus sabores / modelos / marcas favoritos.
+  async insights(organizationId: string, customerId: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const customer = await tx.customer.findFirst({ where: { id: customerId } });
+      if (!customer) throw new AppException(404, ErrorCode.CUSTOMER_NOT_FOUND, "Cliente no encontrado");
+
+      const orders = await tx.order.findMany({
+        where: { customerId, status: { not: "CANCELLED" } },
+        select: { total: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      const orderCount = orders.length;
+      const first = orderCount ? orders[0]!.createdAt : null;
+      const last = orderCount ? orders[orderCount - 1]!.createdAt : null;
+
+      const ZERO = new Prisma.Decimal(0);
+      let totalSpent = ZERO;
+      for (const o of orders) totalSpent = totalSpent.plus(o.total);
+      const avgTicket = orderCount ? totalSpent.dividedBy(orderCount) : ZERO;
+
+      const DAY = 86_400_000;
+      const round1 = (n: number) => Math.round(n * 10) / 10;
+      const avgDaysBetween =
+        orderCount >= 2 && first && last ? round1((last.getTime() - first.getTime()) / (orderCount - 1) / DAY) : null;
+      const daysSinceLast = last ? round1((Date.now() - last.getTime()) / DAY) : null;
+
+      // Preferencias por unidades efectivamente entregadas.
+      const items = await tx.orderItem.findMany({
+        where: { fulfilledQuantity: { gt: 0 }, order: { customerId, status: { not: "CANCELLED" } } },
+        select: { variantId: true, fulfilledQuantity: true },
+      });
+      const variantIds = [...new Set(items.map((i) => i.variantId).filter((v): v is string => !!v))];
+      const variants = variantIds.length
+        ? await tx.productVariant.findMany({
+            where: { id: { in: variantIds } },
+            select: {
+              id: true,
+              flavor: { select: { id: true, name: true } },
+              product: { select: { id: true, name: true, brand: { select: { id: true, name: true } } } },
+            },
+          })
+        : [];
+      const vById = new Map(variants.map((v) => [v.id, v]));
+
+      const flavorAcc = new Map<string, { label: string; units: number }>();
+      const modelAcc = new Map<string, { label: string; units: number }>();
+      const brandAcc = new Map<string, { label: string; units: number }>();
+      const bump = (m: Map<string, { label: string; units: number }>, key: string, label: string, q: number) => {
+        const a = m.get(key) ?? { label, units: 0 };
+        a.units += q;
+        m.set(key, a);
+      };
+      for (const it of items) {
+        const v = it.variantId ? vById.get(it.variantId) : undefined;
+        const q = Number(it.fulfilledQuantity);
+        bump(flavorAcc, v?.flavor?.id ?? "none", v?.flavor?.name ?? "Sin sabor", q);
+        bump(modelAcc, v?.product.id ?? "none", v?.product.name ?? "—", q);
+        bump(brandAcc, v?.product.brand?.id ?? "none", v?.product.brand?.name ?? "Sin marca", q);
+      }
+      const top = (m: Map<string, { label: string; units: number }>) =>
+        [...m.values()].sort((a, b) => b.units - a.units).slice(0, 5).map((x) => ({ label: x.label, units: String(x.units) }));
+
+      return {
+        customer: {
+          id: customer.id,
+          code: customer.code,
+          name: customer.name,
+          phone: customer.phone,
+          address: customer.address,
+          zone: customer.zone,
+          type: customer.type,
+          status: customer.status,
+        },
+        summary: {
+          orderCount,
+          firstOrderAt: first?.toISOString() ?? null,
+          lastOrderAt: last?.toISOString() ?? null,
+          daysSinceLast,
+          avgDaysBetween,
+          totalSpent: totalSpent.toString(),
+          avgTicket: avgTicket.toString(),
+        },
+        topFlavors: top(flavorAcc),
+        topModels: top(modelAcc),
+        topBrands: top(brandAcc),
+      };
     });
-    await this.audit.record({
-      action: "customer.updated",
-      organizationId,
-      entityType: "Customer",
-      entityId: customer.id,
-    });
-    return customer;
   }
 }

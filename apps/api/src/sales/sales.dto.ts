@@ -1,11 +1,16 @@
 import { z } from "zod";
 
 // --- Clientes ---
+const customerZone = z.enum(["NORTE", "SUR", "ESTE", "OESTE", "CENTRO"]);
+
 export const createCustomerSchema = z.object({
+  code: z.string().max(40).optional(), // si se omite se autogenera (C-0001)
   name: z.string().min(1).max(200),
   legalName: z.string().max(200).optional(),
   email: z.string().email().max(200).optional(),
   phone: z.string().max(40).optional(),
+  address: z.string().max(300).optional(),
+  zone: customerZone.optional(),
   taxId: z.string().max(40).optional(),
   type: z.enum(["RETAIL", "WHOLESALE"]).default("RETAIL"),
   creditLimit: z.coerce.number().nonnegative().optional(),
@@ -13,10 +18,13 @@ export const createCustomerSchema = z.object({
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 
 export const updateCustomerSchema = z.object({
+  code: z.string().max(40).nullable().optional(),
   name: z.string().min(1).max(200).optional(),
   legalName: z.string().max(200).nullable().optional(),
   email: z.string().email().max(200).nullable().optional(),
   phone: z.string().max(40).nullable().optional(),
+  address: z.string().max(300).nullable().optional(),
+  zone: customerZone.nullable().optional(),
   taxId: z.string().max(40).nullable().optional(),
   type: z.enum(["RETAIL", "WHOLESALE"]).optional(),
   creditLimit: z.coerce.number().nonnegative().nullable().optional(),

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, Plus, Receipt } from "lucide-react";
+import { ClipboardCheck, CreditCard, Plus, Receipt, UserSquare } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -57,7 +58,12 @@ export default function SalesOrdersPage() {
           <h1 className="text-2xl font-bold">Pedidos</h1>
           <p className="text-sm text-gray-500">Confirmar reserva stock · entregar consume inventario y captura COGS</p>
         </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
+        <div className="flex gap-2">
+          <Link href="/app/sales/customers">
+            <Button variant="outline"><UserSquare className="h-4 w-4" /> Clientes</Button>
+          </Link>
+          <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
+        </div>
       </div>
 
       {isLoading ? (

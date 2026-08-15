@@ -1,22 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserSquare, Wallet } from "lucide-react";
+import { BarChart3, Pencil, Plus, UserSquare, Wallet } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { Customer, CustomerAccount } from "@/lib/catalog-types";
+import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 
 const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
+const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
+const zoneTone: Record<CustomerZone, "blue" | "green" | "amber" | "gray" | "red"> = {
+  NORTE: "blue", SUR: "green", ESTE: "amber", OESTE: "red", CENTRO: "gray",
+};
+
 export default function CustomersPage() {
   const toast = useToast();
   const qc = useQueryClient();
-  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState<Customer | "new" | null>(null);
   const [account, setAccount] = useState<Customer | null>(null);
+  const [insights, setInsights] = useState<Customer | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
   const setStatus = useMutation({
@@ -31,9 +37,9 @@ export default function CustomersPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Clientes</h1>
-          <p className="text-sm text-gray-500">Menudeo y mayoreo</p>
+          <p className="text-sm text-gray-500">Registro de clientes, zona de entrega y análisis de compra</p>
         </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
+        <Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo</Button>
       </div>
 
       {isLoading ? (
@@ -42,18 +48,25 @@ export default function CustomersPage() {
         <EmptyState icon={<UserSquare className="h-8 w-8 text-gray-400" />} title="Sin clientes" />
       ) : (
         <Table>
-          <THead><TR><TH>Nombre</TH><TH>Tipo</TH><TH>Correo</TH><TH>RFC</TH><TH>Estado</TH><TH className="text-right">Acciones</TH></TR></THead>
+          <THead><TR>
+            <TH>Nº</TH><TH>Nombre</TH><TH>Celular</TH><TH>Zona</TH>
+            <TH className="text-right">Pedidos</TH><TH>Última compra</TH><TH>Estado</TH><TH className="text-right">Acciones</TH>
+          </TR></THead>
           <TBody>
             {data.map((c) => (
               <TR key={c.id}>
+                <TD className="font-mono text-xs text-gray-500">{c.code ?? "—"}</TD>
                 <TD className="font-medium">{c.name}</TD>
-                <TD><Badge tone={c.type === "WHOLESALE" ? "blue" : "gray"}>{c.type === "WHOLESALE" ? "Mayoreo" : "Menudeo"}</Badge></TD>
-                <TD className="text-gray-500">{c.email ?? "—"}</TD>
-                <TD className="font-mono text-xs text-gray-500">{c.taxId ?? "—"}</TD>
+                <TD className="text-gray-500">{c.phone ?? "—"}</TD>
+                <TD>{c.zone ? <Badge tone={zoneTone[c.zone]}>{zoneLabel[c.zone]}</Badge> : <span className="text-gray-300">—</span>}</TD>
+                <TD className="text-right tabular-nums">{c.orderCount ?? 0}</TD>
+                <TD className="text-gray-500">{c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("es-MX") : "—"}</TD>
                 <TD><Badge tone={c.status === "ACTIVE" ? "green" : "gray"}>{c.status}</Badge></TD>
                 <TD className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setAccount(c)}><Wallet className="h-4 w-4" /> Estado de cuenta</Button>
+                  <div className="flex justify-end gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => setInsights(c)}><BarChart3 className="h-4 w-4" /> Análisis</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAccount(c)}><Wallet className="h-4 w-4" /> Cuenta</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setForm(c)}><Pencil className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost"
                       onClick={() => setStatus.mutate({ id: c.id, status: c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })}>
                       {c.status === "ACTIVE" ? "Desactivar" : "Activar"}
@@ -66,13 +79,152 @@ export default function CustomersPage() {
         </Table>
       )}
 
-      <CreateCustomerDialog open={creating} onClose={() => setCreating(false)}
-        onCreated={async () => { setCreating(false); await qc.invalidateQueries({ queryKey: ["customers"] }); toast.push("Cliente creado", "success"); }} />
+      <CustomerFormDialog
+        customer={form === "new" ? null : form}
+        open={form !== null}
+        onClose={() => setForm(null)}
+        onSaved={async () => { setForm(null); await qc.invalidateQueries({ queryKey: ["customers"] }); toast.push("Cliente guardado", "success"); }}
+      />
       <AccountDialog customer={account} onClose={() => setAccount(null)} />
+      <InsightsDialog customer={insights} onClose={() => setInsights(null)} />
     </div>
   );
 }
 
+// --- Alta / edición de cliente ---
+function CustomerFormDialog({ customer, open, onClose, onSaved }: {
+  customer: Customer | null; open: boolean; onClose: () => void; onSaved: () => void;
+}) {
+  const toast = useToast();
+  const editing = Boolean(customer);
+  const empty = { code: "", name: "", type: "RETAIL", phone: "", zone: "", address: "", email: "", taxId: "", creditLimit: "" };
+  const [f, setF] = useState(empty);
+
+  // Sincroniza el formulario al abrir (con los datos del cliente o vacío).
+  useEffect(() => {
+    if (!open) return;
+    setF(customer
+      ? {
+          code: customer.code ?? "", name: customer.name, type: customer.type, phone: customer.phone ?? "",
+          zone: customer.zone ?? "", address: customer.address ?? "", email: customer.email ?? "",
+          taxId: customer.taxId ?? "", creditLimit: customer.creditLimit ?? "",
+        }
+      : empty);
+  }, [open, customer]);
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body = {
+        code: f.code.trim() || undefined,
+        name: f.name.trim(),
+        type: f.type,
+        phone: f.phone.trim() || undefined,
+        zone: f.zone || undefined,
+        address: f.address.trim() || undefined,
+        email: f.email.trim() || undefined,
+        taxId: f.taxId.trim() || undefined,
+        creditLimit: f.creditLimit ? Number(f.creditLimit) : undefined,
+      };
+      return editing ? api.patch(`/customers/${customer!.id}`, body) : api.post("/customers", body);
+    },
+    onSuccess: onSaved,
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose} title={editing ? `Editar — ${customer?.name}` : "Nuevo cliente"}
+      footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button size="sm" loading={save.isPending} onClick={() => f.name.trim() ? save.mutate() : toast.push("El nombre es requerido", "error")}>Guardar</Button></>}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Nº de cliente">
+            <Input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} placeholder={editing ? "" : "Automático (C-000N)"} />
+          </FormField>
+          <FormField label="Tipo">
+            <Select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+              <option value="RETAIL">Menudeo</option>
+              <option value="WHOLESALE">Mayoreo</option>
+            </Select>
+          </FormField>
+        </div>
+        <FormField label="Nombre"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Celular"><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="614…" /></FormField>
+          <FormField label="Zona (Chihuahua)">
+            <Select value={f.zone} onChange={(e) => setF({ ...f, zone: e.target.value })}>
+              <option value="">Sin zona</option>
+              <option value="NORTE">Norte</option>
+              <option value="SUR">Sur</option>
+              <option value="ESTE">Este</option>
+              <option value="OESTE">Oeste</option>
+              <option value="CENTRO">Centro</option>
+            </Select>
+          </FormField>
+        </div>
+        <FormField label="Dirección (opcional)"><Input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} placeholder="Calle, número, colonia…" /></FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Correo (opcional)"><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></FormField>
+          <FormField label="RFC (opcional)"><Input value={f.taxId} onChange={(e) => setF({ ...f, taxId: e.target.value })} /></FormField>
+        </div>
+        <FormField label="Límite de crédito (opcional)"><Input type="number" value={f.creditLimit} onChange={(e) => setF({ ...f, creditLimit: e.target.value })} /></FormField>
+      </div>
+    </Dialog>
+  );
+}
+
+// --- Análisis del cliente ---
+function InsightsDialog({ customer, onClose }: { customer: Customer | null; onClose: () => void }) {
+  const { data } = useQuery({
+    queryKey: ["customer-insights", customer?.id], enabled: !!customer,
+    queryFn: () => api.get<CustomerInsights>(`/customers/${customer!.id}/insights`),
+  });
+  const freq = (d: number | null) =>
+    d == null ? "—" : d < 1 ? "varias veces al día" : d < 45 ? `cada ${d} días` : `cada ${Math.round(d / 30)} meses`;
+
+  return (
+    <Dialog open={!!customer} onClose={onClose} title={`Análisis — ${customer?.name ?? ""}`}
+      footer={<Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>}>
+      {!data ? <Skeleton className="h-56 w-full" /> : (
+        <div className="space-y-4 text-sm">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat label="Pedidos" value={String(data.summary.orderCount)} />
+            <Stat label="Total comprado" value={money(data.summary.totalSpent)} />
+            <Stat label="Ticket promedio" value={money(data.summary.avgTicket)} />
+            <Stat label="Frecuencia" value={freq(data.summary.avgDaysBetween)} />
+            <Stat label="Última compra" value={data.summary.daysSinceLast == null ? "—" : `hace ${data.summary.daysSinceLast} días`} accent />
+            <Stat label="Cliente desde" value={data.summary.firstOrderAt ? new Date(data.summary.firstOrderAt).toLocaleDateString("es-MX") : "—"} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <TopList title="Sabores favoritos" rows={data.topFlavors} />
+            <TopList title="Modelos favoritos" rows={data.topModels} />
+            <TopList title="Marcas favoritas" rows={data.topBrands} />
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+function TopList({ title, rows }: { title: string; rows: Array<{ label: string; units: string }> }) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</p>
+      {rows.length === 0 ? <p className="text-gray-400">Sin datos.</p> : (
+        <ul className="space-y-1">
+          {rows.map((r, i) => (
+            <li key={`${r.label}-${i}`} className="flex items-center justify-between rounded-md bg-gray-50 px-2 py-1">
+              <span className="truncate pr-2">{r.label}</span>
+              <span className="shrink-0 font-semibold tabular-nums text-gray-600">{r.units}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// --- Estado de cuenta (existente) ---
 function AccountDialog({ customer, onClose }: { customer: Customer | null; onClose: () => void }) {
   const { data } = useQuery({
     queryKey: ["customer-account", customer?.id], enabled: !!customer,
@@ -146,41 +298,5 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
       <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
       <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-900">{value}</p>
     </div>
-  );
-}
-
-function CreateCustomerDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
-  const toast = useToast();
-  const [form, setForm] = useState({ name: "", type: "RETAIL", email: "", phone: "", taxId: "", creditLimit: "" });
-  const create = useMutation({
-    mutationFn: () => api.post("/customers", {
-      name: form.name,
-      type: form.type,
-      email: form.email || undefined,
-      phone: form.phone || undefined,
-      taxId: form.taxId || undefined,
-      creditLimit: form.creditLimit ? Number(form.creditLimit) : undefined,
-    }),
-    onSuccess: () => { setForm({ name: "", type: "RETAIL", email: "", phone: "", taxId: "", creditLimit: "" }); onCreated(); },
-    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
-  });
-  return (
-    <Dialog open={open} onClose={onClose} title="Nuevo cliente"
-      footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" loading={create.isPending} onClick={() => form.name.trim() && create.mutate()}>Crear</Button></>}>
-      <div className="space-y-3">
-        <FormField label="Nombre"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
-        <FormField label="Tipo">
-          <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-            <option value="RETAIL">Menudeo</option>
-            <option value="WHOLESALE">Mayoreo</option>
-          </Select>
-        </FormField>
-        <FormField label="Correo"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FormField>
-        <FormField label="Teléfono"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FormField>
-        <FormField label="RFC"><Input value={form.taxId} onChange={(e) => setForm({ ...form, taxId: e.target.value })} /></FormField>
-        <FormField label="Límite de crédito"><Input type="number" value={form.creditLimit} onChange={(e) => setForm({ ...form, creditLimit: e.target.value })} /></FormField>
-      </div>
-    </Dialog>
   );
 }

@@ -145,16 +145,40 @@ export interface PurchaseOrder {
   }>;
 }
 
+export type CustomerZone = "NORTE" | "SUR" | "ESTE" | "OESTE" | "CENTRO";
+
 export interface Customer {
   id: string;
+  code: string | null;
   name: string;
   legalName: string | null;
   email: string | null;
   phone: string | null;
+  address: string | null;
+  zone: CustomerZone | null;
   taxId: string | null;
   type: "RETAIL" | "WHOLESALE";
   creditLimit: string | null;
   status: "ACTIVE" | "INACTIVE";
+  // Métricas del registro (las devuelve GET /customers).
+  orderCount?: number;
+  lastOrderAt?: string | null;
+}
+
+export interface CustomerInsights {
+  customer: { id: string; code: string | null; name: string; phone: string | null; address: string | null; zone: CustomerZone | null; type: string; status: string };
+  summary: {
+    orderCount: number;
+    firstOrderAt: string | null;
+    lastOrderAt: string | null;
+    daysSinceLast: number | null;
+    avgDaysBetween: number | null;
+    totalSpent: string;
+    avgTicket: string;
+  };
+  topFlavors: Array<{ label: string; units: string }>;
+  topModels: Array<{ label: string; units: string }>;
+  topBrands: Array<{ label: string; units: string }>;
 }
 
 export interface Order {

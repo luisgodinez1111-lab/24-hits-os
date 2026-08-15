@@ -40,6 +40,12 @@ export class CustomerController {
     return this.customers.account(u.organizationId!, id);
   }
 
+  @Get(":id/insights")
+  @RequirePermissions("customers.read")
+  insights(@CurrentUser() u: AuthContext, @Param("id") id: string) {
+    return this.customers.insights(u.organizationId!, id);
+  }
+
   @Post()
   @RequirePermissions("customers.manage")
   create(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(createCustomerSchema)) b: CreateCustomerInput) {
