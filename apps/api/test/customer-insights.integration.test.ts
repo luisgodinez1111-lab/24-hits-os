@@ -80,6 +80,7 @@ afterAll(async () => {
     await tx.orderItem.deleteMany({ where: { organizationId: orgId } });
     await tx.order.deleteMany({ where: { organizationId: orgId } });
     await tx.customer.deleteMany({ where: { organizationId: orgId } });
+    await tx.documentSequence.deleteMany({ where: { organizationId: orgId } });
     await tx.inventoryReservation.deleteMany({ where: { organizationId: orgId } });
     await tx.inventoryMovement.deleteMany({ where: { organizationId: orgId } });
     await tx.inventoryBalance.deleteMany({ where: { organizationId: orgId } });
@@ -109,6 +110,15 @@ describe("CRM de clientes: número autogenerado + analítica", () => {
     // El siguiente autogenerado sigue la secuencia numérica (ignora VIP-1).
     const c4 = await customers.create(orgId, { name: "Dio", type: "RETAIL" });
     expect(c4.code).toBe("C-0003");
+  });
+
+  it("asigna números únicos bajo creación concurrente (sin carrera)", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => customers.create(orgId, { name: `Conc ${i}`, type: "RETAIL" }))
+    );
+    const codes = results.map((r) => r.code);
+    expect(new Set(codes).size).toBe(codes.length); // todos distintos
+    expect(codes.every((c) => /^C-\d{4,}$/.test(c ?? ""))).toBe(true);
   });
 
   it("rechaza un número de cliente duplicado", async () => {

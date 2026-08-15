@@ -104,7 +104,7 @@ export class CustomerService {
     try {
       const customer = await this.prisma.withTenant(organizationId, async (tx) => {
         // Número de cliente: el indicado o autogenerado secuencial (C-0001).
-        const code = input.code?.trim() || (await this.nextCustomerCode(tx));
+        const code = input.code?.trim() || (await this.nextCustomerCode(tx, organizationId));
         return tx.customer.create({
           data: {
             organizationId,
@@ -134,16 +134,33 @@ export class CustomerService {
     }
   }
 
-  // Siguiente número de cliente (C-0001, C-0002…). Toma el máximo existente con
-  // el patrón C-#### y suma 1. Se ejecuta dentro de la transacción del alta.
-  private async nextCustomerCode(tx: TenantTx): Promise<string> {
-    const rows = await tx.customer.findMany({ where: { code: { startsWith: "C-" } }, select: { code: true } });
-    let max = 0;
-    for (const r of rows) {
-      const m = /^C-(\d+)$/.exec(r.code ?? "");
-      if (m) max = Math.max(max, Number.parseInt(m[1]!, 10));
-    }
-    return `C-${String(max + 1).padStart(4, "0")}`;
+  // Siguiente número de cliente (C-0001, C-0002…) con secuencia atómica
+  // (UPDATE ... RETURNING), igual que los folios. Evita el scan O(n) y las
+  // carreras: dos altas concurrentes se serializan y nunca colisionan.
+  // La primera vez, siembra la secuencia con el máximo existente para no chocar
+  // con clientes ya creados.
+  private async nextCustomerCode(tx: TenantTx, organizationId: string): Promise<string> {
+    await tx.$executeRaw`
+      INSERT INTO "DocumentSequence" ("id", "organizationId", "series", "nextValue", "updatedAt")
+      VALUES (
+        gen_random_uuid(), ${organizationId}::uuid, 'CUST',
+        COALESCE(
+          (SELECT MAX(CAST(SUBSTRING("code" FROM 3) AS INTEGER))
+             FROM "Customer"
+            WHERE "organizationId" = ${organizationId}::uuid AND "code" ~ '^C-[0-9]+$'),
+          0
+        ) + 1,
+        now()
+      )
+      ON CONFLICT ("organizationId", "series") DO NOTHING`;
+    const rows = await tx.$queryRaw<Array<{ seq: number }>>`
+      UPDATE "DocumentSequence"
+         SET "nextValue" = "nextValue" + 1, "updatedAt" = now()
+       WHERE "organizationId" = ${organizationId}::uuid AND "series" = 'CUST'
+      RETURNING ("nextValue" - 1) AS seq`;
+    const seq = rows[0]?.seq;
+    if (seq == null) throw new Error("No se pudo asignar número de cliente");
+    return `C-${String(seq).padStart(4, "0")}`;
   }
 
   private mapCodeConflict(e: unknown): unknown {
