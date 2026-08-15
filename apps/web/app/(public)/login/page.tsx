@@ -26,7 +26,10 @@ export default function LoginPage() {
   async function onSubmit(values: FormValues) {
     try {
       const res = await api.post<{ needsOrgSelection: boolean }>("/auth/login", values);
-      router.push(res.needsOrgSelection ? "/app/select-organization" : "/app");
+      // Vuelve a donde el middleware te interceptó (solo rutas internas /app).
+      const next = new URLSearchParams(window.location.search).get("next");
+      const safeNext = next && next.startsWith("/app") ? next : "/app";
+      router.push(res.needsOrgSelection ? "/app/select-organization" : safeNext);
     } catch (e) {
       toast.push(e instanceof ApiError ? e.message : "Error al iniciar sesión", "error");
     }
