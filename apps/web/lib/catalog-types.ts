@@ -247,6 +247,11 @@ export interface PosLookup {
   available: string | null;
 }
 
+// Resultado del alta rápida por escaneo (misma forma que el lookup + productId).
+export interface QuickRegisterResult extends PosLookup {
+  productId: string;
+}
+
 export interface SalesRegisterRow {
   orderId: string;
   number: string;

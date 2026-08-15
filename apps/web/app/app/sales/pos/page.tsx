@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Camera, CameraOff, Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
+import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button, FormField, Input, Select, useToast } from "@24hits/ui";
-import type { Customer, PosLookup } from "@/lib/catalog-types";
+import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { useMe } from "@/lib/me";
+import { BarcodeScanner, type ScanFormat } from "@/components/BarcodeScanner";
+import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
 const money = (v: number) => `$${v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -22,63 +24,38 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [method, setMethod] = useState("CASH");
   const [manual, setManual] = useState("");
+  const [quick, setQuick] = useState<{ open: boolean; barcode: string; type: ScanFormat }>({ open: false, barcode: "", type: "OTHER" });
 
   const total = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
 
-  // --- Agregar por código de barras ---
-  const addByBarcode = useCallback(async (code: string) => {
-    if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
-    try {
-      const v = await api.get<PosLookup>(`/pos/lookup?barcode=${encodeURIComponent(code)}&warehouseId=${warehouseId}`);
-      setCart((prev) => {
-        const existing = prev.find((l) => l.variantId === v.variantId);
-        if (existing) return prev.map((l) => l.variantId === v.variantId ? { ...l, quantity: l.quantity + 1 } : l);
-        return [...prev, { variantId: v.variantId, sku: v.sku, name: v.name, unitPrice: Number(v.price ?? 0), quantity: 1, available: v.available }];
-      });
-      toast.push(`Agregado: ${v.name}`, "success");
-    } catch (e) {
-      toast.push(e instanceof ApiError ? e.message : "Código no reconocido", "error");
-    }
-  }, [warehouseId, toast]);
-
-  // --- Escáner de cámara (ZXing) ---
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
-  const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
-  const [scanning, setScanning] = useState(false);
-
-  const stopScan = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    setScanning(false);
+  // Agrega o incrementa una línea del carrito.
+  const addLine = useCallback((v: { variantId: string; sku: string; name: string; unitPrice: number; available: string | null }) => {
+    setCart((prev) => {
+      const existing = prev.find((l) => l.variantId === v.variantId);
+      if (existing) return prev.map((l) => (l.variantId === v.variantId ? { ...l, quantity: l.quantity + 1 } : l));
+      return [...prev, { ...v, quantity: 1 }];
+    });
   }, []);
 
-  const startScan = useCallback(async () => {
-    if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
-    try {
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
-      const reader = new BrowserMultiFormatReader();
-      setScanning(true);
-      controlsRef.current = await reader.decodeFromConstraints(
-        { video: { facingMode: "environment" } },
-        videoRef.current!,
-        (result) => {
-          if (!result) return;
-          const code = result.getText();
-          const now = Date.now();
-          // Evita re-escanear el mismo código en ráfaga.
-          if (code === lastScan.current.code && now - lastScan.current.at < 1800) return;
-          lastScan.current = { code, at: now };
-          void addByBarcode(code);
+  // --- Agregar por código de barras ---
+  const addByBarcode = useCallback(
+    async (code: string, fmt: ScanFormat = "OTHER") => {
+      if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
+      try {
+        const v = await api.get<PosLookup>(`/pos/lookup?barcode=${encodeURIComponent(code)}&warehouseId=${warehouseId}`);
+        addLine({ variantId: v.variantId, sku: v.sku, name: v.name, unitPrice: Number(v.price ?? 0), available: v.available });
+        toast.push(`Agregado: ${v.name}`, "success");
+      } catch (e) {
+        // Código no registrado → abre el alta rápida prellenada para darlo de alta.
+        if (e instanceof ApiError && e.status === 404) {
+          setQuick({ open: true, barcode: code, type: fmt });
+        } else {
+          toast.push(e instanceof ApiError ? e.message : "Código no reconocido", "error");
         }
-      );
-    } catch {
-      setScanning(false);
-      toast.push("No se pudo abrir la cámara. Da permiso o usa el código manual.", "error");
-    }
-  }, [warehouseId, addByBarcode, toast]);
-
-  useEffect(() => () => stopScan(), [stopScan]);
+      }
+    },
+    [warehouseId, addLine, toast]
+  );
 
   // --- Cobrar ---
   const sale = useMutation({
@@ -129,19 +106,14 @@ export default function PosPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-semibold"><ScanLine className="h-4 w-4" /> Escáner</span>
-              {scanning
-                ? <Button size="sm" variant="outline" onClick={stopScan}><CameraOff className="h-4 w-4" /> Detener</Button>
-                : <Button size="sm" onClick={startScan}><Camera className="h-4 w-4" /> Encender cámara</Button>}
+              <button type="button" onClick={() => setQuick({ open: true, barcode: "", type: "OTHER" })} className="text-xs font-medium text-brand hover:underline">
+                Dar de alta un producto
+              </button>
             </div>
-            <div className="relative overflow-hidden rounded-lg bg-gray-900" style={{ aspectRatio: "4 / 3" }}>
-              <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
-              {!scanning && (
-                <div className="absolute inset-0 grid place-items-center text-center text-sm text-gray-400">
-                  <span>Enciende la cámara y apunta al código de barras.<br />Funciona en iPhone (Safari) y Android (Chrome).</span>
-                </div>
-              )}
-              {scanning && <div className="pointer-events-none absolute left-1/2 top-1/2 h-24 w-3/4 -translate-x-1/2 -translate-y-1/2 rounded-lg border-2 border-brand/80" />}
-            </div>
+
+            {/* Escáner continuo: sigue leyendo para cargar varios productos seguidos. */}
+            <BarcodeScanner continuous onScan={addByBarcode} />
+
             <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { void addByBarcode(manual.trim()); setManual(""); } }}>
               <Input placeholder="…o teclea el código de barras" value={manual} onChange={(e) => setManual(e.target.value)} />
               <Button type="submit" variant="outline">Agregar</Button>
@@ -198,6 +170,16 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      <QuickRegisterDialog
+        open={quick.open}
+        initialBarcode={quick.barcode}
+        initialType={quick.type}
+        onClose={() => setQuick((q) => ({ ...q, open: false }))}
+        onRegistered={(res: QuickRegisterResult) =>
+          addLine({ variantId: res.variantId, sku: res.sku, name: res.name, unitPrice: Number(res.price ?? 0), available: res.available })
+        }
+      />
     </div>
   );
 }

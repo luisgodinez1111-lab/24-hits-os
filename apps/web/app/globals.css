@@ -9,3 +9,10 @@
 body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
+
+/* Línea de barrido del escáner de código de barras */
+@keyframes scanline {
+  0% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(5.5rem); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0.3; }
+}

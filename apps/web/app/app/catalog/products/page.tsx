@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, ChevronDown, Package, Plus } from "lucide-react";
+import { Barcode, ChevronDown, Package, Plus, ScanLine } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -10,6 +10,7 @@ import {
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Unit, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 const statusTone: Record<ProductListItem["status"], "green" | "gray" | "amber" | "red"> = {
   ACTIVE: "green", DRAFT: "amber", INACTIVE: "gray", DISCONTINUED: "red",
@@ -22,6 +23,7 @@ export default function ProductsPage() {
   const [brandId, setBrandId] = useState("");
   const [status, setStatus] = useState("");
   const [creating, setCreating] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [variantsFor, setVariantsFor] = useState<ProductListItem | null>(null);
 
   const { data: brands } = useQuery({ queryKey: ["brands"], queryFn: () => api.get<Brand[]>("/brands") });
@@ -42,9 +44,14 @@ export default function ProductsPage() {
           <h1 className="text-2xl font-bold">Productos</h1>
           <p className="text-sm text-gray-500">Catálogo de productos y variantes</p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" /> Nuevo producto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setQuickOpen(true)}>
+            <ScanLine className="h-4 w-4" /> Alta por escaneo
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> Nuevo producto
+          </Button>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -98,6 +105,8 @@ export default function ProductsPage() {
 
       <CreateProductDialog open={creating} onClose={() => setCreating(false)} brands={brands ?? []}
         onCreated={async () => { setCreating(false); await qc.invalidateQueries({ queryKey: ["products"] }); toast.push("Producto creado", "success"); }} />
+      <QuickRegisterDialog open={quickOpen} onClose={() => setQuickOpen(false)}
+        onRegistered={async () => { await qc.invalidateQueries({ queryKey: ["products"] }); }} />
       <VariantsDialog product={variantsFor} onClose={() => setVariantsFor(null)}
         onChanged={() => qc.invalidateQueries({ queryKey: ["products"] })} />
     </div>
@@ -241,7 +250,7 @@ function VariantBarcodes({ variant, onChanged }: { variant: Variant; onChanged: 
         </div>
       ) : <p className="text-xs text-gray-400">Sin códigos de barras. Escanéalo con la cámara o tecléalo.</p>}
 
-      <BarcodeScanner autoStopOnScan onScan={(c) => setCode(c)} />
+      <BarcodeScanner onScan={(c, fmt) => { setCode(c); setType(fmt); }} />
 
       <div className="flex gap-2">
         <Input placeholder="Código de barras" value={code} onChange={(e) => setCode(e.target.value)} />

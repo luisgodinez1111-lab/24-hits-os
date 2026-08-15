@@ -9,15 +9,17 @@ import {
   addBarcodeSchema,
   createProductSchema,
   createVariantSchema,
+  quickRegisterSchema,
   updateProductSchema,
   type ProductSearch,
 } from "./catalog.dto.js";
-import { slugify } from "./slug.js";
+import { normalize, slugify } from "./slug.js";
 
 type CreateProduct = z.infer<typeof createProductSchema>;
 type UpdateProduct = z.infer<typeof updateProductSchema>;
 type CreateVariant = z.infer<typeof createVariantSchema>;
 type AddBarcode = z.infer<typeof addBarcodeSchema>;
+type QuickRegister = z.infer<typeof quickRegisterSchema>;
 
 @Injectable()
 export class ProductService {
@@ -186,6 +188,109 @@ export class ProductService {
         take: 100,
       })
     );
+  }
+
+  // Alta rápida por escaneo: crea modelo (producto) + sabor (variante) + código
+  // de barras + precio, todo en una transacción tenant-scoped. Marca y sabor se
+  // resuelven por nombre (se reutilizan si existen, se crean si no). Devuelve la
+  // misma forma que el lookup del POS para poder agregar al carrito de inmediato.
+  async quickRegister(organizationId: string, input: QuickRegister) {
+    try {
+      const result = await this.prisma.withTenant(organizationId, async (tx) => {
+        // El código no debe existir todavía (el flujo se dispara tras un lookup 404).
+        const existing = await tx.productBarcode.findFirst({ where: { barcode: input.barcode }, select: { id: true } });
+        if (existing) throw new AppException(409, ErrorCode.BARCODE_ALREADY_EXISTS, "El código de barras ya existe");
+
+        // Marca (opcional): reutiliza por slug o crea.
+        let brandId: string | null = null;
+        if (input.brandName?.trim()) {
+          const slug = slugify(input.brandName);
+          const brand =
+            (await tx.brand.findFirst({ where: { slug }, select: { id: true } })) ??
+            (await tx.brand.create({ data: { organizationId, name: input.brandName.trim(), slug }, select: { id: true } }));
+          brandId = brand.id;
+        }
+
+        // Modelo (producto): reutiliza por nombre+marca o crea ACTIVE.
+        const productName = input.productName.trim();
+        const product =
+          (await tx.product.findFirst({ where: { name: productName, brandId }, select: { id: true, name: true } })) ??
+          (await tx.product.create({
+            data: { organizationId, name: productName, slug: slugify(productName), brandId, status: "ACTIVE" },
+            select: { id: true, name: true },
+          }));
+
+        // Sabor (opcional): reutiliza por nombre normalizado o crea.
+        let flavorId: string | null = null;
+        if (input.flavorName?.trim()) {
+          const normalizedName = normalize(input.flavorName);
+          const flavor =
+            (await tx.flavor.findFirst({ where: { normalizedName }, select: { id: true } })) ??
+            (await tx.flavor.create({ data: { organizationId, name: input.flavorName.trim(), normalizedName }, select: { id: true } }));
+          flavorId = flavor.id;
+        }
+
+        // Unidad por defecto (las variantes la requieren): usa "PZ" o crea una.
+        const unit =
+          (await tx.unitOfMeasure.findFirst({ where: {}, select: { id: true }, orderBy: { createdAt: "asc" } })) ??
+          (await tx.unitOfMeasure.create({ data: { organizationId, code: "PZ", name: "Pieza" }, select: { id: true } }));
+
+        // SKU: usa el indicado o deriva del código de barras (único por org).
+        const sku = input.sku?.trim() || input.barcode;
+
+        const variant = await tx.productVariant.create({
+          data: {
+            organizationId,
+            productId: product.id,
+            flavorId,
+            sku,
+            name: input.flavorName?.trim() || productName,
+            purchaseUnitId: unit.id,
+            salesUnitId: unit.id,
+            status: "ACTIVE",
+          },
+          select: { id: true, sku: true, name: true, status: true },
+        });
+
+        await tx.productBarcode.create({
+          data: { organizationId, variantId: variant.id, barcode: input.barcode, type: input.barcodeType, isPrimary: true },
+        });
+
+        // Precio (opcional): lista RETAIL activa (reutiliza o crea) + ítem vigente.
+        let price: string | null = null;
+        if (input.price != null) {
+          const list =
+            (await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true } })) ??
+            (await tx.priceList.create({
+              data: { organizationId, name: "Lista de precios", type: "RETAIL", status: "ACTIVE", currency: input.currency },
+              select: { id: true },
+            }));
+          const item = await tx.priceListItem.create({
+            data: { organizationId, priceListId: list.id, variantId: variant.id, price: new Prisma.Decimal(input.price) },
+            select: { price: true },
+          });
+          price = item.price.toString();
+        }
+
+        return {
+          productId: product.id,
+          variantId: variant.id,
+          sku: variant.sku,
+          name: `${product.name} · ${variant.name}`,
+          status: variant.status,
+          price,
+          currency: input.currency,
+          available: null as string | null,
+        };
+      });
+      await this.audit.record({
+        action: "product.quick_registered", organizationId, entityType: "ProductVariant", entityId: result.variantId,
+        after: { sku: result.sku, barcode: input.barcode },
+      });
+      return result;
+    } catch (e) {
+      throw this.mapUniqueError(e);
+    }
   }
 
   private mapUniqueError(e: unknown): AppException {

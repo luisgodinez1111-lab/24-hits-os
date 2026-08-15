@@ -10,11 +10,13 @@ import {
   createProductSchema,
   createVariantSchema,
   productSearchSchema,
+  quickRegisterSchema,
   updateProductSchema,
   type AddBarcodeInput,
   type CreateProductInput,
   type CreateVariantInput,
   type ProductSearch,
+  type QuickRegisterInput,
   type UpdateProductInput,
 } from "./catalog.dto.js";
 
@@ -39,6 +41,13 @@ export class ProductController {
   @RequirePermissions("products.create")
   create(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(createProductSchema)) b: CreateProductInput) {
     return this.products.createProduct(u.organizationId!, b);
+  }
+
+  // Alta rápida por escaneo: modelo + sabor + código de barras (+ precio) en una llamada.
+  @Post("quick-register")
+  @RequirePermissions("products.create")
+  quickRegister(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(quickRegisterSchema)) b: QuickRegisterInput) {
+    return this.products.quickRegister(u.organizationId!, b);
   }
 
   @Patch(":id")

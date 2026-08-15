@@ -46,10 +46,25 @@ export const addBarcodeSchema = z.object({
   isPrimary: z.boolean().default(false),
 });
 
+// Alta rápida por escaneo: da de alta modelo (producto) + sabor (variante) +
+// código de barras en una sola operación. Marca y sabor se resuelven por nombre
+// (se crean si no existen). Base del flujo "escanear para dar de alta".
+export const quickRegisterSchema = z.object({
+  barcode: z.string().min(1).max(64),
+  barcodeType: z.enum(["EAN", "UPC", "CODE128", "QR_INTERNAL", "OTHER"]).default("OTHER"),
+  productName: z.string().min(1).max(200), // modelo
+  brandName: z.string().max(120).optional(),
+  flavorName: z.string().max(120).optional(), // sabor
+  sku: z.string().max(64).optional(),
+  price: z.coerce.number().nonnegative().optional(),
+  currency: z.string().length(3).default("MXN"),
+});
+
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type CreateVariantInput = z.infer<typeof createVariantSchema>;
 export type AddBarcodeInput = z.infer<typeof addBarcodeSchema>;
+export type QuickRegisterInput = z.infer<typeof quickRegisterSchema>;
 
 export const productSearchSchema = z.object({
   search: z.string().max(120).optional(),
