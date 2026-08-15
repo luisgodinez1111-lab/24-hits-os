@@ -1,11 +1,10 @@
-import { DollarSign, Droplet, FolderTree, Package, Tag } from "lucide-react";
+import { DollarSign, Package, Tags } from "lucide-react";
 import type { SectionTab } from "@/components/SectionTabs";
 
-// Pestañas de la ventana única de Catálogo.
+// Pestañas de la ventana única de Catálogo. Marcas, categorías y sabores son
+// listas simples, así que se agrupan en un solo "Atributos" en vez de 3 páginas.
 export const catalogTabs: SectionTab[] = [
   { href: "/app/catalog/products", label: "Productos", icon: Package, perm: "products.read" },
-  { href: "/app/catalog/brands", label: "Marcas", icon: Tag, perm: "brands.read" },
-  { href: "/app/catalog/categories", label: "Categorías", icon: FolderTree, perm: "categories.read" },
-  { href: "/app/catalog/flavors", label: "Sabores", icon: Droplet, perm: "flavors.read" },
   { href: "/app/catalog/pricing", label: "Precios", icon: DollarSign, perm: "pricing.read" },
+  { href: "/app/catalog/attributes", label: "Atributos", icon: Tags, perm: "brands.read" },
 ];
