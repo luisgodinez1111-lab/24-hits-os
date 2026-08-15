@@ -17,6 +17,12 @@ export const createCustomerSchema = z.object({
 });
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 
+// Clientes inactivos: que compraron antes pero llevan >= N días sin comprar.
+export const inactiveCustomersQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(3650).default(30),
+});
+export type InactiveCustomersQuery = z.infer<typeof inactiveCustomersQuerySchema>;
+
 export const updateCustomerSchema = z.object({
   code: z.string().max(40).nullable().optional(),
   name: z.string().min(1).max(200).optional(),

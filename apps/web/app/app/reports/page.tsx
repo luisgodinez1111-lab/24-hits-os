@@ -2,9 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Award, Droplet, MapPin, TrendingUp } from "lucide-react";
+import { Award, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
 import { Badge, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
-import type { SalesByZone, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
+import type { InactiveCustomers, SalesByZone, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
 import { BarChart } from "@/components/BarChart";
 
@@ -61,6 +61,10 @@ export default function DashboardPage() {
   const { data: models } = useQuery({ queryKey: ["dash-models", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=product&limit=8`) });
   const { data: flavors } = useQuery({ queryKey: ["dash-flavors", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=flavor&limit=8`) });
   const { data: zones } = useQuery({ queryKey: ["dash-zones", from, to], queryFn: () => api.get<SalesByZone>(`/reports/by-zone?${qs}`) });
+
+  // Clientes inactivos: independiente del rango, usa su propio umbral de días.
+  const [inactiveDays, setInactiveDays] = useState(30);
+  const { data: inactive } = useQuery({ queryKey: ["dash-inactive", inactiveDays], queryFn: () => api.get<InactiveCustomers>(`/customers/inactive?days=${inactiveDays}`) });
 
   const bars = (series?.points ?? []).map((p) => ({
     label: granularity === "day" ? p.date.slice(8) : p.date.slice(5),
@@ -143,6 +147,55 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* Clientes que dejaron de comprar (retención) */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
+          <UserX className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-semibold">Clientes que dejaron de comprar</span>
+          {inactive && <Badge tone={inactive.count > 0 ? "amber" : "green"}>{inactive.count}</Badge>}
+          <div className="ml-auto flex gap-1">
+            {[30, 60, 90].map((d) => (
+              <button key={d} onClick={() => setInactiveDays(d)} className={`rounded px-2 py-1 text-xs font-medium ${inactiveDays === d ? "bg-brand text-white" : "bg-gray-100 text-gray-600"}`}>{d}d+</button>
+            ))}
+          </div>
+        </div>
+        <CardBody>
+          {!inactive ? (
+            <Skeleton className="h-32 w-full" />
+          ) : inactive.rows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Ningún cliente lleva {inactiveDays}+ días sin comprar. 🎉</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-gray-400">
+                    <th className="pb-2 font-medium">Cliente</th>
+                    <th className="pb-2 font-medium">Celular</th>
+                    <th className="pb-2 font-medium">Zona</th>
+                    <th className="pb-2 text-right font-medium">Pedidos</th>
+                    <th className="pb-2 text-right font-medium">Gasto histórico</th>
+                    <th className="pb-2 text-right font-medium">Sin comprar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {inactive.rows.slice(0, 15).map((r) => (
+                    <tr key={r.id}>
+                      <td className="py-2 font-medium">{r.name}{r.code && <span className="ml-2 font-mono text-[10px] text-gray-400">{r.code}</span>}</td>
+                      <td className="py-2 text-gray-500">{r.phone ?? "—"}</td>
+                      <td className="py-2">{r.zone ? <Badge tone="gray">{zoneLabel[r.zone] ?? r.zone}</Badge> : <span className="text-gray-300">—</span>}</td>
+                      <td className="py-2 text-right tabular-nums">{r.orderCount}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold">{money(r.totalSpent)}</td>
+                      <td className="py-2 text-right"><Badge tone={r.daysSinceLast >= 90 ? "red" : "amber"}>{r.daysSinceLast} días</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {inactive.rows.length > 15 && <p className="mt-2 text-center text-xs text-gray-400">y {inactive.rows.length - 15} más…</p>}
+            </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 }

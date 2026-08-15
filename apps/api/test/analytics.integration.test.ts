@@ -98,6 +98,20 @@ describe("Analítica: serie temporal + ventas por zona", () => {
     expect(profit).toBe(300); // 180 + 120
   });
 
+  it("lista clientes que dejaron de comprar (>= N días sin comprar)", async () => {
+    const lap = await customers.create(orgId, { name: "Lapsado", type: "RETAIL" });
+    await fulfilled(lap.id, 1, 100);
+    const old = new Date(Date.now() - 60 * 86_400_000);
+    await withSystem(prisma, (tx) => tx.order.updateMany({ where: { customerId: lap.id }, data: { createdAt: old } }));
+
+    const res = await customers.inactive(orgId, 30);
+    const row = res.rows.find((r) => r.id === lap.id);
+    expect(row).toBeTruthy();
+    expect(row!.daysSinceLast).toBeGreaterThanOrEqual(59);
+    // Un cliente con compra reciente (Norte, del primer test) NO aparece.
+    expect(res.rows.some((r) => r.name === "Norte")).toBe(false);
+  });
+
   it("por zona: ordena por venta y separa la zona sin cliente", async () => {
     const sur = await customers.create(orgId, { name: "Sur", type: "RETAIL", zone: "SUR" });
     await fulfilled(sur.id, 1, 50); // SUR billed 50

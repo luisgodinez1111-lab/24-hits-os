@@ -351,6 +351,24 @@ export interface SalesByZone {
   rows: ZoneRow[];
 }
 
+export interface InactiveCustomerRow {
+  id: string;
+  code: string | null;
+  name: string;
+  phone: string | null;
+  zone: CustomerZone | null;
+  orderCount: number;
+  lastOrderAt: string;
+  daysSinceLast: number;
+  totalSpent: string;
+}
+export interface InactiveCustomers {
+  days: number;
+  cutoff: string;
+  count: number;
+  rows: InactiveCustomerRow[];
+}
+
 export interface CustomerAccount {
   customer: { id: string; name: string; type: string; status: string };
   creditLimit: string | null;

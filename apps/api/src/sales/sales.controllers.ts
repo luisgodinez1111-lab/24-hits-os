@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
@@ -9,10 +9,12 @@ import { OrderService } from "./order.service.js";
 import {
   createCustomerSchema,
   updateCustomerSchema,
+  inactiveCustomersQuerySchema,
   createOrderSchema,
   updateDeliverySchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
+  type InactiveCustomersQuery,
   type CreateOrderInput,
   type UpdateDeliveryInput,
 } from "./sales.dto.js";
@@ -26,6 +28,13 @@ export class CustomerController {
   @RequirePermissions("customers.read")
   list(@CurrentUser() u: AuthContext) {
     return this.customers.list(u.organizationId!);
+  }
+
+  // Clientes que dejaron de comprar (>= N días sin comprar). Antes de :id.
+  @Get("inactive")
+  @RequirePermissions("customers.read")
+  inactive(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(inactiveCustomersQuerySchema)) q: InactiveCustomersQuery) {
+    return this.customers.inactive(u.organizationId!, q.days);
   }
 
   @Get(":id")

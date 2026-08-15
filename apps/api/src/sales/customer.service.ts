@@ -36,6 +36,52 @@ export class CustomerService {
     });
   }
 
+  // Clientes que compraban y dejaron de hacerlo: última compra hace >= `days`
+  // días. Ordenados por gasto histórico (los valiosos primero) para re-engancharlos.
+  async inactive(organizationId: string, days: number) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const now = Date.now();
+      const cutoff = new Date(now - days * 86_400_000);
+      const customers = await tx.customer.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true, code: true, name: true, phone: true, zone: true },
+      });
+      const ids = customers.map((c) => c.id);
+      const grouped = ids.length
+        ? await tx.order.groupBy({
+            by: ["customerId"],
+            where: { customerId: { in: ids }, status: { not: "CANCELLED" } },
+            _count: { _all: true },
+            _max: { createdAt: true },
+            _sum: { total: true },
+          })
+        : [];
+      const byId = new Map(grouped.map((g) => [g.customerId, g]));
+
+      const rows = customers
+        .map((c) => {
+          const g = byId.get(c.id);
+          const last = g?._max.createdAt;
+          if (!g || !last || last >= cutoff) return null; // sin compras o aún activo
+          return {
+            id: c.id,
+            code: c.code,
+            name: c.name,
+            phone: c.phone,
+            zone: c.zone,
+            orderCount: g._count._all,
+            lastOrderAt: last.toISOString(),
+            daysSinceLast: Math.round((now - last.getTime()) / 86_400_000),
+            totalSpent: (g._sum.total ?? new Prisma.Decimal(0)).toString(),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+        .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent));
+
+      return { days, cutoff: cutoff.toISOString(), count: rows.length, rows };
+    });
+  }
+
   async get(organizationId: string, id: string) {
     const customer = await this.prisma.withTenant(organizationId, (tx) =>
       tx.customer.findFirst({ where: { id } })
