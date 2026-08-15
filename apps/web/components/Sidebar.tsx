@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Boxes,
-  Contact,
   Home,
   Layers,
   Package,
@@ -49,10 +48,8 @@ const sections: NavSection[] = [
   },
   {
     title: "Compras",
-    items: [
-      { href: "/app/purchasing/suppliers", label: "Proveedores", icon: Contact, perm: "suppliers.read" },
-      { href: "/app/purchasing/orders", label: "Órdenes de compra", icon: ShoppingCart, perm: "purchasing.read" },
-    ],
+    // Proveedores y órdenes de compra en una sola ventana con pestañas.
+    items: [{ href: "/app/purchasing", label: "Compras", icon: ShoppingCart, perm: "suppliers.read" }],
   },
   {
     title: "Catálogo",
