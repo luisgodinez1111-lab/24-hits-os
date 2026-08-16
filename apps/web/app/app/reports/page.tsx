@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Award, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
-import { Badge, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
+import { AlertTriangle, Award, Download, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
+import { Badge, Button, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
 import type { InactiveCustomers, SalesByZone, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
 import { BarChart } from "@/components/BarChart";
@@ -80,6 +80,55 @@ export default function DashboardPage() {
   const [inactiveDays, setInactiveDays] = useState(30);
   const { data: inactive } = useQuery({ queryKey: ["dash-inactive", inactiveDays], queryFn: () => api.get<InactiveCustomers>(`/customers/inactive?days=${inactiveDays}`) });
 
+  // Exporta todo el Tablero a un CSV (una sección por panel), abrible en Excel.
+  function exportCsv() {
+    const showProfit = summary?.grossProfit != null;
+    const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const lines: string[] = [];
+    const push = (arr: unknown[]) => lines.push(arr.map(esc).join(","));
+    const section = (title: string, header: string[], rows: unknown[][]) => { push([title]); if (header.length) push(header); rows.forEach(push); lines.push(""); };
+
+    push(["Tablero 24 HITS OS"]);
+    push(["Rango", from, "a", to]);
+    lines.push("");
+
+    if (summary) section("Indicadores", ["Métrica", "Valor", "Periodo anterior"], [
+      ["Ventas", summary.billed, summaryPrev?.billed ?? ""],
+      ["Cobrado", summary.collected, summaryPrev?.collected ?? ""],
+      ["Pedidos", summary.orderCount, summaryPrev?.orderCount ?? ""],
+      ["Ticket promedio", summary.avgTicket, summaryPrev?.avgTicket ?? ""],
+      ...(showProfit ? [["Utilidad", summary.grossProfit, summaryPrev?.grossProfit ?? ""], ["Margen", summary.margin ?? "", summaryPrev?.margin ?? ""]] : []),
+    ]);
+
+    if (series) section(`Ventas por ${series.granularity === "day" ? "día" : "mes"}`,
+      ["Fecha", "Pedidos", "Ventas", "Unidades", ...(showProfit ? ["Utilidad", "Margen"] : [])],
+      series.points.map((p) => [p.date, p.orders, p.billed, p.units, ...(showProfit ? [p.grossProfit ?? "", p.margin ?? ""] : [])]));
+
+    const topRows = (t?: TopSellers) => (t?.rows ?? []).map((r) => [r.label, r.sublabel ?? "", r.units, r.revenue, r.returnedUnits, r.returnRate, ...(showProfit ? [r.grossProfit ?? "", r.margin ?? ""] : [])]);
+    const topHeader = ["Nombre", "Detalle", "Unidades", "Ingreso", "Devueltas", "% Devolución", ...(showProfit ? ["Utilidad", "Margen"] : [])];
+    if (models) section("Modelos más vendidos", topHeader, topRows(models));
+    if (flavors) section("Sabores más vendidos", topHeader, topRows(flavors));
+    if (model && modelFlavors) section(`Sabores del modelo: ${model.name}`, topHeader, topRows(modelFlavors));
+    if (brandReturns) section("Marcas con más devoluciones", topHeader, topRows(brandReturns));
+
+    if (zones) section("Ventas por zona", ["Zona", "Pedidos", "Ventas", "Unidades", ...(showProfit ? ["Utilidad", "Margen"] : [])],
+      zones.rows.map((z) => [zoneLabel[z.zone] ?? z.zone, z.orders, z.billed, z.units, ...(showProfit ? [z.grossProfit ?? "", z.margin ?? ""] : [])]));
+
+    if (inactive) section(`Clientes inactivos (${inactive.days}+ días)`, ["Nº", "Nombre", "Celular", "Zona", "Pedidos", "Última compra", "Días sin comprar", "Gasto histórico"],
+      inactive.rows.map((r) => [r.code ?? "", r.name, r.phone ?? "", r.zone ? zoneLabel[r.zone] ?? r.zone : "", r.orderCount, r.lastOrderAt.slice(0, 10), r.daysSinceLast, r.totalSpent]));
+
+    // BOM para que Excel respete los acentos.
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tablero_${from}_a_${to}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   const bars = (series?.points ?? []).map((p) => ({
     label: granularity === "day" ? p.date.slice(8) : p.date.slice(5),
     value: Number(p.billed),
@@ -104,6 +153,7 @@ export default function DashboardPage() {
         </div>
         <FormField label="Desde"><Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setActive(""); }} /></FormField>
         <FormField label="Hasta"><Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setActive(""); }} /></FormField>
+        <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4" /> Exportar CSV</Button>
       </div>
 
       {/* KPIs con comparativo vs. periodo anterior */}
