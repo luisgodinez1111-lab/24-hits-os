@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Award, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
 import { Badge, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
@@ -61,6 +61,17 @@ export default function DashboardPage() {
   const { data: models } = useQuery({ queryKey: ["dash-models", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=product&limit=8`) });
   const { data: flavors } = useQuery({ queryKey: ["dash-flavors", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=flavor&limit=8`) });
   const { data: zones } = useQuery({ queryKey: ["dash-zones", from, to], queryFn: () => api.get<SalesByZone>(`/reports/by-zone?${qs}`) });
+
+  // Sabores por modelo (drill-down): al elegir un modelo, sus sabores más vendidos.
+  const [model, setModel] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => {
+    if (!model && models?.rows?.length) setModel({ id: models.rows[0]!.key, name: models.rows[0]!.label });
+  }, [models, model]);
+  const { data: modelFlavors } = useQuery({
+    queryKey: ["dash-model-flavors", from, to, model?.id],
+    queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=flavor&productId=${model!.id}&limit=10`),
+    enabled: !!model,
+  });
 
   // Clientes inactivos: independiente del rango, usa su propio umbral de días.
   const [inactiveDays, setInactiveDays] = useState(30);
@@ -123,7 +134,7 @@ export default function DashboardPage() {
 
       {/* Top modelos / sabores + zonas */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <TopCard title="Modelos más vendidos" icon={<Award className="h-4 w-4 text-gray-500" />} rows={models?.rows} />
+        <TopCard title="Modelos más vendidos" icon={<Award className="h-4 w-4 text-gray-500" />} rows={models?.rows} onSelect={setModel} selectedKey={model?.id} />
         <TopCard title="Sabores más vendidos" icon={<Droplet className="h-4 w-4 text-gray-500" />} rows={flavors?.rows} />
 
         <Card>
@@ -147,6 +158,38 @@ export default function DashboardPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* Sabores por modelo (drill-down del modelo seleccionado) */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
+          <Droplet className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-semibold">Sabores por modelo</span>
+          {model && <Badge tone="brand">{model.name}</Badge>}
+          <span className="ml-auto text-[10px] text-gray-400">elige un modelo en “Modelos más vendidos”</span>
+        </div>
+        <CardBody className="space-y-2">
+          {!model ? (
+            <p className="py-6 text-center text-sm text-gray-400">Selecciona un modelo arriba para ver sus sabores.</p>
+          ) : !modelFlavors ? (
+            <Skeleton className="h-28 w-full" />
+          ) : modelFlavors.rows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Sin ventas de sabores para {model.name} en el rango.</p>
+          ) : (() => {
+            const fmax = Math.max(1, ...modelFlavors.rows.map((r) => Number(r.units)));
+            return modelFlavors.rows.map((r) => (
+              <div key={r.key}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="truncate pr-2 font-medium">{r.label}</span>
+                  <span className="shrink-0 tabular-nums">{r.units} u.{Number(r.returnedUnits) > 0 && <Badge tone="amber">−{r.returnedUnits}</Badge>}</span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-full bg-gray-100">
+                  <div className="h-1.5 rounded-full bg-brand/70" style={{ width: `${(Number(r.units) / fmax) * 100}%` }} />
+                </div>
+              </div>
+            ));
+          })()}
+        </CardBody>
+      </Card>
 
       {/* Clientes que dejaron de comprar (retención) */}
       <Card>
@@ -217,25 +260,33 @@ function Kpi({ label, value, sub, accent, delta }: { label: string; value: strin
   );
 }
 
-function TopCard({ title, icon, rows }: { title: string; icon: ReactNode; rows?: TopSellers["rows"] }) {
+function TopCard({ title, icon, rows, onSelect, selectedKey }: { title: string; icon: ReactNode; rows?: TopSellers["rows"]; onSelect?: (row: { id: string; name: string }) => void; selectedKey?: string }) {
   const max = Math.max(1, ...(rows ?? []).map((r) => Number(r.units)));
   return (
     <Card>
-      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">{icon}<span className="text-sm font-semibold">{title}</span></div>
+      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">{icon}<span className="text-sm font-semibold">{title}</span>{onSelect && <span className="ml-auto text-[10px] text-gray-400">clic para ver sabores</span>}</div>
       <CardBody className="space-y-2">
         {!rows ? <Skeleton className="h-32 w-full" /> : rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">Sin ventas en el rango.</p>
-        ) : rows.map((r) => (
-          <div key={r.key}>
-            <div className="flex items-center justify-between text-sm">
-              <span className="truncate pr-2 font-medium">{r.label}{r.sublabel && <span className="ml-1 text-xs text-gray-400">· {r.sublabel}</span>}</span>
-              <span className="shrink-0 tabular-nums">{r.units} u.{Number(r.returnedUnits) > 0 && <Badge tone="amber">−{r.returnedUnits}</Badge>}</span>
-            </div>
-            <div className="mt-1 h-1.5 rounded-full bg-gray-100">
-              <div className="h-1.5 rounded-full bg-brand/70" style={{ width: `${(Number(r.units) / max) * 100}%` }} />
-            </div>
-          </div>
-        ))}
+        ) : rows.map((r) => {
+          const inner = (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="truncate pr-2 font-medium">{r.label}{r.sublabel && <span className="ml-1 text-xs text-gray-400">· {r.sublabel}</span>}</span>
+                <span className="shrink-0 tabular-nums">{r.units} u.{Number(r.returnedUnits) > 0 && <Badge tone="amber">−{r.returnedUnits}</Badge>}</span>
+              </div>
+              <div className="mt-1 h-1.5 rounded-full bg-gray-100">
+                <div className="h-1.5 rounded-full bg-brand/70" style={{ width: `${(Number(r.units) / max) * 100}%` }} />
+              </div>
+            </>
+          );
+          return onSelect ? (
+            <button key={r.key} type="button" onClick={() => onSelect({ id: r.key, name: r.label })}
+              className={`w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50 ${selectedKey === r.key ? "bg-brand/5 ring-1 ring-brand/30" : ""}`}>
+              {inner}
+            </button>
+          ) : <div key={r.key}>{inner}</div>;
+        })}
       </CardBody>
     </Card>
   );
