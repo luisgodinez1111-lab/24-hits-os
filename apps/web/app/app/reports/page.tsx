@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Award, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
+import { AlertTriangle, Award, Droplet, MapPin, TrendingUp, UserX } from "lucide-react";
 import { Badge, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
 import type { InactiveCustomers, SalesByZone, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
@@ -72,6 +72,9 @@ export default function DashboardPage() {
     queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=flavor&productId=${model!.id}&limit=10`),
     enabled: !!model,
   });
+
+  // Marcas con más devoluciones/problemas (ordenadas por devoluciones).
+  const { data: brandReturns } = useQuery({ queryKey: ["dash-brand-returns", from, to], queryFn: () => api.get<TopSellers>(`/reports/top-sellers?${qs}&dimension=brand&sort=returns&limit=8`) });
 
   // Clientes inactivos: independiente del rango, usa su propio umbral de días.
   const [inactiveDays, setInactiveDays] = useState(30);
@@ -187,6 +190,50 @@ export default function DashboardPage() {
                 </div>
               </div>
             ));
+          })()}
+        </CardBody>
+      </Card>
+
+      {/* Marcas con más devoluciones / problemas */}
+      <Card>
+        <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-semibold">Marcas con más devoluciones</span>
+          <span className="ml-auto text-[10px] text-gray-400">problemas de calidad / rotación</span>
+        </div>
+        <CardBody>
+          {!brandReturns ? (
+            <Skeleton className="h-28 w-full" />
+          ) : (() => {
+            const rows = brandReturns.rows.filter((r) => Number(r.returnedUnits) > 0);
+            if (rows.length === 0) return <p className="py-6 text-center text-sm text-gray-400">Sin devoluciones en el rango. 🎉</p>;
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wider text-gray-400">
+                      <th className="pb-2 font-medium">Marca</th>
+                      <th className="pb-2 text-right font-medium">Vendidas</th>
+                      <th className="pb-2 text-right font-medium">Devueltas</th>
+                      <th className="pb-2 text-right font-medium">% Devolución</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rows.map((r) => {
+                      const rate = Number(r.returnRate);
+                      return (
+                        <tr key={r.key}>
+                          <td className="py-2 font-medium">{r.label}</td>
+                          <td className="py-2 text-right tabular-nums text-gray-500">{r.units}</td>
+                          <td className="py-2 text-right tabular-nums font-semibold">{r.returnedUnits}</td>
+                          <td className="py-2 text-right"><Badge tone={rate >= 0.2 ? "red" : rate >= 0.08 ? "amber" : "gray"}>{pct(r.returnRate)}</Badge></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
           })()}
         </CardBody>
       </Card>
