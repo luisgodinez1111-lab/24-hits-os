@@ -92,13 +92,25 @@ describe("Almacén fijo por usuario + entrega a domicilio", () => {
     expect(order.deliveryStatus).toBe("PENDING");
   });
 
-  it("actualiza el estado de entrega", async () => {
+  it("marcar Entregado auto-entrega el pedido (fulfill) y descuenta inventario", async () => {
+    const before = await withTenant(prisma, orgId, (tx) =>
+      tx.inventoryBalance.findFirst({ where: { warehouseId, variantId }, select: { onHand: true } })
+    );
     const order = await orders.create(orgId, userId, {
       currency: "MXN", deliveryAddress: "Dom", items: [{ variantId, quantity: 1, unitPrice: 100, discount: 0, taxRate: 0 }],
     });
-    const updated = await orders.updateDelivery(orgId, order.id, { status: "DELIVERED", deliveryNotes: "Entregado a portería" });
+    const updated = await orders.updateDelivery(orgId, order.id, userId, { status: "DELIVERED", deliveryNotes: "Entregado a portería" }) as {
+      deliveryStatus: string; deliveryNotes: string | null; status: string; items: Array<{ fulfilledQuantity: unknown }>;
+    };
     expect(updated.deliveryStatus).toBe("DELIVERED");
     expect(updated.deliveryNotes).toBe("Entregado a portería");
+    // Auto-fulfill: estado FULFILLED y el físico bajó 1 unidad.
+    expect(updated.status).toBe("FULFILLED");
+    expect(Number(updated.items[0]!.fulfilledQuantity)).toBe(1);
+    const after = await withTenant(prisma, orgId, (tx) =>
+      tx.inventoryBalance.findFirst({ where: { warehouseId, variantId }, select: { onHand: true } })
+    );
+    expect(Number(after!.onHand)).toBe(Number(before!.onHand) - 1);
   });
 
   it("sin almacén fijo ni indicado → error claro", async () => {

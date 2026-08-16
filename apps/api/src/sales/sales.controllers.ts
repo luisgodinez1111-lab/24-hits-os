@@ -116,6 +116,6 @@ export class OrderController {
   @Patch(":id/delivery")
   @RequirePermissions("orders.create")
   updateDelivery(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateDeliverySchema)) b: UpdateDeliveryInput) {
-    return this.orders.updateDelivery(u.organizationId!, id, b);
+    return this.orders.updateDelivery(u.organizationId!, id, u.userId, b);
   }
 }

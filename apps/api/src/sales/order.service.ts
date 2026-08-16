@@ -52,7 +52,28 @@ export class OrderService {
   }
 
   // Actualiza la entrega del pedido (estado y/o datos de domicilio).
-  async updateDelivery(organizationId: string, orderId: string, input: UpdateDeliveryInput) {
+  // Al marcar "Entregado" (DELIVERED), el pedido se ENTREGA (fulfill): consume el
+  // inventario físico y captura COGS. Si aún está en borrador, se confirma primero
+  // (reserva) omitiendo el límite de crédito, porque la mercancía ya se entregó.
+  async updateDelivery(organizationId: string, orderId: string, userId: string, input: UpdateDeliveryInput) {
+    if (input.status === "DELIVERED") {
+      const current = await this.prisma.withTenant(organizationId, (tx) =>
+        tx.order.findFirst({ where: { id: orderId }, select: { status: true } })
+      );
+      if (!current) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
+      if (current.status === "CANCELLED") {
+        throw new AppException(409, ErrorCode.ORDER_INVALID_STATE, "No se puede entregar un pedido cancelado");
+      }
+      let status: string = current.status;
+      if (status === "DRAFT") {
+        await this.confirm(organizationId, userId, orderId, { skipCreditCheck: true });
+        status = "CONFIRMED";
+      }
+      if (status === "CONFIRMED" || status === "PARTIALLY_FULFILLED") {
+        await this.fulfill(organizationId, userId, orderId);
+      }
+    }
+
     await this.prisma.withTenant(organizationId, async (tx) => {
       const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true } });
       if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
