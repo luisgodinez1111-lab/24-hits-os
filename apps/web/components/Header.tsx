@@ -7,6 +7,7 @@ import { Badge, Dropdown, DropdownItem } from "@24hits/ui";
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/me";
 import { NotificationBell } from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void }) {
   const router = useRouter();
@@ -42,6 +43,7 @@ export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         <NotificationBell />
         <Dropdown
           trigger={

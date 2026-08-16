@@ -2,8 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   Tokens de diseño. La paleta neutra (white + gray-50…900) se define como
+   variables "R G B" y se remapea en tailwind.config a rgb(var(--x)/alpha). En
+   modo oscuro se INVIERTE la rampa (superficies oscuras, texto claro), así el
+   dark mode aplica a todo el código existente sin tocar cada clase.
+   ============================================================================ */
 :root {
   color-scheme: light;
+  --c-white: 255 255 255; /* superficie / tarjetas */
+  --c-gray-50: 249 250 251; /* fondo de página */
+  --c-gray-100: 243 244 246;
+  --c-gray-200: 229 231 235;
+  --c-gray-300: 209 213 219;
+  --c-gray-400: 156 163 175;
+  --c-gray-500: 107 114 128;
+  --c-gray-600: 75 85 99;
+  --c-gray-700: 55 65 81;
+  --c-gray-800: 31 41 55;
+  --c-gray-900: 17 24 39; /* texto principal */
+}
+
+.dark {
+  color-scheme: dark;
+  --c-white: 28 28 34; /* superficie / tarjetas (más claras que el fondo) */
+  --c-gray-50: 20 20 24; /* fondo de página (el más oscuro) */
+  --c-gray-100: 38 38 46; /* rellenos sutiles / chips / bordes tenues */
+  --c-gray-200: 51 51 60; /* bordes */
+  --c-gray-300: 69 69 79; /* bordes fuertes / deshabilitado */
+  --c-gray-400: 138 138 149; /* texto/íconos atenuados */
+  --c-gray-500: 162 162 173; /* texto secundario */
+  --c-gray-600: 184 184 194;
+  --c-gray-700: 207 207 216;
+  --c-gray-800: 226 226 232;
+  --c-gray-900: 240 240 245; /* texto principal */
 }
 
 body {

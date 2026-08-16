@@ -23,9 +23,16 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
+// Aplica el tema antes del primer paint (sin parpadeo): preferencia guardada o
+// la del sistema.
+const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={manrope.variable}>
+    <html lang="es" className={manrope.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="font-sans">
         <Providers>{children}</Providers>
       </body>
