@@ -21,6 +21,13 @@
   --c-gray-700: 55 65 81;
   --c-gray-800: 31 41 55;
   --c-gray-900: 17 24 39; /* texto principal */
+
+  /* Semánticos: solo los shades de "chip" (50/100 fondo, 200 borde, 700/800
+     texto). Los tonos medios (500/600) se dejan crudos: se leen en ambos temas. */
+  --c-green-50: 240 253 244;  --c-green-100: 220 252 231;  --c-green-200: 187 247 208;  --c-green-700: 21 128 61;   --c-green-800: 22 101 52;
+  --c-amber-50: 255 251 235;  --c-amber-100: 254 243 199;  --c-amber-200: 253 230 138;  --c-amber-700: 180 83 9;    --c-amber-800: 146 64 14;
+  --c-red-50: 254 242 242;    --c-red-100: 254 226 226;    --c-red-200: 254 202 202;    --c-red-700: 185 28 28;     --c-red-800: 153 27 27;
+  --c-blue-50: 239 246 255;   --c-blue-100: 219 234 254;   --c-blue-200: 191 219 254;   --c-blue-700: 29 78 216;    --c-blue-800: 30 64 175;
 }
 
 .dark {
@@ -36,6 +43,12 @@
   --c-gray-700: 207 207 216;
   --c-gray-800: 226 226 232;
   --c-gray-900: 240 240 245; /* texto principal */
+
+  /* Semánticos invertidos: fondo con tinte oscuro, texto claro y brillante. */
+  --c-green-50: 16 40 27;   --c-green-100: 20 51 33;   --c-green-200: 34 74 48;   --c-green-700: 134 239 172; --c-green-800: 187 247 208;
+  --c-amber-50: 43 34 12;   --c-amber-100: 56 42 12;   --c-amber-200: 82 60 20;   --c-amber-700: 252 211 77;  --c-amber-800: 253 230 138;
+  --c-red-50: 43 20 20;     --c-red-100: 56 24 24;     --c-red-200: 82 34 34;     --c-red-700: 252 165 165;   --c-red-800: 254 202 202;
+  --c-blue-50: 18 30 54;    --c-blue-100: 20 33 61;    --c-blue-200: 30 48 88;    --c-blue-700: 147 197 253;  --c-blue-800: 191 219 254;
 }
 
 body {
