@@ -7,10 +7,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
-import type { InactiveCustomers, InventoryBalanceRow, Order, SalesSummary, TopSellers } from "@/lib/catalog-types";
+import type { InactiveCustomers, InventoryBalanceRow, Order, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
 import { hasPermission, useMe } from "@/lib/me";
 import { api } from "@/lib/api";
 import { money, pct } from "@/lib/format";
+import { BarChart } from "@/components/BarChart";
 
 // Fecha local YYYY-MM-DD (el backend la interpreta en la zona del negocio).
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -45,6 +46,8 @@ export default function AppHomePage() {
   const today = isoLocal(new Date());
   const y = new Date(); y.setDate(y.getDate() - 1);
   const yesterday = isoLocal(y);
+  const w = new Date(); w.setDate(w.getDate() - 6);
+  const weekAgo = isoLocal(w);
 
   const { data: todaySales } = useQuery({ queryKey: ["home-today", today], enabled: showKpis, queryFn: () => api.get<SalesSummary>(`/reports/sales?from=${today}&to=${today}`).catch(() => null) });
   const { data: ydaySales } = useQuery({ queryKey: ["home-yday", yesterday], enabled: showKpis, queryFn: () => api.get<SalesSummary>(`/reports/sales?from=${yesterday}&to=${yesterday}`).catch(() => null) });
@@ -53,6 +56,16 @@ export default function AppHomePage() {
   const { data: orders } = useQuery({ queryKey: ["home-orders"], enabled: canOrders, queryFn: () => api.get<Order[]>("/orders").catch(() => [] as Order[]) });
   const { data: lowStock } = useQuery({ queryKey: ["home-low"], enabled: canInv, queryFn: () => api.get<InventoryBalanceRow[]>("/inventory?lowStock=true").catch(() => [] as InventoryBalanceRow[]) });
   const { data: inactive } = useQuery({ queryKey: ["home-inactive"], enabled: canCust, queryFn: () => api.get<InactiveCustomers>("/customers/inactive?days=30").catch(() => null) });
+  const { data: week } = useQuery({ queryKey: ["home-week", today], enabled: showKpis, queryFn: () => api.get<SalesTimeseries>(`/reports/timeseries?from=${weekAgo}&to=${today}&granularity=day`).catch(() => null) });
+
+  // Serie de 7 días rellenando los días sin venta con 0 (el backend omite vacíos).
+  const byDate = new Map((week?.points ?? []).map((p) => [p.date, Number(p.billed)]));
+  const week7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - 6 + i);
+    const key = isoLocal(d);
+    const value = byDate.get(key) ?? 0;
+    return { label: key.slice(8), value, title: `${key} · ${money(value)}` };
+  });
 
   const hasProfit = todaySales?.grossProfit != null;
   const pendingDeliveries = (orders ?? []).filter((o) => o.deliveryStatus === "PENDING" || o.deliveryStatus === "DISPATCHED").length;
@@ -80,6 +93,19 @@ export default function AppHomePage() {
             <Kpi label="Por cobrar hoy" value={money(todaySales?.outstanding ?? "0")} />
           </div>
           <p className="mt-1.5 text-[11px] text-gray-400">▲▼ comparado con ayer</p>
+        </section>
+      )}
+
+      {/* Mini-gráfico: ventas de los últimos 7 días */}
+      {showKpis && (
+        <section className="mb-8">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Ventas · últimos 7 días</p>
+              <Link href="/app/reports" className="text-xs font-medium text-brand hover:underline">Ver Tablero →</Link>
+            </div>
+            <BarChart bars={week7} height={120} format={(v) => money(v)} />
+          </div>
         </section>
       )}
 
