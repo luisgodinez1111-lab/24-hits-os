@@ -6,12 +6,12 @@ import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button, Combobox, FormField, Input, Select, useToast } from "@24hits/ui";
 import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+import { money } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { BarcodeScanner, type ScanFormat } from "@/components/BarcodeScanner";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
-const money = (v: number) => `$${v.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function PosPage() {
   const toast = useToast();

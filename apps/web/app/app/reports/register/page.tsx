@@ -9,11 +9,11 @@ import {
 } from "@24hits/ui";
 import type { SalesRegister } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
+import { money } from "@/lib/format";
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 const statusTone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
   DRAFT: "gray", CONFIRMED: "blue", PARTIALLY_FULFILLED: "amber",

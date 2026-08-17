@@ -9,8 +9,8 @@ import {
 } from "@24hits/ui";
 import type { CreditNote } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
+import { money } from "@/lib/format";
 
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const refundLabel: Record<string, string> = { CASH: "Efectivo", CARD: "Tarjeta", TRANSFER: "Transferencia", OTHER: "Otro" };
 
 export default function CreditNotesPage() {

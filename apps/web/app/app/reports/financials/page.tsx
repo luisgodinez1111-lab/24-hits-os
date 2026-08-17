@@ -9,12 +9,11 @@ import {
 } from "@24hits/ui";
 import type { ProfitByProductRow, SalesSummary } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
+import { money, pct } from "@/lib/format";
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const pct = (v?: string | null) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
 
 export default function ReportsPage() {
   const [from, setFrom] = useState(isoDaysAgo(30));

@@ -9,8 +9,7 @@ import {
 } from "@24hits/ui";
 import type { CashSession, SaleNote } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
-
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+import { money } from "@/lib/format";
 
 export default function SaleNotesPage() {
   const toast = useToast();

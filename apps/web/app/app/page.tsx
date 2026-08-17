@@ -10,8 +10,7 @@ import type { PermissionKey } from "@24hits/contracts";
 import type { SalesSummary } from "@/lib/catalog-types";
 import { hasPermission, useMe } from "@/lib/me";
 import { api } from "@/lib/api";
-
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+import { money } from "@/lib/format";
 
 interface Action { href: string; label: string; desc: string; icon: LucideIcon; perm?: PermissionKey }
 const actions: Action[] = [

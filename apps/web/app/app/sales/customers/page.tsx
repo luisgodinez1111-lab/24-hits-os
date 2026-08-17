@@ -9,9 +9,8 @@ import {
 } from "@24hits/ui";
 import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+import { money } from "@/lib/format";
 import { classifyZone } from "@/lib/zone";
-
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
 const zoneTone: Record<CustomerZone, "blue" | "green" | "amber" | "gray" | "red"> = {

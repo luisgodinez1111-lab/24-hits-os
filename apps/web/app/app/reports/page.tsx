@@ -6,10 +6,8 @@ import { AlertTriangle, Award, Download, Droplet, MapPin, TrendingUp, UserX } fr
 import { Badge, Button, Card, CardBody, FormField, Input, Skeleton } from "@24hits/ui";
 import type { InactiveCustomers, SalesByZone, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
+import { money, pct } from "@/lib/format";
 import { BarChart } from "@/components/BarChart";
-
-const money = (v?: string | null) => (v == null ? "—" : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const pct = (v?: string | null) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
 
 // Fecha local en formato YYYY-MM-DD (no UTC).
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
