@@ -55,6 +55,13 @@ body {
   @apply bg-gray-50 text-gray-900 antialiased;
 }
 
+/* Foco accesible por teclado (no aparece al hacer clic con el ratón). Cubre
+   todos los controles, incluidos los <button> custom sin estilo de foco. */
+:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
 /* Línea de barrido del escáner de código de barras */
 @keyframes scanline {
   0% { transform: translateY(0); opacity: 0.3; }
