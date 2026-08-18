@@ -52,7 +52,7 @@ export const createOrderSchema = z.object({
   deliveryAddress: z.string().max(500).optional(),
   deliveryPhone: z.string().max(40).optional(),
   deliveryNotes: z.string().max(500).optional(),
-  deliveryLocationUrl: z.string().url().max(500).optional(),
+  deliveryLocationUrl: z.string().max(500).optional(), // link de Google/Apple Maps o "lat,lng"
   idempotencyKey: z.string().min(8).max(128).optional(),
   items: z
     .array(
@@ -75,6 +75,6 @@ export const updateDeliverySchema = z.object({
   deliveryAddress: z.string().max(500).optional(),
   deliveryPhone: z.string().max(40).optional(),
   deliveryNotes: z.string().max(500).optional(),
-  deliveryLocationUrl: z.string().url().max(500).optional(),
+  deliveryLocationUrl: z.string().max(500).optional(), // link de Google/Apple Maps o "lat,lng"
 });
 export type UpdateDeliveryInput = z.infer<typeof updateDeliverySchema>;

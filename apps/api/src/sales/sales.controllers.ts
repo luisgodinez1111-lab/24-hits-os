@@ -83,6 +83,13 @@ export class OrderController {
     return this.orders.list(u.organizationId!);
   }
 
+  // Entregas pendientes para la ruta (antes de :id para no colisionar).
+  @Get("pending-deliveries")
+  @RequirePermissions("orders.read")
+  pendingDeliveries(@CurrentUser() u: AuthContext) {
+    return this.orders.pendingDeliveries(u.organizationId!);
+  }
+
   @Get(":id")
   @RequirePermissions("orders.read")
   get(@CurrentUser() u: AuthContext, @Param("id") id: string) {

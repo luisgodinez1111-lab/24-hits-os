@@ -1156,6 +1156,8 @@ model Customer {
   phone          String?
   address        String?
   zone           CustomerZone?
+  lat            Float? // última ubicación conocida (para prellenar entregas)
+  lng            Float?
   taxId          String?
   type           CustomerType   @default(RETAIL)
   creditLimit    Decimal?       @db.Decimal(18, 4)
@@ -1193,6 +1195,8 @@ model Order {
   deliveryPhone       String?
   deliveryNotes       String?
   deliveryLocationUrl String?
+  deliveryLat         Float? // lat/lng extraídos del link (Google/Apple Maps) para la ruta
+  deliveryLng         Float?
   deliveryStatus      DeliveryStatus?
   confirmedAt         DateTime?
   fulfilledAt         DateTime?

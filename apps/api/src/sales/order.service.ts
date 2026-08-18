@@ -15,6 +15,7 @@ import { CostService } from "../inventory/cost.service.js";
 import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
+import { parseLatLng } from "./geo.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
 interface ResolvedLine {
@@ -75,8 +76,10 @@ export class OrderService {
     }
 
     await this.prisma.withTenant(organizationId, async (tx) => {
-      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true } });
+      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true, customerId: true } });
       if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
+      // Si cambió el link, re-extrae coordenadas (Google/Apple Maps).
+      const coords = input.deliveryLocationUrl !== undefined ? parseLatLng(input.deliveryLocationUrl) : undefined;
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -85,11 +88,40 @@ export class OrderService {
           ...(input.deliveryPhone !== undefined ? { deliveryPhone: input.deliveryPhone } : {}),
           ...(input.deliveryNotes !== undefined ? { deliveryNotes: input.deliveryNotes } : {}),
           ...(input.deliveryLocationUrl !== undefined ? { deliveryLocationUrl: input.deliveryLocationUrl } : {}),
+          ...(coords !== undefined ? { deliveryLat: coords?.lat ?? null, deliveryLng: coords?.lng ?? null } : {}),
         },
       });
+      if (coords && order.customerId) {
+        await tx.customer.update({ where: { id: order.customerId }, data: { lat: coords.lat, lng: coords.lng } });
+      }
     });
     await this.audit.record({ action: "order.delivery_updated", organizationId, entityType: "Order", entityId: orderId, after: { status: input.status } });
     return this.get(organizationId, orderId);
+  }
+
+  // Entregas pendientes (PENDING/DISPATCHED) para armar la ruta. El orden por
+  // cercanía lo calcula el frontend con el GPS del repartidor (vecino más cercano).
+  async pendingDeliveries(organizationId: string) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.order.findMany({
+        where: { deliveryStatus: { in: ["PENDING", "DISPATCHED"] }, status: { not: "CANCELLED" } },
+        select: {
+          id: true,
+          number: true,
+          total: true,
+          deliveryStatus: true,
+          deliveryAddress: true,
+          deliveryPhone: true,
+          deliveryNotes: true,
+          deliveryLocationUrl: true,
+          deliveryLat: true,
+          deliveryLng: true,
+          createdAt: true,
+          customer: { select: { name: true, phone: true, zone: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    );
   }
 
   // Crea un pedido en DRAFT. Resuelve precio por renglón (override o lista de
@@ -119,17 +151,23 @@ export class OrderService {
       if (!wh) throw AppException.badRequest("Almacén no encontrado");
 
       let customerType: PriceListType = "RETAIL";
+      let customerCoords: { lat: number; lng: number } | null = null;
       if (input.customerId) {
         const customer = await tx.customer.findFirst({
           where: { id: input.customerId },
-          select: { type: true, status: true },
+          select: { type: true, status: true, lat: true, lng: true },
         });
         if (!customer) throw new AppException(404, ErrorCode.CUSTOMER_NOT_FOUND, "Cliente no encontrado");
         if (customer.status !== "ACTIVE") {
           throw new AppException(409, ErrorCode.ORDER_INVALID_STATE, "El cliente está inactivo");
         }
         customerType = customer.type === "WHOLESALE" ? "WHOLESALE" : "RETAIL";
+        if (customer.lat != null && customer.lng != null) customerCoords = { lat: customer.lat, lng: customer.lng };
       }
+
+      // Coordenadas de la entrega: del link (Google/Apple Maps) o heredadas del cliente.
+      const urlCoords = parseLatLng(input.deliveryLocationUrl);
+      const coords = urlCoords ?? customerCoords;
 
       // Lista de precios: explícita o la ACTIVE que corresponda al tipo de cliente.
       const priceList = input.priceListId
@@ -153,7 +191,7 @@ export class OrderService {
         total = total.plus(l.lineTotal);
       }
 
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           organizationId,
           branchId: wh.branchId,
@@ -173,6 +211,8 @@ export class OrderService {
           deliveryPhone: input.deliveryPhone ?? null,
           deliveryNotes: input.deliveryNotes ?? null,
           deliveryLocationUrl: input.deliveryLocationUrl ?? null,
+          deliveryLat: coords?.lat ?? null,
+          deliveryLng: coords?.lng ?? null,
           deliveryStatus: input.deliveryAddress ? "PENDING" : null,
           createdByUserId: userId,
           correlationId: RequestContext.correlationId(),
@@ -191,6 +231,12 @@ export class OrderService {
         },
         include: { items: true },
       });
+
+      // Recuerda la ubicación en el cliente (si vino del link) para prellenar futuras entregas.
+      if (urlCoords && input.customerId) {
+        await tx.customer.update({ where: { id: input.customerId }, data: { lat: urlCoords.lat, lng: urlCoords.lng } });
+      }
+      return created;
     });
 
     await this.audit.record({

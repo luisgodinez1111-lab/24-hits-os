@@ -351,6 +351,21 @@ export interface SalesByZone {
   rows: ZoneRow[];
 }
 
+export interface DeliveryStop {
+  id: string;
+  number: string;
+  total: string;
+  deliveryStatus: "PENDING" | "DISPATCHED" | "DELIVERED" | null;
+  deliveryAddress: string | null;
+  deliveryPhone: string | null;
+  deliveryNotes: string | null;
+  deliveryLocationUrl: string | null;
+  deliveryLat: number | null;
+  deliveryLng: number | null;
+  createdAt: string;
+  customer: { name: string; phone: string | null; zone: CustomerZone | null } | null;
+}
+
 export interface InactiveCustomerRow {
   id: string;
   code: string | null;

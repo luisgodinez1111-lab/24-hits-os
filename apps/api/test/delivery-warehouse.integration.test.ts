@@ -90,6 +90,24 @@ describe("Almacén fijo por usuario + entrega a domicilio", () => {
     expect(order.warehouseId).toBe(warehouseId); // resuelto de la membresía
     expect(order.deliveryAddress).toBe("Calle 24 #100, Col. Centro");
     expect(order.deliveryStatus).toBe("PENDING");
+    // Coordenadas extraídas del link (Google Maps).
+    expect(Number(order.deliveryLat)).toBeCloseTo(28.6, 2);
+    expect(Number(order.deliveryLng)).toBeCloseTo(-106.0, 2);
+  });
+
+  it("entregas pendientes expone coordenadas (tolera Apple Maps)", async () => {
+    const order = await orders.create(orgId, userId, {
+      currency: "MXN",
+      deliveryAddress: "Dom con pin de Apple",
+      deliveryLocationUrl: "https://maps.apple.com/?ll=28.635,-106.075",
+      items: [{ variantId, quantity: 1, unitPrice: 100, discount: 0, taxRate: 0 }],
+    }) as { id: string; deliveryLat: number | null };
+    expect(Number(order.deliveryLat)).toBeCloseTo(28.635, 2);
+    const pend = (await orders.pendingDeliveries(orgId)) as Array<{ id: string; deliveryLat: number | null; deliveryStatus: string }>;
+    const row = pend.find((p) => p.id === order.id);
+    expect(row).toBeTruthy();
+    expect(Number(row!.deliveryLat)).toBeCloseTo(28.635, 2);
+    expect(row!.deliveryStatus).toBe("PENDING");
   });
 
   it("marcar Entregado auto-entrega el pedido (fulfill) y descuenta inventario", async () => {
