@@ -8,6 +8,7 @@ import {
   Home,
   Layers,
   Package,
+  Route,
   ScanLine,
   Settings,
   ShoppingCart,
@@ -45,6 +46,7 @@ const sections: NavSection[] = [
     items: [
       { href: "/app/sales/pos", label: "Punto de venta", icon: ScanLine, perm: "orders.create" },
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
+      { href: "/app/sales/route", label: "Ruta de hoy", icon: Route, perm: "orders.read" },
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare, perm: "customers.read" },
     ],
   },

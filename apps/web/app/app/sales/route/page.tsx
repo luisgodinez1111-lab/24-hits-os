@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
@@ -21,30 +21,37 @@ const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ES
 export default function RoutePage() {
   const toast = useToast();
   const qc = useQueryClient();
-  const [pos, setPos] = useState<LatLng | null>(null);
+  const [pos, setPos] = useState<LatLng | null>(null); // posición EN VIVO (marcador)
+  const [start, setStart] = useState<LatLng | null>(null); // origen para optimizar (bajo demanda)
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
 
-  // El backend optimiza la ruta (vecino más cercano + 2-opt) desde tu posición.
+  // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
-    queryKey: ["route", pos?.lat ?? null, pos?.lng ?? null],
-    queryFn: () => api.get<OptimizedRoute>(`/orders/route${pos ? `?lat=${pos.lat}&lng=${pos.lng}` : ""}`),
+    queryKey: ["route", start?.lat ?? null, start?.lng ?? null],
+    queryFn: () => api.get<OptimizedRoute>(`/orders/route${start ? `?lat=${start.lat}&lng=${start.lng}` : ""}`),
   });
 
-  const locate = useCallback(() => {
+  // GPS EN VIVO: mueve el marcador en cada lectura; fija el origen en la primera
+  // (la ruta NO se recalcula en cada tick — eso es bajo demanda, con Recalcular).
+  useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoMsg("Este dispositivo no permite ubicación."); return; }
-    setGeoMsg("Obteniendo tu ubicación…");
-    navigator.geolocation.getCurrentPosition(
-      (p) => { setPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setGeoMsg(null); },
+    const id = navigator.geolocation.watchPosition(
+      (p) => { const c = { lat: p.coords.latitude, lng: p.coords.longitude }; setPos(c); setStart((s) => s ?? c); setGeoMsg(null); },
       () => setGeoMsg("Sin permiso de ubicación: la ruta arranca desde el primer pedido."),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
+    return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  useEffect(() => { locate(); }, [locate]);
+  const recalc = () => { if (pos) setStart(pos); void qc.invalidateQueries({ queryKey: ["route"] }); };
 
   const deliver = useMutation({
     mutationFn: (id: string) => api.patch(`/orders/${id}/delivery`, { status: "DELIVERED" }),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["route"] }); toast.push("Entregado ✓", "success"); },
+    onSuccess: async () => {
+      if (pos) setStart(pos); // re-optimiza desde donde estás ahora
+      await qc.invalidateQueries({ queryKey: ["route"] });
+      toast.push("Entregado ✓", "success");
+    },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
@@ -65,7 +72,7 @@ export default function RoutePage() {
             {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
           </p>
         </div>
-        <Button variant="outline" onClick={locate}><Crosshair className="h-4 w-4" /> Mi ubicación</Button>
+        <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
       </div>
 
       {geoMsg && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{geoMsg}</p>}

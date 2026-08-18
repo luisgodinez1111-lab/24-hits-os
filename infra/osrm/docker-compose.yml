@@ -1,0 +1,23 @@
+# OSRM self-host — motor de rutas por carretera para 24 HITS OS.
+#
+# Uso (en tu servidor propio):
+#   1) Prepara los datos una sola vez:   ./prepare.sh
+#   2) Levanta el servidor:              docker compose up -d
+#   3) En la API (Vercel) define:        OSRM_URL=https://<tu-servidor>:5000
+#
+# El perfil es "car" (auto). --max-table-size 10000 permite matrices de hasta
+# 100 paradas (100x100) en /table, suficiente para el reparto diario.
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/region.osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
