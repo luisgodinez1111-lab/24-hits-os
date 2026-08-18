@@ -62,6 +62,13 @@ export class AuthController {
     return this.auth.verifyEmail(body.token);
   }
 
+  // Reenvía el correo de verificación al usuario autenticado (rate-limited).
+  @RateLimit({ limit: 3, windowSec: 600 })
+  @Post("resend-verification")
+  resendVerification(@CurrentUser() u: AuthContext) {
+    return this.auth.resendVerification(u.userId);
+  }
+
   @Public()
   @RateLimit({ limit: 10, windowSec: 60 })
   @Post("login")

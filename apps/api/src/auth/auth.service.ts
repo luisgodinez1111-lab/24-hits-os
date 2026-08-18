@@ -69,6 +69,18 @@ export class AuthService {
     return { userId: user.id };
   }
 
+  // Reenvía el correo de verificación al usuario autenticado (si aún no verifica).
+  async resendVerification(userId: string): Promise<{ sent: boolean }> {
+    const user = await this.prisma.client.user.findUnique({
+      where: { id: userId },
+      select: { email: true, emailVerifiedAt: true },
+    });
+    if (!user) throw AppException.notFound("Usuario no encontrado");
+    if (user.emailVerifiedAt) return { sent: false }; // ya verificado
+    await this.sendEmailVerification(userId, user.email);
+    return { sent: true };
+  }
+
   private async sendEmailVerification(userId: string, email: string): Promise<void> {
     const { token, tokenHash } = this.tokens.generateRefreshToken();
     await this.prisma.client.emailVerificationToken.create({

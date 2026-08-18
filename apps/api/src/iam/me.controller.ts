@@ -22,8 +22,11 @@ export class MeController {
   async me(@CurrentUser() user: AuthContext) {
     const dbUser = await this.prisma.client.user.findUnique({
       where: { id: user.userId },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, emailVerifiedAt: true },
     });
+    const userOut = dbUser
+      ? { id: dbUser.id, email: dbUser.email, name: dbUser.name, emailVerified: dbUser.emailVerifiedAt != null }
+      : null;
     const memberships = await this.organizations.getUserMemberships(user.userId);
 
     let permissions: string[] = [];
@@ -41,7 +44,7 @@ export class MeController {
       null;
 
     return {
-      user: dbUser,
+      user: userOut,
       organizationId: user.organizationId ?? null,
       membershipId: user.membershipId ?? null,
       activeOrganization,

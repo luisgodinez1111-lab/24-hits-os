@@ -5,7 +5,7 @@ import type { Membership, PermissionKey } from "@24hits/contracts";
 import { api } from "./api";
 
 export interface Me {
-  user: { id: string; email: string; name: string | null } | null;
+  user: { id: string; email: string; name: string | null; emailVerified: boolean } | null;
   organizationId: string | null;
   membershipId: string | null;
   activeOrganization: { id: string; name: string; slug: string; status: string } | null;
