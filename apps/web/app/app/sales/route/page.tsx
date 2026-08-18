@@ -1,64 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton, useToast } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
+import { buildRoute, navUrl, type LatLng, type Leg } from "@/lib/route";
+
+// El mapa solo en cliente (Leaflet usa window).
+const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[56vh] w-full" />,
+});
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
-
-type LatLng = { lat: number; lng: number };
-
-function haversineKm(a: LatLng, b: LatLng): number {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-}
-
-// Navegación paso a paso: Apple Maps en iPhone/iPad, Google Maps en el resto.
-function navUrl(stop: DeliveryStop): string | null {
-  if (stop.deliveryLat != null && stop.deliveryLng != null) {
-    const dest = `${stop.deliveryLat},${stop.deliveryLng}`;
-    const isIOS = typeof navigator !== "undefined" && /iP(hone|ad|od)/.test(navigator.userAgent);
-    return isIOS ? `https://maps.apple.com/?daddr=${dest}&dirflg=d` : `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
-  }
-  return stop.deliveryLocationUrl || null;
-}
-
-interface Leg { stop: DeliveryStop; km: number | null }
-
-// Ordena por vecino más cercano desde `start`; los pedidos sin coordenadas van al
-// final (agrupados por zona). Devuelve cada parada con la distancia al anterior.
-function buildRoute(stops: DeliveryStop[], start: LatLng | null): { legs: Leg[]; noCoords: DeliveryStop[]; totalKm: number } {
-  const withCoords = stops.filter((s): s is DeliveryStop & { deliveryLat: number; deliveryLng: number } => s.deliveryLat != null && s.deliveryLng != null);
-  const noCoords = stops.filter((s) => s.deliveryLat == null || s.deliveryLng == null);
-
-  const legs: Leg[] = [];
-  const remaining = [...withCoords];
-  let cur: LatLng | null = start ?? (withCoords[0] ? { lat: withCoords[0].deliveryLat, lng: withCoords[0].deliveryLng } : null);
-  let totalKm = 0;
-
-  while (remaining.length > 0 && cur) {
-    let bestIdx = 0;
-    let bestKm = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(cur, { lat: remaining[i]!.deliveryLat, lng: remaining[i]!.deliveryLng });
-      if (d < bestKm) { bestKm = d; bestIdx = i; }
-    }
-    const next = remaining.splice(bestIdx, 1)[0]!;
-    legs.push({ stop: next, km: legs.length === 0 && !start ? null : bestKm });
-    totalKm += legs.length === 0 && !start ? 0 : bestKm;
-    cur = { lat: next.deliveryLat, lng: next.deliveryLng };
-  }
-
-  return { legs, noCoords, totalKm };
-}
 
 export default function RoutePage() {
   const toast = useToast();
@@ -88,11 +46,13 @@ export default function RoutePage() {
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
+  const hasStops = (stops?.length ?? 0) > 0;
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
           <p className="text-sm text-gray-500">
             {stops?.length ?? 0} entregas pendientes{route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""} · orden por cercanía
           </p>
@@ -104,24 +64,28 @@ export default function RoutePage() {
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
-      ) : (stops?.length ?? 0) === 0 ? (
+      ) : !hasStops ? (
         <EmptyState icon={<MapPin className="h-8 w-8 text-gray-400" />} title="Sin entregas pendientes" description="Cuando haya pedidos por enviar, aparecerán aquí en orden de cercanía." />
       ) : (
-        <ol className="space-y-2">
-          {route.legs.map((leg, i) => (
-            <Stop key={leg.stop.id} n={i + 1} leg={leg} next={i === 0} onDeliver={() => deliver.mutate(leg.stop.id)} delivering={deliver.isPending} />
-          ))}
-          {route.noCoords.length > 0 && (
-            <li className="pt-2">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación (ponles el pin de Maps)</p>
-              <div className="space-y-2">
-                {route.noCoords.map((s) => (
-                  <Stop key={s.id} n={null} leg={{ stop: s, km: null }} next={false} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
-                ))}
-              </div>
-            </li>
-          )}
-        </ol>
+        <div className="space-y-4">
+          {route.legs.length > 0 && <RouteMap legs={route.legs} driver={pos} />}
+
+          <ol className="space-y-2">
+            {route.legs.map((leg, i) => (
+              <Stop key={leg.stop.id} n={i + 1} leg={leg} next={i === 0} onDeliver={() => deliver.mutate(leg.stop.id)} delivering={deliver.isPending} />
+            ))}
+            {route.noCoords.length > 0 && (
+              <li className="pt-2">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
+                <div className="space-y-2">
+                  {route.noCoords.map((s) => (
+                    <Stop key={s.id} n={null} leg={{ stop: s, km: null }} next={false} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
+                  ))}
+                </div>
+              </li>
+            )}
+          </ol>
+        </div>
       )}
     </div>
   );
@@ -143,7 +107,7 @@ function Stop({ n, leg, next, onDeliver, delivering }: { n: number | null; leg: 
             {leg.km != null && <span className="ml-auto text-xs font-medium text-gray-500">{leg.km.toFixed(1)} km</span>}
           </div>
           <p className="truncate text-sm text-gray-500">{s.deliveryAddress ?? "Sin dirección"}</p>
-          <p className="text-xs text-gray-400 font-mono">{s.number} · {money(s.total)}{s.deliveryNotes ? ` · ${s.deliveryNotes}` : ""}</p>
+          <p className="font-mono text-xs text-gray-400">{s.number} · {money(s.total)}{s.deliveryNotes ? ` · ${s.deliveryNotes}` : ""}</p>
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
