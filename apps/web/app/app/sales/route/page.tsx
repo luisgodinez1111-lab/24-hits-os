@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
-import { Badge, Button, EmptyState, Skeleton, useToast } from "@24hits/ui";
+import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
 import type { CustomerZone, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 import { navUrl, type LatLng, type Leg } from "@/lib/route";
+import { DeliverDialog } from "@/components/DeliverDialog";
 
 // El mapa solo en cliente (Leaflet usa window).
 const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
@@ -19,11 +20,11 @@ const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.Rou
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
 
 export default function RoutePage() {
-  const toast = useToast();
   const qc = useQueryClient();
   const [pos, setPos] = useState<LatLng | null>(null); // posición EN VIVO (marcador)
   const [start, setStart] = useState<LatLng | null>(null); // origen para optimizar (bajo demanda)
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
+  const [deliverStop, setDeliverStop] = useState<OptimizedStop | null>(null);
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -45,15 +46,12 @@ export default function RoutePage() {
 
   const recalc = () => { if (pos) setStart(pos); void qc.invalidateQueries({ queryKey: ["route"] }); };
 
-  const deliver = useMutation({
-    mutationFn: (id: string) => api.patch(`/orders/${id}/delivery`, { status: "DELIVERED" }),
-    onSuccess: async () => {
-      if (pos) setStart(pos); // re-optimiza desde donde estás ahora
-      await qc.invalidateQueries({ queryKey: ["route"] });
-      toast.push("Entregado ✓", "success");
-    },
-    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
-  });
+  // Tras entregar+cobrar, re-optimiza desde donde estás y refresca la ruta.
+  const afterDeliver = async () => {
+    setDeliverStop(null);
+    if (pos) setStart(pos);
+    await qc.invalidateQueries({ queryKey: ["route"] });
+  };
 
   const stops: OptimizedStop[] = route?.stops ?? [];
   const legs: Leg[] = stops.map((s) => ({ stop: s, km: s.legKm }));
@@ -87,14 +85,14 @@ export default function RoutePage() {
 
           <ol className="space-y-2">
             {stops.map((s, i) => (
-              <Stop key={s.id} n={i + 1} stop={s} next={i === 0} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
+              <Stop key={s.id} n={i + 1} stop={s} next={i === 0} onDeliver={() => setDeliverStop(s)} />
             ))}
             {noCoords.length > 0 && (
               <li className="pt-2">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
                 <div className="space-y-2">
                   {noCoords.map((s) => (
-                    <Stop key={s.id} n={null} stop={{ ...s, legKm: null, legMin: null }} next={false} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
+                    <Stop key={s.id} n={null} stop={{ ...s, legKm: null, legMin: null }} next={false} onDeliver={() => setDeliverStop({ ...s, legKm: null, legMin: null })} />
                   ))}
                 </div>
               </li>
@@ -102,11 +100,13 @@ export default function RoutePage() {
           </ol>
         </div>
       )}
+
+      <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
     </div>
   );
 }
 
-function Stop({ n, stop, next, onDeliver, delivering }: { n: number | null; stop: OptimizedStop; next: boolean; onDeliver: () => void; delivering: boolean }) {
+function Stop({ n, stop, next, onDeliver }: { n: number | null; stop: OptimizedStop; next: boolean; onDeliver: () => void }) {
   const nav = navUrl(stop);
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
@@ -131,7 +131,7 @@ function Stop({ n, stop, next, onDeliver, delivering }: { n: number | null; stop
       <div className="mt-2 flex flex-wrap gap-2">
         {nav && <a href={nav} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white"><Navigation className="h-4 w-4" /> Navegar</a>}
         {phone && <a href={`tel:${phone}`} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"><Phone className="h-4 w-4" /> Llamar</a>}
-        <Button size="sm" variant="outline" loading={delivering} onClick={onDeliver}><Check className="h-4 w-4" /> Entregado</Button>
+        <Button size="sm" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar</Button>
       </div>
     </div>
   );
