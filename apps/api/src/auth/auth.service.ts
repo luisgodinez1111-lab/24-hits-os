@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Env } from "@24hits/config";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
-import { QueueService } from "../queue/queue.service.js";
+import { EmailService } from "../email/email.service.js";
 import { OrganizationService } from "../iam/organization.service.js";
 import { RequestContext } from "../common/context/request-context.js";
 import { AppException } from "../common/errors/app-exception.js";
@@ -34,7 +34,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly organizations: OrganizationService,
     private readonly audit: AuditService,
-    private readonly queue: QueueService,
+    private readonly email: EmailService,
     @Inject(ENV) private readonly env: Env
   ) {}
 
@@ -78,12 +78,15 @@ export class AuthService {
         expiresAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS),
       },
     });
-    await this.queue.enqueueEmail({
-      to: email,
-      subject: "Verifica tu correo — 24 HITS OS",
-      template: "email-verification",
-      data: { url: `${this.env.APP_URL}/verify-email?token=${token}` },
-    });
+    // No bloquear el registro si el correo falla (el usuario puede reintentar).
+    await this.email
+      .send({
+        to: email,
+        subject: "Verifica tu correo — 24 HITS OS",
+        template: "email-verification",
+        data: { url: `${this.env.APP_URL}/verify-email?token=${token}` },
+      })
+      .catch(() => undefined);
   }
 
   async verifyEmail(token: string): Promise<{ verified: boolean }> {
@@ -280,12 +283,15 @@ export class AuthService {
         expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
       },
     });
-    await this.queue.enqueueEmail({
-      to: user.email,
-      subject: "Restablece tu contraseña — 24 HITS OS",
-      template: "password-reset",
-      data: { url: `${this.env.APP_URL}/reset-password?token=${token}` },
-    });
+    // Envío directo; no se revela el resultado (respuesta uniforme por seguridad).
+    await this.email
+      .send({
+        to: user.email,
+        subject: "Restablece tu contraseña — 24 HITS OS",
+        template: "password-reset",
+        data: { url: `${this.env.APP_URL}/reset-password?token=${token}` },
+      })
+      .catch(() => undefined);
   }
 
   async resetPassword(input: ResetPasswordInput): Promise<void> {

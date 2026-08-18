@@ -4,7 +4,7 @@ import argon2 from "argon2";
 import type { Env } from "@24hits/config";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
-import { QueueService } from "../queue/queue.service.js";
+import { EmailService } from "../email/email.service.js";
 import { PermissionService } from "./permission.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ENV } from "../config/app-config.module.js";
@@ -22,7 +22,7 @@ export class MemberService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly queue: QueueService,
+    private readonly email: EmailService,
     private readonly permissions: PermissionService,
     @Inject(ENV) private readonly env: Env
   ) {}
@@ -127,12 +127,15 @@ export class MemberService {
         expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
       },
     });
-    await this.queue.enqueueEmail({
-      to: user.email,
-      subject: "Te invitaron a 24 HITS OS",
-      template: "member-invitation",
-      data: { url: `${this.env.APP_URL}/reset-password?token=${token}` },
-    });
+    // Envío directo; no bloquea la invitación si el correo falla (se puede reenviar).
+    await this.email
+      .send({
+        to: user.email,
+        subject: "Te invitaron a 24 HITS OS",
+        template: "member-invitation",
+        data: { url: `${this.env.APP_URL}/reset-password?token=${token}` },
+      })
+      .catch(() => undefined);
 
     await this.audit.record({
       action: "user.invited",
