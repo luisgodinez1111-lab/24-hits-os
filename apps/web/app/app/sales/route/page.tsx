@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
-import type { CustomerZone, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
+import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 import { navUrl, type LatLng, type Leg } from "@/lib/route";
@@ -18,6 +18,21 @@ const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.Rou
 });
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
+
+// "45 min" / "1h 20m" — cuánto lleva esperando el pedido.
+function waited(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+// Convierte una parada sin coordenadas en OptimizedStop (prioridad calculada en el front).
+function toOptStop(s: DeliveryStop): OptimizedStop {
+  const minutesPending = Math.round((Date.now() - new Date(s.createdAt).getTime()) / 60000);
+  const priority = minutesPending >= 90 ? "urgent" : minutesPending >= 45 ? "priority" : null;
+  return { ...s, legKm: null, legMin: null, priority, minutesPending };
+}
 
 export default function RoutePage() {
   const qc = useQueryClient();
@@ -75,6 +90,12 @@ export default function RoutePage() {
 
       {geoMsg && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{geoMsg}</p>}
 
+      {route && route.priorityCount > 0 && (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+          ⚠️ {route.priorityCount} {route.priorityCount === 1 ? "entrega atrasada" : "entregas atrasadas"} — se colocaron primero en la ruta.
+        </p>
+      )}
+
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : total === 0 ? (
@@ -91,9 +112,10 @@ export default function RoutePage() {
               <li className="pt-2">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
                 <div className="space-y-2">
-                  {noCoords.map((s) => (
-                    <Stop key={s.id} n={null} stop={{ ...s, legKm: null, legMin: null }} next={false} onDeliver={() => setDeliverStop({ ...s, legKm: null, legMin: null })} />
-                  ))}
+                  {noCoords.map((s) => {
+                    const opt = toOptStop(s);
+                    return <Stop key={s.id} n={null} stop={opt} next={false} onDeliver={() => setDeliverStop(opt)} />;
+                  })}
                 </div>
               </li>
             )}
@@ -114,9 +136,11 @@ function Stop({ n, stop, next, onDeliver }: { n: number | null; stop: OptimizedS
       <div className="flex items-start gap-3">
         <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${next ? "bg-brand text-white" : "bg-gray-100 text-gray-500"}`}>{n ?? "–"}</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{stop.customer?.name ?? "Mostrador"}</span>
             {next && <Badge tone="brand">siguiente</Badge>}
+            {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
+            {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
             {stop.customer?.zone && <Badge tone="gray">{zoneLabel[stop.customer.zone]}</Badge>}
             {stop.legKm != null && (
               <span className="ml-auto text-xs font-medium text-gray-500">

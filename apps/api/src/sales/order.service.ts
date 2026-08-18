@@ -16,7 +16,7 @@ import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
 import { parseLatLng } from "./geo.js";
-import { haversineMatrix, optimizeOrder, osrmMatrix, type Pt } from "./route-optimizer.js";
+import { haversineMatrix, optimizeSubset, osrmMatrix, type Pt } from "./route-optimizer.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
 interface ResolvedLine {
@@ -125,44 +125,86 @@ export class OrderService {
     );
   }
 
-  // Ruta óptima GLOBAL: ordena las entregas minimizando el recorrido total
-  // (vecino más cercano + 2-opt), no solo el siguiente salto. Usa distancias por
-  // carretera si hay OSRM_URL; si no, línea recta. Devuelve cada parada con su
-  // tramo (km y, con OSRM, minutos) más los totales.
+  // Ruta óptima con PRIORIDAD por tiempo: las entregas que llevan mucho esperando
+  // (createdAt) se marcan prioritario/urgente y se visitan PRIMERO; dentro de cada
+  // grupo se minimiza el recorrido (vecino más cercano + 2-opt), no solo el
+  // siguiente salto. Distancias por carretera si hay OSRM_URL; si no, línea recta.
   async optimizeRoute(organizationId: string, start: Pt | null, osrmUrl?: string | null) {
+    const PRIORITY_MIN = 45; // min sin entregar → prioritario
+    const URGENT_MIN = 90; // min sin entregar → urgente
+    const now = Date.now();
+
     const all = await this.pendingDeliveries(organizationId);
     const coordStops = all.filter((s) => s.deliveryLat != null && s.deliveryLng != null);
     const noCoords = all.filter((s) => s.deliveryLat == null || s.deliveryLng == null);
     if (coordStops.length === 0) {
-      return { provider: "none" as const, totalKm: 0, totalMin: null, stops: [], noCoords };
+      return { provider: "none" as const, totalKm: 0, totalMin: null, priorityCount: 0, stops: [], noCoords };
     }
+
+    // Antigüedad y nivel de prioridad por parada.
+    const meta = coordStops.map((s) => {
+      const minutesPending = Math.round((now - new Date(s.createdAt).getTime()) / 60000);
+      const priority: "urgent" | "priority" | null = minutesPending >= URGENT_MIN ? "urgent" : minutesPending >= PRIORITY_MIN ? "priority" : null;
+      return { minutesPending, priority };
+    });
 
     const nodes: Pt[] = [];
     if (start) nodes.push(start);
+    const base = start ? 1 : 0; // node index de la 1ª parada
     for (const s of coordStops) nodes.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
 
     const matrix = (osrmUrl ? await osrmMatrix(nodes, osrmUrl) : null) ?? haversineMatrix(nodes);
-    const order = optimizeOrder(matrix, nodes.length); // order[0] = origen (repartidor o 1ª parada)
+    const primary = matrix.dur ?? matrix.dist;
+    const cost = (a: number, b: number) => primary[a]![b]!;
+
+    // Índices (en espacio de nodos) de prioritarios y normales.
+    const priIdx = coordStops.map((_, i) => base + i).filter((_, i) => meta[i]!.priority != null);
+    const normIdx = coordStops.map((_, i) => base + i).filter((_, i) => meta[i]!.priority == null);
+
+    // Ancla inicial: el repartidor (si hay GPS) o la 1ª parada (prioritaria si existe).
+    let anchor: number;
+    let anchorIsStop = false;
+    if (start) {
+      anchor = 0;
+    } else if (priIdx.length > 0) {
+      anchor = priIdx.shift()!;
+      anchorIsStop = true;
+    } else {
+      anchor = normIdx.shift()!;
+      anchorIsStop = true;
+    }
+
+    const priOrder = optimizeSubset(priIdx, anchor, cost); // prioritarios primero
+    const afterPri = priOrder.length > 0 ? priOrder[priOrder.length - 1]! : anchor;
+    const normOrder = optimizeSubset(normIdx, afterPri, cost); // luego el resto
+    const visit = anchorIsStop ? [anchor, ...priOrder, ...normOrder] : [...priOrder, ...normOrder];
 
     const round1 = (n: number) => Math.round(n * 10) / 10;
-    const stops: Array<(typeof coordStops)[number] & { legKm: number | null; legMin: number | null }> = [];
+    const stops: Array<(typeof coordStops)[number] & { legKm: number | null; legMin: number | null; priority: "urgent" | "priority" | null; minutesPending: number }> = [];
     let totalKm = 0;
     let totalMin = 0;
-    for (let k = 0; k < order.length; k++) {
-      const nodeIdx = order[k]!;
-      if (start && k === 0) continue; // el nodo 0 es el repartidor, no una parada
-      const stopIdx = start ? nodeIdx - 1 : nodeIdx;
-      const legKm = k === 0 ? null : matrix.dist[order[k - 1]!]![nodeIdx]!;
-      const legMin = k === 0 || !matrix.dur ? null : matrix.dur[order[k - 1]!]![nodeIdx]!;
-      stops.push({ ...coordStops[stopIdx]!, legKm: legKm != null ? round1(legKm) : null, legMin: legMin != null ? Math.round(legMin) : null });
+    let prev = start ? 0 : -1; // node del punto anterior (-1 = sin origen previo)
+    for (const nodeIdx of visit) {
+      const stopIdx = nodeIdx - base;
+      const legKm = prev < 0 ? null : matrix.dist[prev]![nodeIdx]!;
+      const legMin = prev < 0 || !matrix.dur ? null : matrix.dur[prev]![nodeIdx]!;
+      stops.push({
+        ...coordStops[stopIdx]!,
+        legKm: legKm != null ? round1(legKm) : null,
+        legMin: legMin != null ? Math.round(legMin) : null,
+        priority: meta[stopIdx]!.priority,
+        minutesPending: meta[stopIdx]!.minutesPending,
+      });
       if (legKm != null) totalKm += legKm;
       if (legMin != null) totalMin += legMin;
+      prev = nodeIdx;
     }
 
     return {
       provider: matrix.provider,
       totalKm: round1(totalKm),
       totalMin: matrix.dur ? Math.round(totalMin) : null,
+      priorityCount: meta.filter((m) => m.priority != null).length,
       stops,
       noCoords,
     };

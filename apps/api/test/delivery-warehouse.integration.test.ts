@@ -129,6 +129,26 @@ describe("Almacén fijo por usuario + entrega a domicilio", () => {
     expect(res.totalKm).toBeCloseTo(Math.round(sum * 10) / 10, 1);
   });
 
+  it("prioriza por tiempo: un pedido viejo (urgente) va primero aunque esté más lejos", async () => {
+    const far = await orders.create(orgId, userId, {
+      currency: "MXN",
+      deliveryAddress: "Lejos y viejo",
+      deliveryLocationUrl: "https://maps.google.com/?q=28.75,-106.25",
+      items: [{ variantId, quantity: 1, unitPrice: 100, discount: 0, taxRate: 0 }],
+    });
+    // Retro-fecha 2 horas → urgente.
+    await withSystem(prisma, (tx) => tx.order.updateMany({ where: { id: far.id }, data: { createdAt: new Date(Date.now() - 120 * 60_000) } }));
+
+    const res = (await orders.optimizeRoute(orgId, { lat: 28.6, lng: -106.0 })) as {
+      priorityCount: number;
+      stops: Array<{ id: string; priority: string | null; minutesPending: number }>;
+    };
+    expect(res.priorityCount).toBeGreaterThanOrEqual(1);
+    expect(res.stops[0]!.id).toBe(far.id); // el urgente va primero pese a estar más lejos
+    expect(res.stops[0]!.priority).toBe("urgent");
+    expect(res.stops[0]!.minutesPending).toBeGreaterThanOrEqual(115);
+  });
+
   it("marcar Entregado auto-entrega el pedido (fulfill) y descuenta inventario", async () => {
     const before = await withTenant(prisma, orgId, (tx) =>
       tx.inventoryBalance.findFirst({ where: { warehouseId, variantId }, select: { onHand: true } })

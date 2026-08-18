@@ -106,3 +106,25 @@ export function optimizeOrder(matrix: CostMatrix, n: number): number[] {
   const cost: Cost = (a, b) => primary[a]![b]!;
   return twoOpt(nearestNeighborPath(n, cost, 0), cost);
 }
+
+// Ordena un SUBCONJUNTO de nodos empezando desde `startIdx` (fijo, no incluido
+// en la salida): NN + 2-opt. Sirve para optimizar grupos (prioritarios primero,
+// luego el resto) encadenando el punto final de uno como inicio del siguiente.
+export function optimizeSubset(nodeIdxs: number[], startIdx: number, cost: Cost): number[] {
+  if (nodeIdxs.length === 0) return [];
+  const remaining = [...nodeIdxs];
+  const order: number[] = [];
+  let cur = startIdx;
+  while (remaining.length > 0) {
+    let best = 0;
+    let bestC = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const c = cost(cur, remaining[i]!);
+      if (c < bestC) { bestC = c; best = i; }
+    }
+    const nx = remaining.splice(best, 1)[0]!;
+    order.push(nx);
+    cur = nx;
+  }
+  return twoOpt([startIdx, ...order], cost).slice(1);
+}

@@ -369,11 +369,14 @@ export interface DeliveryStop {
 export interface OptimizedStop extends DeliveryStop {
   legKm: number | null;
   legMin: number | null;
+  priority: "urgent" | "priority" | null;
+  minutesPending: number;
 }
 export interface OptimizedRoute {
   provider: "osrm" | "haversine" | "none";
   totalKm: number;
   totalMin: number | null;
+  priorityCount: number;
   stops: OptimizedStop[];
   noCoords: DeliveryStop[];
 }
