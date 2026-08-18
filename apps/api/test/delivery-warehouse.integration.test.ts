@@ -110,6 +110,25 @@ describe("Almacén fijo por usuario + entrega a domicilio", () => {
     expect(row!.deliveryStatus).toBe("PENDING");
   });
 
+  it("optimizeRoute arma la ruta global (2-opt, haversine) con tramos y total", async () => {
+    const res = (await orders.optimizeRoute(orgId, { lat: 28.6, lng: -106.0 })) as {
+      provider: string;
+      totalKm: number;
+      totalMin: number | null;
+      stops: Array<{ deliveryLat: number | null; legKm: number | null }>;
+    };
+    expect(res.provider).toBe("haversine");
+    expect(res.totalMin).toBeNull(); // sin OSRM no hay minutos
+    expect(res.stops.length).toBeGreaterThan(0);
+    let sum = 0;
+    for (const s of res.stops) {
+      expect(s.deliveryLat).not.toBeNull();
+      expect(typeof s.legKm).toBe("number");
+      sum += s.legKm ?? 0;
+    }
+    expect(res.totalKm).toBeCloseTo(Math.round(sum * 10) / 10, 1);
+  });
+
   it("marcar Entregado auto-entrega el pedido (fulfill) y descuenta inventario", async () => {
     const before = await withTenant(prisma, orgId, (tx) =>
       tx.inventoryBalance.findFirst({ where: { warehouseId, variantId }, select: { onHand: true } })

@@ -44,6 +44,10 @@ export const envSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default("hits-api"),
 
+  // Motor de rutas por carretera (OSRM). Opcional: si se define, la Ruta usa
+  // distancias/tiempos reales de manejo; si no, línea recta (haversine).
+  OSRM_URL: z.string().url().optional(),
+
   // Email
   EMAIL_PROVIDER: z.enum(["console", "resend"]).default("console"),
   EMAIL_FROM: z.string().default("no-reply@24hits.local"),

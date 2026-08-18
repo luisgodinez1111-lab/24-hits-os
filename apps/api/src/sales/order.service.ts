@@ -16,6 +16,7 @@ import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
 import { parseLatLng } from "./geo.js";
+import { haversineMatrix, optimizeOrder, osrmMatrix, type Pt } from "./route-optimizer.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
 interface ResolvedLine {
@@ -122,6 +123,49 @@ export class OrderService {
         orderBy: { createdAt: "asc" },
       })
     );
+  }
+
+  // Ruta óptima GLOBAL: ordena las entregas minimizando el recorrido total
+  // (vecino más cercano + 2-opt), no solo el siguiente salto. Usa distancias por
+  // carretera si hay OSRM_URL; si no, línea recta. Devuelve cada parada con su
+  // tramo (km y, con OSRM, minutos) más los totales.
+  async optimizeRoute(organizationId: string, start: Pt | null, osrmUrl?: string | null) {
+    const all = await this.pendingDeliveries(organizationId);
+    const coordStops = all.filter((s) => s.deliveryLat != null && s.deliveryLng != null);
+    const noCoords = all.filter((s) => s.deliveryLat == null || s.deliveryLng == null);
+    if (coordStops.length === 0) {
+      return { provider: "none" as const, totalKm: 0, totalMin: null, stops: [], noCoords };
+    }
+
+    const nodes: Pt[] = [];
+    if (start) nodes.push(start);
+    for (const s of coordStops) nodes.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
+
+    const matrix = (osrmUrl ? await osrmMatrix(nodes, osrmUrl) : null) ?? haversineMatrix(nodes);
+    const order = optimizeOrder(matrix, nodes.length); // order[0] = origen (repartidor o 1ª parada)
+
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const stops: Array<(typeof coordStops)[number] & { legKm: number | null; legMin: number | null }> = [];
+    let totalKm = 0;
+    let totalMin = 0;
+    for (let k = 0; k < order.length; k++) {
+      const nodeIdx = order[k]!;
+      if (start && k === 0) continue; // el nodo 0 es el repartidor, no una parada
+      const stopIdx = start ? nodeIdx - 1 : nodeIdx;
+      const legKm = k === 0 ? null : matrix.dist[order[k - 1]!]![nodeIdx]!;
+      const legMin = k === 0 || !matrix.dur ? null : matrix.dur[order[k - 1]!]![nodeIdx]!;
+      stops.push({ ...coordStops[stopIdx]!, legKm: legKm != null ? round1(legKm) : null, legMin: legMin != null ? Math.round(legMin) : null });
+      if (legKm != null) totalKm += legKm;
+      if (legMin != null) totalMin += legMin;
+    }
+
+    return {
+      provider: matrix.provider,
+      totalKm: round1(totalKm),
+      totalMin: matrix.dur ? Math.round(totalMin) : null,
+      stops,
+      noCoords,
+    };
   }
 
   // Crea un pedido en DRAFT. Resuelve precio por renglón (override o lista de

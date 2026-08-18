@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
+import type { Env } from "@24hits/config";
+import { ENV } from "../config/app-config.module.js";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
 import type { AuthContext } from "../common/context/request-context.js";
@@ -75,7 +77,10 @@ export class CustomerController {
 @ApiTags("orders")
 @Controller("orders")
 export class OrderController {
-  constructor(private readonly orders: OrderService) {}
+  constructor(
+    private readonly orders: OrderService,
+    @Inject(ENV) private readonly env: Env
+  ) {}
 
   @Get()
   @RequirePermissions("orders.read")
@@ -88,6 +93,16 @@ export class OrderController {
   @RequirePermissions("orders.read")
   pendingDeliveries(@CurrentUser() u: AuthContext) {
     return this.orders.pendingDeliveries(u.organizationId!);
+  }
+
+  // Ruta óptima global (2-opt) desde la posición del repartidor (lat/lng opcionales).
+  @Get("route")
+  @RequirePermissions("orders.read")
+  route(@CurrentUser() u: AuthContext, @Query("lat") lat?: string, @Query("lng") lng?: string) {
+    const la = lat != null ? Number(lat) : NaN;
+    const ln = lng != null ? Number(lng) : NaN;
+    const start = Number.isFinite(la) && Number.isFinite(ln) ? { lat: la, lng: ln } : null;
+    return this.orders.optimizeRoute(u.organizationId!, start, this.env.OSRM_URL);
   }
 
   @Get(":id")

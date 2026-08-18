@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton, useToast } from "@24hits/ui";
-import type { CustomerZone, DeliveryStop } from "@/lib/catalog-types";
+import type { CustomerZone, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
-import { buildRoute, navUrl, type LatLng, type Leg } from "@/lib/route";
+import { navUrl, type LatLng, type Leg } from "@/lib/route";
 
 // El mapa solo en cliente (Leaflet usa window).
 const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
@@ -24,7 +24,11 @@ export default function RoutePage() {
   const [pos, setPos] = useState<LatLng | null>(null);
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
 
-  const { data: stops, isLoading } = useQuery({ queryKey: ["pending-deliveries"], queryFn: () => api.get<DeliveryStop[]>("/orders/pending-deliveries") });
+  // El backend optimiza la ruta (vecino más cercano + 2-opt) desde tu posición.
+  const { data: route, isLoading } = useQuery({
+    queryKey: ["route", pos?.lat ?? null, pos?.lng ?? null],
+    queryFn: () => api.get<OptimizedRoute>(`/orders/route${pos ? `?lat=${pos.lat}&lng=${pos.lng}` : ""}`),
+  });
 
   const locate = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoMsg("Este dispositivo no permite ubicación."); return; }
@@ -38,15 +42,17 @@ export default function RoutePage() {
 
   useEffect(() => { locate(); }, [locate]);
 
-  const route = useMemo(() => buildRoute(stops ?? [], pos), [stops, pos]);
-
   const deliver = useMutation({
     mutationFn: (id: string) => api.patch(`/orders/${id}/delivery`, { status: "DELIVERED" }),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["pending-deliveries"] }); toast.push("Entregado ✓", "success"); },
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["route"] }); toast.push("Entregado ✓", "success"); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
-  const hasStops = (stops?.length ?? 0) > 0;
+  const stops: OptimizedStop[] = route?.stops ?? [];
+  const legs: Leg[] = stops.map((s) => ({ stop: s, km: s.legKm }));
+  const noCoords = route?.noCoords ?? [];
+  const total = stops.length + noCoords.length;
+  const providerLabel = route?.provider === "osrm" ? "por calles" : route?.provider === "haversine" ? "línea recta" : "";
 
   return (
     <div>
@@ -54,7 +60,9 @@ export default function RoutePage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
           <p className="text-sm text-gray-500">
-            {stops?.length ?? 0} entregas pendientes{route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""} · orden por cercanía
+            {total} entregas{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
+            {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
+            {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
           </p>
         </div>
         <Button variant="outline" onClick={locate}><Crosshair className="h-4 w-4" /> Mi ubicación</Button>
@@ -64,22 +72,22 @@ export default function RoutePage() {
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
-      ) : !hasStops ? (
-        <EmptyState icon={<MapPin className="h-8 w-8 text-gray-400" />} title="Sin entregas pendientes" description="Cuando haya pedidos por enviar, aparecerán aquí en orden de cercanía." />
+      ) : total === 0 ? (
+        <EmptyState icon={<MapPin className="h-8 w-8 text-gray-400" />} title="Sin entregas pendientes" description="Cuando haya pedidos por enviar, aparecerán aquí en la ruta más eficiente." />
       ) : (
         <div className="space-y-4">
-          {route.legs.length > 0 && <RouteMap legs={route.legs} driver={pos} />}
+          {legs.length > 0 && <RouteMap legs={legs} driver={pos} />}
 
           <ol className="space-y-2">
-            {route.legs.map((leg, i) => (
-              <Stop key={leg.stop.id} n={i + 1} leg={leg} next={i === 0} onDeliver={() => deliver.mutate(leg.stop.id)} delivering={deliver.isPending} />
+            {stops.map((s, i) => (
+              <Stop key={s.id} n={i + 1} stop={s} next={i === 0} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
             ))}
-            {route.noCoords.length > 0 && (
+            {noCoords.length > 0 && (
               <li className="pt-2">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
                 <div className="space-y-2">
-                  {route.noCoords.map((s) => (
-                    <Stop key={s.id} n={null} leg={{ stop: s, km: null }} next={false} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
+                  {noCoords.map((s) => (
+                    <Stop key={s.id} n={null} stop={{ ...s, legKm: null, legMin: null }} next={false} onDeliver={() => deliver.mutate(s.id)} delivering={deliver.isPending} />
                   ))}
                 </div>
               </li>
@@ -91,23 +99,26 @@ export default function RoutePage() {
   );
 }
 
-function Stop({ n, leg, next, onDeliver, delivering }: { n: number | null; leg: Leg; next: boolean; onDeliver: () => void; delivering: boolean }) {
-  const s = leg.stop;
-  const nav = navUrl(s);
-  const phone = s.deliveryPhone || s.customer?.phone || null;
+function Stop({ n, stop, next, onDeliver, delivering }: { n: number | null; stop: OptimizedStop; next: boolean; onDeliver: () => void; delivering: boolean }) {
+  const nav = navUrl(stop);
+  const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
     <div className={`rounded-xl border p-3 ${next ? "border-brand/40 bg-brand/5" : "border-gray-200 bg-white"}`}>
       <div className="flex items-start gap-3">
         <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${next ? "bg-brand text-white" : "bg-gray-100 text-gray-500"}`}>{n ?? "–"}</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate font-semibold">{s.customer?.name ?? "Mostrador"}</span>
+            <span className="truncate font-semibold">{stop.customer?.name ?? "Mostrador"}</span>
             {next && <Badge tone="brand">siguiente</Badge>}
-            {s.customer?.zone && <Badge tone="gray">{zoneLabel[s.customer.zone]}</Badge>}
-            {leg.km != null && <span className="ml-auto text-xs font-medium text-gray-500">{leg.km.toFixed(1)} km</span>}
+            {stop.customer?.zone && <Badge tone="gray">{zoneLabel[stop.customer.zone]}</Badge>}
+            {stop.legKm != null && (
+              <span className="ml-auto text-xs font-medium text-gray-500">
+                {stop.legKm.toFixed(1)} km{stop.legMin != null ? ` · ${stop.legMin} min` : ""}
+              </span>
+            )}
           </div>
-          <p className="truncate text-sm text-gray-500">{s.deliveryAddress ?? "Sin dirección"}</p>
-          <p className="font-mono text-xs text-gray-400">{s.number} · {money(s.total)}{s.deliveryNotes ? ` · ${s.deliveryNotes}` : ""}</p>
+          <p className="truncate text-sm text-gray-500">{stop.deliveryAddress ?? "Sin dirección"}</p>
+          <p className="font-mono text-xs text-gray-400">{stop.number} · {money(stop.total)}{stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}</p>
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">

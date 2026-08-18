@@ -366,6 +366,18 @@ export interface DeliveryStop {
   customer: { name: string; phone: string | null; zone: CustomerZone | null } | null;
 }
 
+export interface OptimizedStop extends DeliveryStop {
+  legKm: number | null;
+  legMin: number | null;
+}
+export interface OptimizedRoute {
+  provider: "osrm" | "haversine" | "none";
+  totalKm: number;
+  totalMin: number | null;
+  stops: OptimizedStop[];
+  noCoords: DeliveryStop[];
+}
+
 export interface InactiveCustomerRow {
   id: string;
   code: string | null;
