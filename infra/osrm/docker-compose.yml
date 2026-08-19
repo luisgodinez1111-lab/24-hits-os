@@ -1,9 +1,19 @@
-# OSRM self-host — motor de rutas por carretera para 24 HITS OS.
+# OSRM self-host + Cloudflare Tunnel — motor de rutas por carretera para 24 HITS OS.
+#
+# Arquitectura:
+#   Vercel (API)  ──HTTPS──▶  Cloudflare (Access)  ──túnel saliente──▶  cloudflared  ──▶  osrm:5000
+#
+# OSRM NO se expone a internet: solo escucha en la red interna de Docker y
+# cloudflared abre una conexión SALIENTE hacia Cloudflare (no abres puertos ni
+# necesitas IP pública/fija). Cloudflare Access exige un Service Token, así que
+# solo la API con las credenciales correctas puede consultarlo.
 #
 # Uso (en tu servidor propio):
 #   1) Prepara los datos una sola vez:   ./prepare.sh
-#   2) Levanta el servidor:              docker compose up -d
-#   3) En la API (Vercel) define:        OSRM_URL=https://<tu-servidor>:5000
+#   2) Crea el túnel y pega su token en .env (TUNNEL_TOKEN=...). Ver README.
+#   3) Levanta todo:                     docker compose up -d
+#   4) En la API (Vercel) define:        OSRM_URL, OSRM_CF_ACCESS_CLIENT_ID,
+#                                        OSRM_CF_ACCESS_CLIENT_SECRET
 #
 # El perfil es "car" (auto). --max-table-size 10000 permite matrices de hasta
 # 100 paradas (100x100) en /table, suficiente para el reparto diario.
@@ -11,13 +21,26 @@ services:
   osrm:
     image: ghcr.io/project-osrm/osrm-backend:latest
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/region.osrm
-    ports:
-      - "5000:5000"
     volumes:
       - ./data:/data
     restart: unless-stopped
+    # Sin `ports`: OSRM queda solo en la red interna, jamás expuesto a internet.
+    expose:
+      - "5000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 30s
       timeout: 5s
       retries: 5
+
+  # Túnel de Cloudflare: publica osrm:5000 por HTTPS bajo tu hostname, con
+  # conexión saliente (no hace falta abrir el firewall). El TUNNEL_TOKEN sale
+  # del panel de Cloudflare Zero Trust (ver README) y vive solo en tu .env local.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - osrm
+    restart: unless-stopped

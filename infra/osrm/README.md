@@ -1,50 +1,96 @@
-# OSRM self-host — rutas por carretera para la Ruta de hoy
+# OSRM self-host + Cloudflare Tunnel — rutas por carretera para la Ruta de hoy
 
-Motor de rutas propio (gratis, sin dependencia de Google/Mapbox). El API lo usa
-para calcular distancias y tiempos reales de manejo (`/table`) y ordenar las
-entregas de forma óptima. Si `OSRM_URL` no está definido, el sistema cae a línea
-recta (haversine) sin costo.
+Motor de rutas propio (gratis, sin depender de Google/Mapbox). La API lo usa para
+calcular distancias y tiempos reales de manejo (`/table`) y ordenar las entregas
+de forma óptima, y para dibujar el trazo por calles (`/route`). Si `OSRM_URL` no
+está definido, el sistema cae a línea recta (haversine) sin costo — todo funciona
+igual, solo con menos precisión.
+
+Exposición elegida: **Cloudflare Tunnel + Access (Service Token)**. OSRM nunca se
+abre a internet; cloudflared abre una conexión **saliente** hacia Cloudflare y
+Access exige un token de servicio, así que **solo la API con las credenciales
+correctas** puede consultarlo. No abres puertos ni necesitas IP pública/fija.
+
+```
+Vercel (API) ──HTTPS──▶ Cloudflare (Access) ──túnel saliente──▶ cloudflared ──▶ osrm:5000
+```
 
 ## Requisitos
 - Un servidor propio con **Docker** y ~2–4 GB de RAM libres (Chihuahua es ligero;
-  todo México pide más memoria).
-- Puerto **5000** accesible **por HTTPS desde internet** (la API en Vercel lo llama).
+  todo México pide más).
+- Una cuenta de **Cloudflare** con un dominio gestionado ahí (el plan gratis basta)
+  y **Zero Trust** habilitado (también gratis para este uso).
 
-## Puesta en marcha
+---
+
+## Paso 1 — Preparar los datos del mapa (una vez)
 ```bash
 cd infra/osrm
-./prepare.sh                 # descarga el mapa y prepara los datos (una vez, ~minutos)
-docker compose up -d         # levanta el servidor OSRM
-curl "http://localhost:5000/route/v1/driving/-106.07,28.63;-106.09,28.66?overview=false"
+./prepare.sh                 # descarga Chihuahua y preprocesa (MLD, ~minutos)
+```
+Para otra región: `REGION_URL=... ./prepare.sh` (ver comentarios del script).
+
+## Paso 2 — Crear el túnel en Cloudflare
+1. Panel **Cloudflare → Zero Trust → Networks → Tunnels → Create a tunnel**
+   (tipo *Cloudflared*). Ponle un nombre, p. ej. `osrm-24hits`.
+2. En **Install and run a connector** copia el **token** del comando
+   (`cloudflared ... run --token <TOKEN>`). No corras ese comando; solo el token.
+3. Crea el archivo de entorno con ese token:
+   ```bash
+   cp .env.example .env      # y pega TUNNEL_TOKEN=<TOKEN>
+   ```
+4. En **Public Hostnames** del túnel añade:
+   - **Subdomain**: `osrm`  ·  **Domain**: `tudominio.com`
+   - **Service**: `HTTP` → `osrm:5000`  (así se llama el contenedor en la red del compose)
+
+## Paso 3 — Levantar todo
+```bash
+docker compose up -d
+./verify.sh                  # comprueba que OSRM responde dentro del contenedor
 ```
 
-## Conectarlo al sistema
-En el proyecto de la **API** en Vercel → Environment Variables:
-```
-OSRM_URL = https://<tu-dominio-o-ip>:5000
-```
-Redeploy. Listo: la Ruta mostrará "ruta por calles · ~X min" con orden óptimo real.
+## Paso 4 — Proteger con Access + Service Token
+1. **Zero Trust → Access → Applications → Add an application → Self-hosted**.
+   - **Application domain**: `osrm.tudominio.com`
+2. **Zero Trust → Access → Service Auth → Service Tokens → Create**. Guarda el
+   **Client ID** y **Client Secret** (el secret solo se muestra una vez).
+3. En la aplicación de Access crea una **policy**:
+   - **Action**: `Service Auth`
+   - **Include** → *Service Token* → selecciona el token recién creado.
+   (Esto hace que solo peticiones con ese token pasen; todo lo demás se rechaza.)
 
-## Exponerlo seguro (recomendado)
-OSRM no trae autenticación. No lo dejes abierto a internet sin protección:
-- Ponlo detrás de un **reverse proxy con HTTPS** (Caddy/nginx) en tu servidor.
-- Restringe el acceso: por firewall a orígenes conocidos, o exige un header/token
-  en el proxy. (Nota: los rangos de IP de Vercel son dinámicos; lo más simple es
-  un **Cloudflare Tunnel** que publique el 5000 por HTTPS con reglas de acceso.)
-
-### Ejemplo mínimo con Caddy (HTTPS automático)
+## Paso 5 — Conectarlo a la API en Vercel
+Proyecto de la **API** → *Settings → Environment Variables* (Production):
 ```
-osrm.tudominio.com {
-    reverse_proxy localhost:5000
-}
+OSRM_URL                       = https://osrm.tudominio.com
+OSRM_CF_ACCESS_CLIENT_ID       = <Client ID del Service Token>
+OSRM_CF_ACCESS_CLIENT_SECRET   = <Client Secret del Service Token>
 ```
-Luego `OSRM_URL=https://osrm.tudominio.com`.
+Redeploy. La API enviará los headers `CF-Access-Client-Id/Secret` en cada llamada.
 
-## Actualizar el mapa
-Vuelve a correr `./prepare.sh` (descarga el extracto nuevo y reprocesa) y
-`docker compose up -d` para recargar.
+Verifica el túnel + Access de punta a punta antes del redeploy:
+```bash
+OSRM_URL=https://osrm.tudominio.com \
+CF_ID=<Client ID> CF_SECRET=<Client Secret> \
+./verify.sh
+```
+Si responde `200 OK`, listo: **Ruta de hoy** pasará de “línea recta” a
+“ruta por calles · ~X min” con orden óptimo real. El propio subtítulo de la
+página te lo confirma.
+
+---
+
+## Operación
+- **Actualizar el mapa**: `./prepare.sh` de nuevo y `docker compose up -d`.
+- **Logs**: `docker compose logs -f osrm` · `docker compose logs -f cloudflared`.
+- **Rotar el token**: crea uno nuevo en Service Auth, actualiza las 2 vars en
+  Vercel, borra el viejo.
 
 ## Escalar
-- Región más grande → más RAM. Para todo México usa un extracto mayor y un
-  servidor con 8–16 GB.
-- Alto volumen de peticiones → varias réplicas de OSRM detrás del proxy.
+- Región más grande → más RAM (todo México: 8–16 GB).
+- Mucho tráfico → varias réplicas de `osrm` detrás del mismo túnel.
+
+## Sin Cloudflare (solo dev/local)
+Si corres OSRM en tu máquina sin túnel, deja las dos vars `OSRM_CF_*` sin definir
+y usa `OSRM_URL=http://localhost:5000`; la API no enviará headers. **No** dejes
+OSRM abierto a internet sin Access.

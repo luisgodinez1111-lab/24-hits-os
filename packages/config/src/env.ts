@@ -47,6 +47,10 @@ export const envSchema = z.object({
   // Motor de rutas por carretera (OSRM). Opcional: si se define, la Ruta usa
   // distancias/tiempos reales de manejo; si no, línea recta (haversine).
   OSRM_URL: z.string().url().optional(),
+  // Si OSRM está detrás de Cloudflare Access, credenciales del Service Token
+  // (se envían como headers CF-Access-Client-Id/Secret). Opcionales.
+  OSRM_CF_ACCESS_CLIENT_ID: z.string().optional(),
+  OSRM_CF_ACCESS_CLIENT_SECRET: z.string().optional(),
 
   // Email
   EMAIL_PROVIDER: z.enum(["console", "resend"]).default("console"),

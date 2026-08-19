@@ -129,7 +129,7 @@ export class OrderService {
   // (createdAt) se marcan prioritario/urgente y se visitan PRIMERO; dentro de cada
   // grupo se minimiza el recorrido (vecino más cercano + 2-opt), no solo el
   // siguiente salto. Distancias por carretera si hay OSRM_URL; si no, línea recta.
-  async optimizeRoute(organizationId: string, start: Pt | null, osrmUrl?: string | null) {
+  async optimizeRoute(organizationId: string, start: Pt | null, osrmUrl?: string | null, osrmHeaders?: Record<string, string>) {
     const PRIORITY_MIN = 45; // min sin entregar → prioritario
     const URGENT_MIN = 90; // min sin entregar → urgente
     const now = Date.now();
@@ -153,7 +153,7 @@ export class OrderService {
     const base = start ? 1 : 0; // node index de la 1ª parada
     for (const s of coordStops) nodes.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
 
-    const matrix = (osrmUrl ? await osrmMatrix(nodes, osrmUrl) : null) ?? haversineMatrix(nodes);
+    const matrix = (osrmUrl ? await osrmMatrix(nodes, osrmUrl, osrmHeaders) : null) ?? haversineMatrix(nodes);
     const primary = matrix.dur ?? matrix.dist;
     const cost = (a: number, b: number) => primary[a]![b]!;
 
@@ -207,7 +207,7 @@ export class OrderService {
       const orderedPts: Pt[] = [];
       if (start) orderedPts.push(nodes[0]!);
       for (const idx of visit) orderedPts.push(nodes[idx]!);
-      geometry = await osrmRoute(orderedPts, osrmUrl);
+      geometry = await osrmRoute(orderedPts, osrmUrl, osrmHeaders);
     }
 
     return {

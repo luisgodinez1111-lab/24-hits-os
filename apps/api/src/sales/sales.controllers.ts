@@ -98,6 +98,15 @@ export class OrderController {
     return this.orders.pendingDeliveries(u.organizationId!);
   }
 
+  // Headers de servicio para llegar a OSRM detrás de Cloudflare Access
+  // (Service Token). undefined si no se configuró → sin auth (dev/local).
+  private osrmHeaders(): Record<string, string> | undefined {
+    const id = this.env.OSRM_CF_ACCESS_CLIENT_ID;
+    const secret = this.env.OSRM_CF_ACCESS_CLIENT_SECRET;
+    if (!id || !secret) return undefined;
+    return { "CF-Access-Client-Id": id, "CF-Access-Client-Secret": secret };
+  }
+
   // Ruta óptima global (2-opt) desde la posición del repartidor (lat/lng opcionales).
   @Get("route")
   @RequirePermissions("orders.read")
@@ -105,7 +114,7 @@ export class OrderController {
     const la = lat != null ? Number(lat) : NaN;
     const ln = lng != null ? Number(lng) : NaN;
     const start = Number.isFinite(la) && Number.isFinite(ln) ? { lat: la, lng: ln } : null;
-    return this.orders.optimizeRoute(u.organizationId!, start, this.env.OSRM_URL);
+    return this.orders.optimizeRoute(u.organizationId!, start, this.env.OSRM_URL, this.osrmHeaders());
   }
 
   @Get(":id")

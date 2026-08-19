@@ -22,12 +22,16 @@ export function haversineMatrix(pts: Pt[]): CostMatrix {
   return { dist, dur: null, provider: "haversine" };
 }
 
+// Headers opcionales para llegar a un OSRM detrás de Cloudflare Access
+// (Service Token). Vacío si no se protege.
+export type OsrmHeaders = Record<string, string> | undefined;
+
 // Matriz por CARRETERAS vía OSRM (/table). Devuelve null si falla (→ fallback).
-export async function osrmMatrix(pts: Pt[], osrmUrl: string): Promise<CostMatrix | null> {
+export async function osrmMatrix(pts: Pt[], osrmUrl: string, headers?: OsrmHeaders): Promise<CostMatrix | null> {
   try {
     const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `${osrmUrl.replace(/\/+$/, "")}/table/v1/driving/${coords}?annotations=distance,duration`;
-    const res = await fetch(url);
+    const res = await fetch(url, headers ? { headers } : undefined);
     if (!res.ok) return null;
     const j = (await res.json()) as { code?: string; distances?: (number | null)[][]; durations?: (number | null)[][] };
     if (j.code !== "Ok" || !j.distances || !j.durations) return null;
@@ -41,12 +45,12 @@ export async function osrmMatrix(pts: Pt[], osrmUrl: string): Promise<CostMatrix
 
 // Geometría de la ruta por CALLES vía OSRM (/route). Devuelve la polilínea como
 // [[lat,lng], …] siguiendo las carreteras, o null si falla (→ línea recta).
-export async function osrmRoute(pts: Pt[], osrmUrl: string): Promise<[number, number][] | null> {
+export async function osrmRoute(pts: Pt[], osrmUrl: string, headers?: OsrmHeaders): Promise<[number, number][] | null> {
   try {
     if (pts.length < 2) return null;
     const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `${osrmUrl.replace(/\/+$/, "")}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
+    const res = await fetch(url, headers ? { headers } : undefined);
     if (!res.ok) return null;
     const j = (await res.json()) as { code?: string; routes?: Array<{ geometry?: { coordinates?: [number, number][] } }> };
     const geo = j.routes?.[0]?.geometry?.coordinates;

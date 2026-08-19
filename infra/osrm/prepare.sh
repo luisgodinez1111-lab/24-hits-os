@@ -27,5 +27,5 @@ echo "==> osrm-customize…"
 docker run --rm -t -v "$PWD:/data" "$IMG" osrm-customize /data/region.osrm
 
 echo ""
-echo "✅ Datos listos. Levanta el servidor con:  docker compose up -d"
-echo "   Prueba:  curl 'http://localhost:5000/route/v1/driving/-106.07,28.63;-106.09,28.66?overview=false'"
+echo "✅ Datos listos. Configura el túnel (ver README) y levanta con:  docker compose up -d"
+echo "   Prueba:  ./verify.sh   (OSRM no expone puerto al host; verify usa la red interna)"
