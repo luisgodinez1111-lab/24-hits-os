@@ -382,6 +382,19 @@ export interface OptimizedRoute {
   noCoords: DeliveryStop[];
 }
 
+export interface LiveDriver {
+  userId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  ts: number;
+  minutesAgo: number;
+}
+export interface LiveTracking {
+  drivers: LiveDriver[];
+  stops: DeliveryStop[];
+}
+
 export interface InactiveCustomerRow {
   id: string;
   code: string | null;

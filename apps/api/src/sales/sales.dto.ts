@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+// --- Seguimiento en vivo del repartidor ---
+export const driverLocationSchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+});
+export type DriverLocationInput = z.infer<typeof driverLocationSchema>;
+
 // --- Clientes ---
 const customerZone = z.enum(["NORTE", "SUR", "ESTE", "OESTE", "CENTRO"]);
 

@@ -8,17 +8,20 @@ import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { CustomerService } from "./customer.service.js";
 import { OrderService } from "./order.service.js";
+import { DeliveryTrackingService } from "./delivery-tracking.service.js";
 import {
   createCustomerSchema,
   updateCustomerSchema,
   inactiveCustomersQuerySchema,
   createOrderSchema,
   updateDeliverySchema,
+  driverLocationSchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type InactiveCustomersQuery,
   type CreateOrderInput,
   type UpdateDeliveryInput,
+  type DriverLocationInput,
 } from "./sales.dto.js";
 
 @ApiTags("customers")
@@ -139,5 +142,33 @@ export class OrderController {
   @RequirePermissions("orders.create")
   updateDelivery(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateDeliverySchema)) b: UpdateDeliveryInput) {
     return this.orders.updateDelivery(u.organizationId!, id, u.userId, b);
+  }
+}
+
+@ApiTags("delivery-tracking")
+@Controller("delivery")
+export class DeliveryController {
+  constructor(
+    private readonly tracking: DeliveryTrackingService,
+    private readonly orders: OrderService
+  ) {}
+
+  // El repartidor emite su ubicación (mientras tiene la Ruta abierta).
+  @Post("location")
+  @RequirePermissions("orders.create")
+  async report(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(driverLocationSchema)) b: DriverLocationInput) {
+    await this.tracking.report(u.organizationId!, u.userId, b.lat, b.lng);
+    return { ok: true };
+  }
+
+  // El dueño ve repartidores en vivo + entregas pendientes.
+  @Get("live")
+  @RequirePermissions("orders.read")
+  async live(@CurrentUser() u: AuthContext) {
+    const [drivers, stops] = await Promise.all([
+      this.tracking.live(u.organizationId!),
+      this.orders.pendingDeliveries(u.organizationId!),
+    ]);
+    return { drivers, stops };
   }
 }

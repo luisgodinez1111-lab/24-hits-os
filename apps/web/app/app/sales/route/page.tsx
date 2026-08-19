@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
@@ -49,10 +49,22 @@ export default function RoutePage() {
 
   // GPS EN VIVO: mueve el marcador en cada lectura; fija el origen en la primera
   // (la ruta NO se recalcula en cada tick — eso es bajo demanda, con Recalcular).
+  // Además emite la ubicación (throttled ~10s) para el seguimiento del dueño.
+  const lastSent = useRef(0);
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoMsg("Este dispositivo no permite ubicación."); return; }
     const id = navigator.geolocation.watchPosition(
-      (p) => { const c = { lat: p.coords.latitude, lng: p.coords.longitude }; setPos(c); setStart((s) => s ?? c); setGeoMsg(null); },
+      (p) => {
+        const c = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setPos(c);
+        setStart((s) => s ?? c);
+        setGeoMsg(null);
+        const now = Date.now();
+        if (now - lastSent.current > 10000) {
+          lastSent.current = now;
+          void api.post("/delivery/location", { lat: c.lat, lng: c.lng }).catch(() => undefined);
+        }
+      },
       () => setGeoMsg("Sin permiso de ubicación: la ruta arranca desde el primer pedido."),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
