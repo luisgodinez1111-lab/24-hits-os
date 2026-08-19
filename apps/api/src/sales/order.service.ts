@@ -16,7 +16,7 @@ import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
 import { parseLatLng } from "./geo.js";
-import { haversineMatrix, optimizeSubset, osrmMatrix, type Pt } from "./route-optimizer.js";
+import { haversineMatrix, optimizeSubset, osrmMatrix, osrmRoute, type Pt } from "./route-optimizer.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
 interface ResolvedLine {
@@ -200,11 +200,22 @@ export class OrderService {
       prev = nodeIdx;
     }
 
+    // Trazo por calles: geometría real de la ruta en el orden ya optimizado (solo
+    // con OSRM). Sin OSRM, geometry = null y el frontend dibuja línea recta.
+    let geometry: [number, number][] | null = null;
+    if (matrix.provider === "osrm" && osrmUrl) {
+      const orderedPts: Pt[] = [];
+      if (start) orderedPts.push(nodes[0]!);
+      for (const idx of visit) orderedPts.push(nodes[idx]!);
+      geometry = await osrmRoute(orderedPts, osrmUrl);
+    }
+
     return {
       provider: matrix.provider,
       totalKm: round1(totalKm),
       totalMin: matrix.dur ? Math.round(totalMin) : null,
       priorityCount: meta.filter((m) => m.priority != null).length,
+      geometry,
       stops,
       noCoords,
     };

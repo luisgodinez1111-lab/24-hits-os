@@ -377,6 +377,7 @@ export interface OptimizedRoute {
   totalKm: number;
   totalMin: number | null;
   priorityCount: number;
+  geometry: [number, number][] | null; // trazo por calles (OSRM); null = línea recta
   stops: OptimizedStop[];
   noCoords: DeliveryStop[];
 }

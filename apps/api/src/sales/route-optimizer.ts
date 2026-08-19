@@ -39,6 +39,24 @@ export async function osrmMatrix(pts: Pt[], osrmUrl: string): Promise<CostMatrix
   }
 }
 
+// Geometría de la ruta por CALLES vía OSRM (/route). Devuelve la polilínea como
+// [[lat,lng], …] siguiendo las carreteras, o null si falla (→ línea recta).
+export async function osrmRoute(pts: Pt[], osrmUrl: string): Promise<[number, number][] | null> {
+  try {
+    if (pts.length < 2) return null;
+    const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
+    const url = `${osrmUrl.replace(/\/+$/, "")}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code?: string; routes?: Array<{ geometry?: { coordinates?: [number, number][] } }> };
+    const geo = j.routes?.[0]?.geometry?.coordinates;
+    if (j.code !== "Ok" || !geo) return null;
+    return geo.map(([lng, lat]) => [lat, lng] as [number, number]);
+  } catch {
+    return null;
+  }
+}
+
 type Cost = (a: number, b: number) => number;
 
 // Tour inicial por vecino más cercano (índice 0 fijo como origen).

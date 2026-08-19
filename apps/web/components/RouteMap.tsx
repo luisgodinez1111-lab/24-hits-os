@@ -14,7 +14,7 @@ function esc(s: string): string {
 // VIVO (se mueve con el GPS), la ruta dibujada y navegación de un toque. Leaflet
 // + OpenStreetMap (sin API key). El marcador del repartidor se actualiza en un
 // efecto propio para no re-encuadrar el mapa en cada tick del GPS.
-export function RouteMap({ legs, driver, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; height?: string }) {
+export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const routeLayerRef = useRef<LayerGroup | null>(null);
@@ -81,12 +81,15 @@ export function RouteMap({ legs, driver, height = "58vh" }: { legs: Leg[]; drive
       routePts.push([stop.deliveryLat, stop.deliveryLng]);
     });
 
-    if (routePts.length >= 2) {
+    // Trazo por calles (OSRM) si viene la geometría; si no, línea recta punteada.
+    if (geometry && geometry.length >= 2) {
+      L.polyline(geometry, { color: "#7c3aed", weight: 4, opacity: 0.85 }).addTo(layer);
+    } else if (routePts.length >= 2) {
       L.polyline(routePts, { color: "#7c3aed", weight: 3, opacity: 0.6, dashArray: "6 7" }).addTo(layer);
     }
     if (bounds.length === 1) map.setView(bounds[0]!, 15);
     else if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-  }, [ready, legs]);
+  }, [ready, legs, geometry]);
 
   // Marcador del repartidor EN VIVO (solo mueve el punto; no re-encuadra).
   useEffect(() => {

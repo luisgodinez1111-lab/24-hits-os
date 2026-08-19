@@ -102,7 +102,7 @@ export default function RoutePage() {
         <EmptyState icon={<MapPin className="h-8 w-8 text-gray-400" />} title="Sin entregas pendientes" description="Cuando haya pedidos por enviar, aparecerán aquí en la ruta más eficiente." />
       ) : (
         <div className="space-y-4">
-          {legs.length > 0 && <RouteMap legs={legs} driver={pos} />}
+          {legs.length > 0 && <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} />}
 
           <ol className="space-y-2">
             {stops.map((s, i) => (
