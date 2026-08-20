@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LMap, Marker } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Crosshair } from "lucide-react";
 import type { LatLng, Leg } from "@/lib/route";
 import { navUrl } from "@/lib/route";
 
@@ -10,16 +11,19 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 }
 
-// Mapa navegador de la ruta: paradas numeradas en orden óptimo, tu posición EN
-// VIVO (se mueve con el GPS), la ruta dibujada y navegación de un toque. Leaflet
-// + OpenStreetMap (sin API key). El marcador del repartidor se actualiza en un
-// efecto propio para no re-encuadrar el mapa en cada tick del GPS.
+// Mapa navegador de la ruta (estilo Uber): tu posición EN VIVO con halo que late,
+// las paradas numeradas en orden óptimo, la ruta dibujada y navegación de un
+// toque. Se muestra SIEMPRE — aunque no haya paradas centra en tu ubicación.
+// Leaflet + OpenStreetMap (sin API key). El marcador del repartidor se actualiza
+// en un efecto propio para no re-encuadrar el mapa en cada tick del GPS.
 export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const routeLayerRef = useRef<LayerGroup | null>(null);
   const driverRef = useRef<Marker | null>(null);
   const LRef = useRef<typeof import("leaflet") | null>(null);
+  const driverPos = useRef<LatLng | null>(null); // última posición para "recentrar"
+  const didFitOnce = useRef(false); // primer encuadre en tu ubicación
   const [ready, setReady] = useState(false);
 
   // Inicializa el mapa (una vez).
@@ -44,11 +48,12 @@ export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Le
       mapRef.current = null;
       routeLayerRef.current = null;
       driverRef.current = null;
+      didFitOnce.current = false;
       setReady(false);
     };
   }, []);
 
-  // Paradas + ruta (se redibujan cuando cambia el orden; encuadra a las paradas).
+  // Paradas + ruta (se redibujan cuando cambia el orden; encuadra paradas + tú).
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -87,11 +92,14 @@ export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Le
     } else if (routePts.length >= 2) {
       L.polyline(routePts, { color: "#7c3aed", weight: 3, opacity: 0.6, dashArray: "6 7" }).addTo(layer);
     }
-    if (bounds.length === 1) map.setView(bounds[0]!, 15);
-    else if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+
+    // Encuadra incluyendo tu ubicación, para que siempre te veas junto a las paradas.
+    const fitBounds = driverPos.current ? [...bounds, [driverPos.current.lat, driverPos.current.lng] as [number, number]] : bounds;
+    if (fitBounds.length === 1) map.setView(fitBounds[0]!, 15);
+    else if (fitBounds.length > 1) map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
   }, [ready, legs, geometry]);
 
-  // Marcador del repartidor EN VIVO (solo mueve el punto; no re-encuadra).
+  // Marcador del repartidor EN VIVO (halo que late; solo mueve el punto).
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -99,20 +107,45 @@ export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Le
     if (!driver) {
       driverRef.current?.remove();
       driverRef.current = null;
+      driverPos.current = null;
       return;
     }
+    driverPos.current = driver;
     if (!driverRef.current) {
       const dot = L.divIcon({
         className: "",
-        html: `<div style="width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
+        html: `<div class="driver-dot"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
       });
       driverRef.current = L.marker([driver.lat, driver.lng], { icon: dot, zIndexOffset: 1000 }).addTo(map).bindPopup("Tú (repartidor)");
+      // Sin paradas todavía: centra el mapa en ti la primera vez que llega el GPS.
+      if (!didFitOnce.current && legs.length === 0) {
+        map.setView([driver.lat, driver.lng], 15);
+        didFitOnce.current = true;
+      }
     } else {
       driverRef.current.setLatLng([driver.lat, driver.lng]);
     }
-  }, [ready, driver]);
+  }, [ready, driver, legs.length]);
 
-  return <div ref={elRef} style={{ height, width: "100%" }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200" />;
+  const recenter = () => {
+    const map = mapRef.current;
+    const d = driverPos.current;
+    if (map && d) map.setView([d.lat, d.lng], 15, { animate: true });
+  };
+
+  return (
+    <div className="relative">
+      <div ref={elRef} style={{ height, width: "100%" }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200" />
+      <button
+        type="button"
+        onClick={recenter}
+        aria-label="Centrar en mi ubicación"
+        className="absolute bottom-3 right-3 z-[400] grid h-11 w-11 place-items-center rounded-full border border-gray-200 bg-white text-brand shadow-lg active:scale-95"
+      >
+        <Crosshair className="h-5 w-5" />
+      </button>
+    </div>
+  );
 }

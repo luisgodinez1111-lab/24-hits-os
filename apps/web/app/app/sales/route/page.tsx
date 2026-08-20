@@ -14,7 +14,7 @@ import { DeliverDialog } from "@/components/DeliverDialog";
 // El mapa solo en cliente (Leaflet usa window).
 const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
   ssr: false,
-  loading: () => <Skeleton className="h-[56vh] w-full" />,
+  loading: () => <Skeleton className="h-[58vh] w-full" />,
 });
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
@@ -65,7 +65,7 @@ export default function RoutePage() {
           void api.post("/delivery/location", { lat: c.lat, lng: c.lng }).catch(() => undefined);
         }
       },
-      () => setGeoMsg("Sin permiso de ubicación: la ruta arranca desde el primer pedido."),
+      () => setGeoMsg("Activa el permiso de ubicación para verte en el mapa. Mientras, la ruta arranca desde el primer pedido."),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
     return () => navigator.geolocation.clearWatch(id);
@@ -85,6 +85,8 @@ export default function RoutePage() {
   const noCoords = route?.noCoords ?? [];
   const total = stops.length + noCoords.length;
   const providerLabel = route?.provider === "osrm" ? "por calles" : route?.provider === "haversine" ? "línea recta" : "";
+  const nextStop = stops[0] ?? null; // el siguiente pedido más cercano/prioritario
+  const restStops = stops.slice(1);
 
   return (
     <div>
@@ -92,7 +94,7 @@ export default function RoutePage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
           <p className="text-sm text-gray-500">
-            {total} entregas{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
+            {total} {total === 1 ? "entrega" : "entregas"}{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
             {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
             {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
           </p>
@@ -108,49 +110,104 @@ export default function RoutePage() {
         </p>
       )}
 
-      {isLoading ? (
-        <Skeleton className="h-64 w-full" />
-      ) : total === 0 ? (
-        <EmptyState icon={<MapPin className="h-8 w-8 text-gray-400" />} title="Sin entregas pendientes" description="Cuando haya pedidos por enviar, aparecerán aquí en la ruta más eficiente." />
-      ) : (
-        <div className="space-y-4">
-          {legs.length > 0 && <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} />}
+      {/* MAPA SIEMPRE VISIBLE (estilo Uber): tu ubicación en vivo + las paradas. */}
+      <div className="space-y-4">
+        <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} />
 
-          <ol className="space-y-2">
-            {stops.map((s, i) => (
-              <Stop key={s.id} n={i + 1} stop={s} next={i === 0} onDeliver={() => setDeliverStop(s)} />
-            ))}
-            {noCoords.length > 0 && (
-              <li className="pt-2">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
-                <div className="space-y-2">
-                  {noCoords.map((s) => {
-                    const opt = toOptStop(s);
-                    return <Stop key={s.id} n={null} stop={opt} next={false} onDeliver={() => setDeliverStop(opt)} />;
-                  })}
-                </div>
-              </li>
+        {isLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : total === 0 ? (
+          <EmptyState
+            icon={<MapPin className="h-8 w-8 text-gray-400" />}
+            title="Sin entregas pendientes"
+            description="Ya te ves en el mapa. Cuando haya pedidos por enviar aparecerán aquí en la ruta más eficiente, empezando por el más cercano."
+          />
+        ) : (
+          <>
+            {/* SIGUIENTE PEDIDO — tarjeta grande, lo primero que ves. */}
+            {nextStop && <NextCard stop={nextStop} onDeliver={() => setDeliverStop(nextStop)} />}
+
+            {/* El resto de la ruta, en orden. */}
+            {(restStops.length > 0 || noCoords.length > 0) && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Después ({restStops.length + noCoords.length})</p>
+                <ol className="space-y-2">
+                  {restStops.map((s, i) => (
+                    <Stop key={s.id} n={i + 2} stop={s} onDeliver={() => setDeliverStop(s)} />
+                  ))}
+                  {noCoords.length > 0 && (
+                    <li className="pt-2">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
+                      <div className="space-y-2">
+                        {noCoords.map((s) => {
+                          const opt = toOptStop(s);
+                          return <Stop key={s.id} n={null} stop={opt} onDeliver={() => setDeliverStop(opt)} />;
+                        })}
+                      </div>
+                    </li>
+                  )}
+                </ol>
+              </div>
             )}
-          </ol>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
     </div>
   );
 }
 
-function Stop({ n, stop, next, onDeliver }: { n: number | null; stop: OptimizedStop; next: boolean; onDeliver: () => void }) {
+// Tarjeta destacada del siguiente pedido (estilo "próxima parada" de Uber).
+function NextCard({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => void }) {
   const nav = navUrl(stop);
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
-    <div className={`rounded-xl border p-3 ${next ? "border-brand/40 bg-brand/5" : "border-gray-200 bg-white"}`}>
+    <div className="rounded-2xl border-2 border-brand/40 bg-brand/5 p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <Badge tone="brand">Siguiente parada</Badge>
+        {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
+        {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
+        {stop.legKm != null && (
+          <span className="ml-auto text-sm font-semibold text-brand">
+            {stop.legKm.toFixed(1)} km{stop.legMin != null ? ` · ${stop.legMin} min` : ""}
+          </span>
+        )}
+      </div>
+      <p className="text-lg font-bold leading-tight">{stop.customer?.name ?? "Mostrador"}</p>
+      <p className="text-sm text-gray-600">{stop.deliveryAddress ?? "Sin dirección"}</p>
+      <p className="mt-0.5 font-mono text-xs text-gray-400">
+        {stop.number} · {money(stop.total)}
+        {stop.customer?.zone ? ` · ${zoneLabel[stop.customer.zone]}` : ""}
+        {stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        {nav && (
+          <a href={nav} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-95">
+            <Navigation className="h-4 w-4" /> Navegar
+          </a>
+        )}
+        {phone && (
+          <a href={`tel:${phone}`} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
+            <Phone className="h-4 w-4" /> Llamar
+          </a>
+        )}
+        <Button className="col-span-2 sm:col-span-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar aquí</Button>
+      </div>
+    </div>
+  );
+}
+
+function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; onDeliver: () => void }) {
+  const nav = navUrl(stop);
+  const phone = stop.deliveryPhone || stop.customer?.phone || null;
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3">
       <div className="flex items-start gap-3">
-        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${next ? "bg-brand text-white" : "bg-gray-100 text-gray-500"}`}>{n ?? "–"}</span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-sm font-bold text-gray-500">{n ?? "–"}</span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{stop.customer?.name ?? "Mostrador"}</span>
-            {next && <Badge tone="brand">siguiente</Badge>}
             {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
             {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
             {stop.customer?.zone && <Badge tone="gray">{zoneLabel[stop.customer.zone]}</Badge>}
