@@ -16,7 +16,7 @@ function esc(s: string): string {
 // toque. Se muestra SIEMPRE — aunque no haya paradas centra en tu ubicación.
 // Leaflet + OpenStreetMap (sin API key). El marcador del repartidor se actualiza
 // en un efecto propio para no re-encuadrar el mapa en cada tick del GPS.
-export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; height?: string }) {
+export function RouteMap({ legs, driver, geometry, follow = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; follow?: boolean; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const routeLayerRef = useRef<LayerGroup | null>(null);
@@ -93,11 +93,13 @@ export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Le
       L.polyline(routePts, { color: "#7c3aed", weight: 3, opacity: 0.6, dashArray: "6 7" }).addTo(layer);
     }
 
+    // En modo navegación (follow) NO re-encuadramos: el mapa sigue al repartidor.
+    if (follow) return;
     // Encuadra incluyendo tu ubicación, para que siempre te veas junto a las paradas.
     const fitBounds = driverPos.current ? [...bounds, [driverPos.current.lat, driverPos.current.lng] as [number, number]] : bounds;
     if (fitBounds.length === 1) map.setView(fitBounds[0]!, 15);
     else if (fitBounds.length > 1) map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
-  }, [ready, legs, geometry]);
+  }, [ready, legs, geometry, follow]);
 
   // Marcador del repartidor EN VIVO (halo que late; solo mueve el punto).
   useEffect(() => {
@@ -127,7 +129,9 @@ export function RouteMap({ legs, driver, geometry, height = "58vh" }: { legs: Le
     } else {
       driverRef.current.setLatLng([driver.lat, driver.lng]);
     }
-  }, [ready, driver, legs.length]);
+    // Modo navegación: el mapa persigue al repartidor (zoom cercano), como Uber.
+    if (follow) map.setView([driver.lat, driver.lng], Math.max(map.getZoom(), 16), { animate: true });
+  }, [ready, driver, follow, legs.length]);
 
   const recenter = () => {
     const map = mapRef.current;

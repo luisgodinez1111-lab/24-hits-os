@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Crosshair, MapPin, Navigation, Phone, Route as RouteIcon } from "lucide-react";
+import { Check, Crosshair, MapPin, Navigation, Navigation2, Phone, Route as RouteIcon, X } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
@@ -27,6 +27,18 @@ function waited(min: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+// Minutos estimados al siguiente punto: usa el tiempo real de OSRM si viene; si
+// no, estima con velocidad urbana promedio (~22 km/h, con paradas/semáforos).
+function etaMin(stop: OptimizedStop): number | null {
+  if (stop.legMin != null) return stop.legMin;
+  if (stop.legKm != null) return Math.max(1, Math.round((stop.legKm / 22) * 60));
+  return null;
+}
+// Hora estimada de llegada "14:35" a partir de ahora + minutos.
+function arrivalAt(min: number): string {
+  return new Date(Date.now() + min * 60000).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+}
+
 // Convierte una parada sin coordenadas en OptimizedStop (prioridad calculada en el front).
 function toOptStop(s: DeliveryStop): OptimizedStop {
   const minutesPending = Math.round((Date.now() - new Date(s.createdAt).getTime()) / 60000);
@@ -40,6 +52,7 @@ export default function RoutePage() {
   const [start, setStart] = useState<LatLng | null>(null); // origen para optimizar (bajo demanda)
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
   const [deliverStop, setDeliverStop] = useState<OptimizedStop | null>(null);
+  const [navMode, setNavMode] = useState(false); // modo navegación in-app (mapa sigue al repartidor)
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -88,6 +101,29 @@ export default function RoutePage() {
   const nextStop = stops[0] ?? null; // el siguiente pedido más cercano/prioritario
   const restStops = stops.slice(1);
 
+  // MODO NAVEGACIÓN (in-app): mapa a pantalla casi completa que sigue tu punto
+  // azul + bottom-sheet con el siguiente pedido, distancia, tiempo y ETA.
+  if (navMode && nextStop) {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <button onClick={() => setNavMode(false)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 active:scale-95">
+            <X className="h-4 w-4" /> Salir de navegación
+          </button>
+          <span className="text-sm font-medium text-gray-500">
+            {total} {total === 1 ? "entrega" : "entregas"} por delante
+            {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
+          </span>
+        </div>
+        <div className="relative">
+          <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} follow height="72vh" />
+          <NavSheet stop={nextStop} onDeliver={() => setDeliverStop(nextStop)} />
+        </div>
+        <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -99,7 +135,10 @@ export default function RoutePage() {
             {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
           </p>
         </div>
-        <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
+        <div className="flex gap-2">
+          {nextStop && <Button onClick={() => setNavMode(true)}><Navigation2 className="h-4 w-4" /> Navegar</Button>}
+          <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
+        </div>
       </div>
 
       {geoMsg && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{geoMsg}</p>}
@@ -193,6 +232,42 @@ function NextCard({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => v
           </a>
         )}
         <Button className="col-span-2 sm:col-span-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar aquí</Button>
+      </div>
+    </div>
+  );
+}
+
+// Bottom-sheet de navegación (estilo Uber): tiempo/distancia/ETA al siguiente
+// pedido, encima del mapa, con la acción principal "Entregar aquí".
+function NavSheet({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => void }) {
+  const phone = stop.deliveryPhone || stop.customer?.phone || null;
+  const nav = navUrl(stop);
+  const min = etaMin(stop);
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-[500] rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
+      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
+        {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
+        <span className="text-2xl font-extrabold tabular-nums">{min != null ? `${min} min` : "—"}</span>
+        {stop.legKm != null && <span className="text-lg font-semibold text-gray-500">· {stop.legKm.toFixed(1)} km</span>}
+        {min != null && <span className="ml-auto text-sm text-gray-400">llegada ~{arrivalAt(min)}</span>}
+      </div>
+      <p className="mt-1 text-base font-bold leading-tight">{stop.customer?.name ?? "Mostrador"}</p>
+      <p className="text-sm text-gray-500">{stop.deliveryAddress ?? "Sin dirección"}</p>
+      <p className="font-mono text-xs text-gray-400">{stop.number} · {money(stop.total)}{stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}</p>
+      <div className="mt-3 flex items-center gap-2">
+        <Button className="flex-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar aquí</Button>
+        {phone && (
+          <a href={`tel:${phone}`} aria-label="Llamar" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-300 text-gray-700 active:scale-95">
+            <Phone className="h-5 w-5" />
+          </a>
+        )}
+        {nav && (
+          <a href={nav} target="_blank" rel="noreferrer" aria-label="Abrir en Maps (voz)" title="Abrir en Google/Apple Maps" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-300 text-gray-700 active:scale-95">
+            <Navigation className="h-5 w-5" />
+          </a>
+        )}
       </div>
     </div>
   );
