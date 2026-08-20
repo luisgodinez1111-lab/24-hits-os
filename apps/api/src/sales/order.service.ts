@@ -15,7 +15,7 @@ import { CostService } from "../inventory/cost.service.js";
 import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
-import { parseLatLng } from "./geo.js";
+import { resolveLatLng } from "./geo.js";
 import { haversineMatrix, optimizeSubset, osrmMatrix, osrmRoute, type Pt } from "./route-optimizer.js";
 
 // Renglón ya calculado (precio resuelto + totales) listo para persistir.
@@ -76,11 +76,13 @@ export class OrderService {
       }
     }
 
+    // Si cambió el link, re-extrae coordenadas (Google/Apple Maps, incluye links
+    // cortos) ANTES de la transacción: puede requerir una llamada de red.
+    const coords = input.deliveryLocationUrl !== undefined ? await resolveLatLng(input.deliveryLocationUrl) : undefined;
+
     await this.prisma.withTenant(organizationId, async (tx) => {
       const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true, customerId: true } });
       if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
-      // Si cambió el link, re-extrae coordenadas (Google/Apple Maps).
-      const coords = input.deliveryLocationUrl !== undefined ? parseLatLng(input.deliveryLocationUrl) : undefined;
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -224,6 +226,9 @@ export class OrderService {
   // Crea un pedido en DRAFT. Resuelve precio por renglón (override o lista de
   // precios vigente) y calcula totales en Decimal. NO toca inventario (ADR-020).
   async create(organizationId: string, userId: string, input: CreateOrderInput) {
+    // Coordenadas del link ANTES de la transacción: puede requerir una llamada de
+    // red (link corto de Google que se resuelve siguiendo el redirect).
+    const urlCoords = await resolveLatLng(input.deliveryLocationUrl);
     const order = await this.prisma.withTenant(organizationId, async (tx) => {
       // Idempotencia: si ya existe un pedido con el mismo key, devolverlo.
       if (input.idempotencyKey) {
@@ -263,7 +268,6 @@ export class OrderService {
       }
 
       // Coordenadas de la entrega: del link (Google/Apple Maps) o heredadas del cliente.
-      const urlCoords = parseLatLng(input.deliveryLocationUrl);
       const coords = urlCoords ?? customerCoords;
 
       // Lista de precios: explícita o la ACTIVE que corresponda al tipo de cliente.
