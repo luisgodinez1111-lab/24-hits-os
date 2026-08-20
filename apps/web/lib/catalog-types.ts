@@ -197,6 +197,8 @@ export interface Order {
   deliveryPhone: string | null;
   deliveryNotes: string | null;
   deliveryLocationUrl: string | null;
+  deliveryLat: number | null;
+  deliveryLng: number | null;
   deliveryStatus: "PENDING" | "DISPATCHED" | "DELIVERED" | null;
   createdAt: string;
   items: Array<{

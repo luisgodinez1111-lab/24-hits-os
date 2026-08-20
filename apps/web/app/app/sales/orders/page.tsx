@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, Plus, Receipt } from "lucide-react";
+import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -26,6 +26,7 @@ export default function SalesOrdersPage() {
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<Order | null>(null);
+  const [locating, setLocating] = useState<Order | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["sales-orders"], queryFn: () => api.get<Order[]>("/orders") });
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
@@ -47,6 +48,19 @@ export default function SalesOrdersPage() {
   const delivery = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/orders/${id}/delivery`, { status }),
     onSuccess: async () => { await refresh(); toast.push("Entrega actualizada", "success"); },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  // Corregir ubicación de un pedido existente: re-resuelve el link (incluye los
+  // links cortos de Google) y avisa si encontró o no las coordenadas.
+  const saveLocation = useMutation({
+    mutationFn: ({ id, url }: { id: string; url: string }) => api.patch<Order>(`/orders/${id}/delivery`, { deliveryLocationUrl: url }),
+    onSuccess: async (order) => {
+      await refresh();
+      setLocating(null);
+      if (order.deliveryLat != null && order.deliveryLng != null) toast.push("Ubicación encontrada ✓ — ya aparece en la ruta", "success");
+      else toast.push("Guardado, pero ese link no tiene ubicación. Usa el botón Compartir de Google Maps o pega el enlace completo.", "error");
+    },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
@@ -77,11 +91,16 @@ export default function SalesOrdersPage() {
                 <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{o.paymentStatus}</Badge></TD>
                 <TD>
                   {o.deliveryStatus ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={deliveryTone[o.deliveryStatus] ?? "gray"}>{deliveryLabel[o.deliveryStatus] ?? o.deliveryStatus}</Badge>
                       {o.deliveryStatus === "PENDING" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}>Enviar</Button>}
                       {o.deliveryStatus === "DISPATCHED" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}>Entregado</Button>}
-                      {o.deliveryLocationUrl && <a href={o.deliveryLocationUrl} target="_blank" rel="noreferrer" className="text-xs text-brand underline">ubicación</a>}
+                      {/* Sin coordenadas = no aparece en la ruta: se ofrece corregir. */}
+                      {o.deliveryLat == null || o.deliveryLng == null ? (
+                        <Button size="sm" variant="outline" onClick={() => setLocating(o)}><MapPin className="h-4 w-4" /> Corregir ubicación</Button>
+                      ) : (
+                        <button onClick={() => setLocating(o)} className="inline-flex items-center gap-1 text-xs text-brand underline"><MapPin className="h-3.5 w-3.5" /> ubicación ✓</button>
+                      )}
                     </div>
                   ) : <span className="text-gray-300">—</span>}
                 </TD>
@@ -104,7 +123,35 @@ export default function SalesOrdersPage() {
         onCreated={async () => { setCreating(false); await refresh(); toast.push("Pedido creado", "success"); }} />
       <PaymentDialog order={paying} onClose={() => setPaying(null)}
         onDone={async () => { setPaying(null); await refresh(); toast.push("Cobro registrado", "success"); }} />
+      <LocationDialog order={locating} onClose={() => setLocating(null)} pending={saveLocation.isPending}
+        onSave={(url) => locating && saveLocation.mutate({ id: locating.id, url })} />
     </div>
+  );
+}
+
+// Corrige la ubicación de un pedido: pega el link de Maps (corto o largo) y el
+// backend re-resuelve las coordenadas. Muestra si el pedido ya tiene ubicación.
+function LocationDialog({ order, onClose, onSave, pending }: { order: Order | null; onClose: () => void; onSave: (url: string) => void; pending: boolean }) {
+  const [url, setUrl] = useState("");
+  // Pre-llena con el link actual: reabrir y Guardar re-resuelve un link corto.
+  useEffect(() => { setUrl(order?.deliveryLocationUrl ?? ""); }, [order]);
+  const hasCoords = order?.deliveryLat != null && order?.deliveryLng != null;
+  return (
+    <Dialog open={!!order} onClose={onClose} title={`Ubicación · pedido ${order?.number ?? ""}`}
+      footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button size="sm" loading={pending} onClick={() => { const v = url.trim(); if (!v) return; onSave(v); }}>Guardar ubicación</Button></>}>
+      <div className="space-y-3">
+        <p className={`text-sm ${hasCoords ? "text-green-700" : "text-amber-700"}`}>
+          {hasCoords ? "✓ Este pedido ya tiene ubicación en el mapa. Puedes reemplazarla." : "⚠️ Este pedido no tiene ubicación, por eso no aparece en la ruta."}
+        </p>
+        <FormField label="Link de Google/Apple Maps">
+          <Input autoFocus placeholder="https://maps.app.goo.gl/… o https://maps…" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </FormField>
+        <p className="text-xs text-gray-400">
+          En Google Maps: mantén presionada la dirección → <b>Compartir</b> → copia el enlace y pégalo aquí. También sirve el enlace largo o unas coordenadas <span className="font-mono">28.63,-106.07</span>.
+        </p>
+      </div>
+    </Dialog>
   );
 }
 
