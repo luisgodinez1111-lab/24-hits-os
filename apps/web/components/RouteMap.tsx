@@ -11,11 +11,31 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 }
 
-// Mapa navegador de la ruta (estilo Uber): tu posición EN VIVO con halo que late,
-// las paradas numeradas en orden óptimo, la ruta dibujada y navegación de un
-// toque. Se muestra SIEMPRE — aunque no haya paradas centra en tu ubicación.
-// Leaflet + OpenStreetMap (sin API key). El marcador del repartidor se actualiza
-// en un efecto propio para no re-encuadrar el mapa en cada tick del GPS.
+// Motor de rutas público (OSRM demo): traza el recorrido por CALLES desde el
+// navegador cuando el backend no manda geometría (OSRM propio aún no montado).
+// TEMPORAL / solo para ver el trazo — no es para producción a gran volumen.
+// El día que haya OSRM_URL propio, el backend manda `geometry` y esto no corre.
+const OSRM_DEMO = "https://router.project-osrm.org";
+
+async function fetchStreetGeometry(pts: LatLng[]): Promise<[number, number][] | null> {
+  if (pts.length < 2) return null;
+  try {
+    const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
+    const url = `${OSRM_DEMO}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code?: string; routes?: Array<{ geometry?: { coordinates?: [number, number][] } }> };
+    const geo = j.routes?.[0]?.geometry?.coordinates;
+    if (j.code !== "Ok" || !geo) return null;
+    return geo.map(([lng, lat]) => [lat, lng] as [number, number]);
+  } catch {
+    return null;
+  }
+}
+
+// Mapa navegador de la ruta (estilo Uber): base minimalista, tu posición EN VIVO
+// con halo que late, el destino como pin negro y el recorrido trazado por las
+// calles. Se muestra SIEMPRE — sin paradas centra en tu ubicación.
 export function RouteMap({ legs, driver, geometry, follow = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; follow?: boolean; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
@@ -25,6 +45,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   const driverPos = useRef<LatLng | null>(null); // última posición para "recentrar"
   const didFitOnce = useRef(false); // primer encuadre en tu ubicación
   const [ready, setReady] = useState(false);
+  const [fallbackGeom, setFallbackGeom] = useState<[number, number][] | null>(null); // trazo por calles del cliente
 
   // Inicializa el mapa (una vez).
   useEffect(() => {
@@ -34,17 +55,18 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
       const L = (await import("leaflet")).default;
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { zoomControl: true }).setView([28.632, -106.069], 12);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      const map = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView([28.632, -106.069], 12);
+      // Base minimalista tipo Uber (CartoDB Positron), sin API key.
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
       }).addTo(map);
       routeLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setReady(true);
       // Bug clásico de Leaflet en SPA/móvil: el mapa se crea antes de que el
-      // contenedor tenga tamaño y sale en blanco. Forzamos recálculo del tamaño
-      // tras el layout (varios intentos por si el contenedor anima su entrada).
+      // contenedor tenga tamaño y sale en blanco. Forzamos recálculo del tamaño.
       const fix = () => map.invalidateSize();
       [50, 200, 500].forEach((ms) => timers.push(setTimeout(fix, ms)));
     })();
@@ -60,8 +82,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
     };
   }, []);
 
-  // Recalcula el tamaño del mapa cuando cambia el de la ventana (rotar el móvil,
-  // teclado, etc.), otra causa de mapa "en blanco".
+  // Recalcula el tamaño del mapa al cambiar el de la ventana (otra causa de blanco).
   useEffect(() => {
     if (!ready) return;
     const onResize = () => mapRef.current?.invalidateSize();
@@ -69,7 +90,24 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
     return () => window.removeEventListener("resize", onResize);
   }, [ready]);
 
-  // Paradas + ruta (se redibujan cuando cambia el orden; encuadra paradas + tú).
+  // Trazo por CALLES del cliente: si el backend NO manda geometría, la pedimos al
+  // motor público desde el navegador (mirror del backend: desde tu posición por
+  // las paradas en orden). Se refresca solo cuando cambia la ruta, no con el GPS.
+  useEffect(() => {
+    if (geometry && geometry.length >= 2) { setFallbackGeom(null); return; }
+    const stops = legs.map((l) => l.stop).filter((s) => s.deliveryLat != null && s.deliveryLng != null);
+    if (stops.length < 1) { setFallbackGeom(null); return; }
+    const waypoints: LatLng[] = [];
+    if (driverPos.current) waypoints.push(driverPos.current);
+    for (const s of stops) waypoints.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
+    if (waypoints.length < 2) { setFallbackGeom(null); return; }
+    let cancelled = false;
+    void fetchStreetGeometry(waypoints).then((g) => { if (!cancelled) setFallbackGeom(g); });
+    return () => { cancelled = true; };
+    // Nota: intencionalmente NO dependemos de `driver` para no refetch en cada tick.
+  }, [legs, geometry]);
+
+  // Paradas + ruta (se redibujan cuando cambia el orden o el trazo).
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -78,44 +116,58 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
     layer.clearLayers();
 
     const bounds: [number, number][] = [];
-    const routePts: [number, number][] = [];
+    const straightPts: [number, number][] = [];
 
     legs.forEach(({ stop }, i) => {
       if (stop.deliveryLat == null || stop.deliveryLng == null) return;
       const n = i + 1;
       const isNext = i === 0;
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 13px system-ui,sans-serif;color:#fff;background:${isNext ? "#7c3aed" : "#4b5563"};border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)">${n}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
+      // Siguiente = pin negro grande (destino, estilo Uber); resto = punto gris con número.
+      const icon = isNext
+        ? L.divIcon({
+            className: "",
+            html: `<div style="position:relative;width:30px;height:38px">
+              <div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#111827;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>
+              <div style="position:absolute;top:6px;left:0;width:30px;text-align:center;color:#fff;font:700 13px system-ui">${n}</div>
+            </div>`,
+            iconSize: [30, 38],
+            iconAnchor: [15, 38],
+          })
+        : L.divIcon({
+            className: "",
+            html: `<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px system-ui;color:#374151;background:#e5e7eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)">${n}</div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          });
       const nav = navUrl(stop);
       const popup =
         `<div style="min-width:150px"><b>${esc(stop.customer?.name ?? "Mostrador")}</b>` +
         `<div style="color:#6b7280;font-size:12px;margin:2px 0">${esc(stop.deliveryAddress ?? "")}</div>` +
         `<div style="font-family:monospace;font-size:11px;color:#9ca3af">#${n} · ${esc(stop.number)}</div>` +
-        (nav ? `<a href="${nav}" target="_blank" rel="noreferrer" style="display:inline-block;margin-top:6px;color:#7c3aed;font-weight:600">Navegar &rarr;</a>` : "") +
+        (nav ? `<a href="${nav}" target="_blank" rel="noreferrer" style="display:inline-block;margin-top:6px;color:#111827;font-weight:600">Abrir en Maps &rarr;</a>` : "") +
         `</div>`;
       L.marker([stop.deliveryLat, stop.deliveryLng], { icon }).addTo(layer).bindPopup(popup);
       bounds.push([stop.deliveryLat, stop.deliveryLng]);
-      routePts.push([stop.deliveryLat, stop.deliveryLng]);
+      straightPts.push([stop.deliveryLat, stop.deliveryLng]);
     });
 
-    // Trazo por calles (OSRM) si viene la geometría; si no, línea recta punteada.
-    if (geometry && geometry.length >= 2) {
-      L.polyline(geometry, { color: "#7c3aed", weight: 4, opacity: 0.85 }).addTo(layer);
-    } else if (routePts.length >= 2) {
-      L.polyline(routePts, { color: "#7c3aed", weight: 3, opacity: 0.6, dashArray: "6 7" }).addTo(layer);
+    // El recorrido: por calles si hay geometría (backend o cliente); si no, recta.
+    const streets = (geometry && geometry.length >= 2 ? geometry : null) ?? fallbackGeom;
+    if (streets && streets.length >= 2) {
+      // Casing estilo Uber: trazo grueso oscuro con un halo blanco debajo.
+      L.polyline(streets, { color: "#ffffff", weight: 9, opacity: 0.9, lineJoin: "round", lineCap: "round" }).addTo(layer);
+      L.polyline(streets, { color: "#111827", weight: 5, opacity: 0.95, lineJoin: "round", lineCap: "round" }).addTo(layer);
+      streets.forEach((p) => bounds.push(p));
+    } else if (straightPts.length >= 2) {
+      L.polyline(straightPts, { color: "#6b7280", weight: 3, opacity: 0.6, dashArray: "6 7" }).addTo(layer);
     }
 
     // En modo navegación (follow) NO re-encuadramos: el mapa sigue al repartidor.
     if (follow) return;
-    // Encuadra incluyendo tu ubicación, para que siempre te veas junto a las paradas.
     const fitBounds = driverPos.current ? [...bounds, [driverPos.current.lat, driverPos.current.lng] as [number, number]] : bounds;
     if (fitBounds.length === 1) map.setView(fitBounds[0]!, 15);
     else if (fitBounds.length > 1) map.fitBounds(fitBounds, { padding: [50, 50], maxZoom: 16 });
-  }, [ready, legs, geometry, follow]);
+  }, [ready, legs, geometry, fallbackGeom, follow]);
 
   // Marcador del repartidor EN VIVO (halo que late; solo mueve el punto).
   useEffect(() => {
@@ -130,14 +182,8 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
     }
     driverPos.current = driver;
     if (!driverRef.current) {
-      const dot = L.divIcon({
-        className: "",
-        html: `<div class="driver-dot"></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
+      const dot = L.divIcon({ className: "", html: `<div class="driver-dot"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
       driverRef.current = L.marker([driver.lat, driver.lng], { icon: dot, zIndexOffset: 1000 }).addTo(map).bindPopup("Tú (repartidor)");
-      // Sin paradas todavía: centra el mapa en ti la primera vez que llega el GPS.
       if (!didFitOnce.current && legs.length === 0) {
         map.setView([driver.lat, driver.lng], 15);
         didFitOnce.current = true;
@@ -152,7 +198,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   const recenter = () => {
     const map = mapRef.current;
     const d = driverPos.current;
-    if (map && d) map.setView([d.lat, d.lng], 15, { animate: true });
+    if (map && d) map.setView([d.lat, d.lng], 16, { animate: true });
   };
 
   return (
