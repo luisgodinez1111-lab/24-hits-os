@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Crosshair, MapPin, Navigation, Navigation2, Phone, Route as RouteIcon, X } from "lucide-react";
+import { Check, Crosshair, MapPin, Navigation2, Phone, Route as RouteIcon, X } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
@@ -102,22 +102,27 @@ export default function RoutePage() {
   const restStops = stops.slice(1);
 
   // MODO NAVEGACIÓN (in-app): mapa a pantalla casi completa que sigue tu punto
-  // azul + bottom-sheet con el siguiente pedido, distancia, tiempo y ETA.
+  // azul + bottom-sheet con el siguiente pedido, distancia, tiempo y ETA + las
+  // próximas paradas (para saber la secuencia cuando llevas 20-30 pedidos).
   if (navMode && nextStop) {
+    const upcoming = [...restStops, ...noCoords.map(toOptStop)];
     return (
       <div>
         <div className="mb-3 flex items-center justify-between gap-2">
           <button onClick={() => setNavMode(false)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 active:scale-95">
-            <X className="h-4 w-4" /> Salir de navegación
+            <X className="h-4 w-4" /> Salir
           </button>
-          <span className="text-sm font-medium text-gray-500">
-            {total} {total === 1 ? "entrega" : "entregas"} por delante
-            {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
+          <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">
+            Parada 1 de {total}
+          </span>
+          <span className="hidden text-sm font-medium text-gray-500 sm:inline">
+            {route?.totalKm ? `~${route.totalKm.toFixed(1)} km` : ""}
+            {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""} en total
           </span>
         </div>
         <div className="relative">
           <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} follow height="72vh" />
-          <NavSheet stop={nextStop} onDeliver={() => setDeliverStop(nextStop)} />
+          <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
         </div>
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
       </div>
@@ -136,7 +141,7 @@ export default function RoutePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {nextStop && <Button onClick={() => setNavMode(true)}><Navigation2 className="h-4 w-4" /> Navegar</Button>}
+          {nextStop && <Button onClick={() => setNavMode(true)}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>}
           <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
         </div>
       </div>
@@ -164,7 +169,7 @@ export default function RoutePage() {
         ) : (
           <>
             {/* SIGUIENTE PEDIDO — tarjeta grande, lo primero que ves. */}
-            {nextStop && <NextCard stop={nextStop} onDeliver={() => setDeliverStop(nextStop)} />}
+            {nextStop && <NextCard stop={nextStop} onNavigate={() => setNavMode(true)} onDeliver={() => setDeliverStop(nextStop)} />}
 
             {/* El resto de la ruta, en orden. */}
             {(restStops.length > 0 || noCoords.length > 0) && (
@@ -197,9 +202,9 @@ export default function RoutePage() {
   );
 }
 
-// Tarjeta destacada del siguiente pedido (estilo "próxima parada" de Uber).
-function NextCard({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => void }) {
-  const nav = navUrl(stop);
+// Tarjeta destacada del siguiente pedido. La acción principal ENTRA a la
+// navegación in-app (no lanza a Google Maps).
+function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavigate: () => void; onDeliver: () => void }) {
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
     <div className="rounded-2xl border-2 border-brand/40 bg-brand/5 p-4 shadow-sm">
@@ -221,30 +226,28 @@ function NextCard({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => v
         {stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        {nav && (
-          <a href={nav} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-95">
-            <Navigation className="h-4 w-4" /> Navegar
-          </a>
-        )}
+        <Button className="col-span-2 sm:col-span-1" onClick={onNavigate}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>
         {phone && (
           <a href={`tel:${phone}`} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
             <Phone className="h-4 w-4" /> Llamar
           </a>
         )}
-        <Button className="col-span-2 sm:col-span-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar aquí</Button>
+        <button onClick={onDeliver} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
+          <Check className="h-4 w-4" /> Entregar
+        </button>
       </div>
     </div>
   );
 }
 
-// Bottom-sheet de navegación (estilo Uber): tiempo/distancia/ETA al siguiente
-// pedido, encima del mapa, con la acción principal "Entregar aquí".
-function NavSheet({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => void }) {
+// Bottom-sheet de navegación (estilo Uber): tiempo/distancia/ETA + info del
+// cliente + próximas paradas, encima del mapa. Acción principal "Entregar aquí".
+function NavSheet({ stop, upcoming, onDeliver }: { stop: OptimizedStop; upcoming: OptimizedStop[]; onDeliver: () => void }) {
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   const nav = navUrl(stop);
   const min = etaMin(stop);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-[500] rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
+    <div className="absolute inset-x-0 bottom-0 z-[500] max-h-[62%] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
       <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
@@ -263,18 +266,37 @@ function NavSheet({ stop, onDeliver }: { stop: OptimizedStop; onDeliver: () => v
             <Phone className="h-5 w-5" />
           </a>
         )}
-        {nav && (
-          <a href={nav} target="_blank" rel="noreferrer" aria-label="Abrir en Maps (voz)" title="Abrir en Google/Apple Maps" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-300 text-gray-700 active:scale-95">
-            <Navigation className="h-5 w-5" />
-          </a>
-        )}
       </div>
+
+      {/* Próximas paradas: para saber la secuencia con muchos pedidos. */}
+      {upcoming.length > 0 && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Después ({upcoming.length})</p>
+          <ol className="space-y-1.5">
+            {upcoming.slice(0, 6).map((s, i) => (
+              <li key={s.id} className="flex items-center gap-2 text-sm">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">{i + 2}</span>
+                <span className="truncate font-medium">{s.customer?.name ?? "Mostrador"}</span>
+                <span className="truncate text-gray-400">{s.deliveryAddress ?? "sin ubicación"}</span>
+                {s.legKm != null && <span className="ml-auto shrink-0 text-xs text-gray-400">{s.legKm.toFixed(1)} km</span>}
+              </li>
+            ))}
+            {upcoming.length > 6 && <li className="pl-8 text-xs text-gray-400">y {upcoming.length - 6} más…</li>}
+          </ol>
+        </div>
+      )}
+
+      {/* Opción secundaria para quien quiera indicaciones por voz. */}
+      {nav && (
+        <a href={nav} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs text-gray-400 underline">
+          ¿Prefieres indicaciones por voz? Abrir en Maps
+        </a>
+      )}
     </div>
   );
 }
 
 function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; onDeliver: () => void }) {
-  const nav = navUrl(stop);
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3">
@@ -297,7 +319,6 @@ function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; o
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
-        {nav && <a href={nav} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white"><Navigation className="h-4 w-4" /> Navegar</a>}
         {phone && <a href={`tel:${phone}`} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"><Phone className="h-4 w-4" /> Llamar</a>}
         <Button size="sm" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar</Button>
       </div>
