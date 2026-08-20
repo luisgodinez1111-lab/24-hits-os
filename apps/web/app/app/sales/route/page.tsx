@@ -154,6 +154,14 @@ export default function RoutePage() {
         </p>
       )}
 
+      {/* Caso más común de "no veo pines/ruta": los pedidos no tienen ubicación. */}
+      {!isLoading && stops.length === 0 && noCoords.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+          <p className="font-semibold">📍 Tus {noCoords.length} {noCoords.length === 1 ? "pedido no tiene" : "pedidos no tienen"} ubicación en el mapa.</p>
+          <p className="mt-1">Para verlos como pines y poder navegar, edita el pedido y pega el <b>link de Google/Apple Maps</b> de la dirección del cliente (o guarda la ubicación en la ficha del cliente). Sin ubicación no se puede trazar la ruta.</p>
+        </div>
+      )}
+
       {/* MAPA SIEMPRE VISIBLE (estilo Uber): tu ubicación en vivo + las paradas. */}
       <div className="space-y-4">
         <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} />

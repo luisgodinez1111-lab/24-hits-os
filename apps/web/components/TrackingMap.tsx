@@ -21,6 +21,7 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
 
   useEffect(() => {
     let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     void (async () => {
       const L = (await import("leaflet")).default;
       if (cancelled || !elRef.current || mapRef.current) return;
@@ -33,9 +34,13 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
       layerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setReady(true);
+      // Evita el mapa en blanco (contenedor sin tamaño al inicializar).
+      const fix = () => map.invalidateSize();
+      [50, 200, 500].forEach((ms) => timers.push(setTimeout(fix, ms)));
     })();
     return () => {
       cancelled = true;
+      timers.forEach(clearTimeout);
       mapRef.current?.remove();
       mapRef.current = null;
       layerRef.current = null;
@@ -87,5 +92,5 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
     }
   }, [ready, drivers, stops]);
 
-  return <div ref={elRef} style={{ height, width: "100%" }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200" />;
+  return <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />;
 }

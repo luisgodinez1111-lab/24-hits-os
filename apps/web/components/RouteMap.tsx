@@ -29,6 +29,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   // Inicializa el mapa (una vez).
   useEffect(() => {
     let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     void (async () => {
       const L = (await import("leaflet")).default;
       if (cancelled || !elRef.current || mapRef.current) return;
@@ -41,9 +42,15 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
       routeLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setReady(true);
+      // Bug clásico de Leaflet en SPA/móvil: el mapa se crea antes de que el
+      // contenedor tenga tamaño y sale en blanco. Forzamos recálculo del tamaño
+      // tras el layout (varios intentos por si el contenedor anima su entrada).
+      const fix = () => map.invalidateSize();
+      [50, 200, 500].forEach((ms) => timers.push(setTimeout(fix, ms)));
     })();
     return () => {
       cancelled = true;
+      timers.forEach(clearTimeout);
       mapRef.current?.remove();
       mapRef.current = null;
       routeLayerRef.current = null;
@@ -52,6 +59,15 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
       setReady(false);
     };
   }, []);
+
+  // Recalcula el tamaño del mapa cuando cambia el de la ventana (rotar el móvil,
+  // teclado, etc.), otra causa de mapa "en blanco".
+  useEffect(() => {
+    if (!ready) return;
+    const onResize = () => mapRef.current?.invalidateSize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [ready]);
 
   // Paradas + ruta (se redibujan cuando cambia el orden; encuadra paradas + tú).
   useEffect(() => {
@@ -141,7 +157,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
 
   return (
     <div className="relative">
-      <div ref={elRef} style={{ height, width: "100%" }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200" />
+      <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />
       <button
         type="button"
         onClick={recenter}
