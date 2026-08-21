@@ -208,7 +208,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
         type="button"
         onClick={recenter}
         aria-label="Centrar en mi ubicación"
-        className="absolute bottom-3 right-3 z-[400] grid h-11 w-11 place-items-center rounded-full border border-gray-200 bg-white text-brand shadow-lg active:scale-95"
+        className="absolute bottom-3 right-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-gray-200 bg-white text-brand shadow-lg active:scale-95"
       >
         <Crosshair className="h-5 w-5" />
       </button>

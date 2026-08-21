@@ -255,7 +255,7 @@ function NavSheet({ stop, upcoming, onDeliver }: { stop: OptimizedStop; upcoming
   const nav = navUrl(stop);
   const min = etaMin(stop);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-[500] max-h-[62%] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
+    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[62%] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
       <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
