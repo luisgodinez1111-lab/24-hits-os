@@ -64,6 +64,15 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
           // Igual que Leaflet: recalcular tamaño por si el contenedor arrancó sin él.
           [0, 150, 400].forEach((ms) => resizeTimers.push(setTimeout(() => mapRef.current?.resize(), ms)));
 
+          // Watchdog de tiles: si el worker no procesa ningún tile vectorial en 7s
+          // (solo se ve el fondo "crema"), caemos a 2D.
+          let tilesOk = false;
+          const tilesTimer = setTimeout(() => { if (!tilesOk) fail(); }, 7000);
+          resizeTimers.push(tilesTimer);
+          map.on("sourcedata", (e: { sourceId?: string; isSourceLoaded?: boolean }) => {
+            if (e.sourceId === "openmaptiles" && e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
+          });
+
         // Edificios en 3D (fill-extrusion) — la sensación "Google 3D".
         try {
           const layers = (map.getStyle().layers ?? []) as Array<{ id: string; type: string }>;

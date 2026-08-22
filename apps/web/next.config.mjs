@@ -22,7 +22,9 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   // Los paquetes internos se consumen como fuente y los transpila Next.
-  transpilePackages: ["@24hits/ui", "@24hits/contracts"],
+  // maplibre-gl: transpilado para que Next resuelva su Web Worker (si no, los
+  // tiles vectoriales no se renderizan y solo se ve el fondo).
+  transpilePackages: ["@24hits/ui", "@24hits/contracts", "maplibre-gl"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
