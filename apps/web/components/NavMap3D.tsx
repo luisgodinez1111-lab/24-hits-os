@@ -5,35 +5,35 @@ import type { ExpressionSpecification, Map as MlMap, Marker as MlMarker } from "
 import { Crosshair } from "lucide-react";
 import type { LatLng } from "@/lib/route";
 
-// Estilo vectorial oscuro PROFESIONAL (CARTO dark-matter, gratis, sin token) —
-// look nocturno tipo Uber. Mucho más premium que un mapa claro genérico.
-const STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-const VECTOR_SOURCE = "carto"; // nombre del source vectorial de este estilo
+// Motor MapLibre GL (open source, sin terceros de pago). Cargado desde CDN para
+// que su worker se auto-resuelva.
+const MAPLIBRE_JS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+const MAPLIBRE_CSS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
 
-// v4 trae build UMD (define window.maplibregl) y su worker se auto-resuelve
-// desde el CDN. La v6 es solo ESM (sin UMD) y por eso no cargaba por <script>.
-const CDN_JS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
-const CDN_CSS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
+// Estilo del mapa. Se toma de NEXT_PUBLIC_MAP_STYLE_URL → apunta a TU estilo
+// self-hosted (tiles propios) cuando lo tengas. Si no, respaldo oscuro gratuito.
+const FALLBACK_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const STYLE = process.env.NEXT_PUBLIC_MAP_STYLE_URL || FALLBACK_DARK;
 
 declare global {
   interface Window { maplibregl?: typeof import("maplibre-gl"); }
 }
 
 let loaderPromise: Promise<typeof import("maplibre-gl")> | null = null;
-function loadMapLibre(): Promise<typeof import("maplibre-gl")> {
+function loadGl(): Promise<typeof import("maplibre-gl")> {
   if (typeof window === "undefined") return Promise.reject(new Error("sin window"));
   if (window.maplibregl) return Promise.resolve(window.maplibregl);
   if (loaderPromise) return loaderPromise;
   loaderPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector("link[data-maplibre]")) {
+    if (!document.querySelector('link[data-gl="maplibre"]')) {
       const link = document.createElement("link");
-      link.rel = "stylesheet"; link.href = CDN_CSS; link.setAttribute("data-maplibre", "1");
+      link.rel = "stylesheet"; link.href = MAPLIBRE_CSS; link.setAttribute("data-gl", "maplibre");
       document.head.appendChild(link);
     }
     const script = document.createElement("script");
-    script.src = CDN_JS; script.async = true;
+    script.src = MAPLIBRE_JS; script.async = true;
     script.onload = () => (window.maplibregl ? resolve(window.maplibregl) : reject(new Error("maplibregl no definido")));
-    script.onerror = () => reject(new Error("no se pudo cargar maplibre-gl desde el CDN"));
+    script.onerror = () => reject(new Error("no se pudo cargar el motor de mapa desde el CDN"));
     document.head.appendChild(script);
   });
   return loaderPromise;
@@ -85,7 +85,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
 
     void (async () => {
       try {
-        const maplibregl = await loadMapLibre();
+        const maplibregl = await loadGl();
         if (cancelled || !elRef.current || mapRef.current) return;
         const center: [number, number] = driver ? [driver.lng, driver.lat] : [-106.069, 28.632];
         const map = new maplibregl.Map({
@@ -124,8 +124,10 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
           let tilesOk = false;
           const tilesTimer = setTimeout(() => { if (!tilesOk) fail(); }, 7000);
           resizeTimers.push(tilesTimer);
-          map.on("sourcedata", (e: { sourceId?: string; isSourceLoaded?: boolean }) => {
-            if (e.sourceId === VECTOR_SOURCE && e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
+          map.on("sourcedata", (e: { isSourceLoaded?: boolean }) => {
+            // Cualquier source vectorial que cargue = el motor funciona (robusto
+            // ante cualquier estilo, propio o de respaldo).
+            if (e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
           });
 
           const mapAny = map as unknown as { setSky?: (s: unknown) => void; setLight?: (l: unknown) => void };
@@ -144,14 +146,17 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
             }
           } catch { /* estilo sin símbolos */ }
 
-          // Edificios 3D con degradado por altura + sombreado vertical.
+          // Edificios 3D con degradado por altura + sombreado vertical. Detecta el
+          // source de edificios del estilo (propio o de respaldo) automáticamente.
           try {
-            const layers = (map.getStyle().layers ?? []) as Array<{ id: string; type: string }>;
+            const layers = (map.getStyle().layers ?? []) as Array<{ id: string; type: string; source?: string; "source-layer"?: string }>;
             const firstSymbol = layers.find((l) => l.type === "symbol")?.id;
+            const bLayer = layers.find((l) => l["source-layer"] === "building" && l.source);
+            const bSource = bLayer?.source ?? "carto";
             const H = ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 3], 3], 12] as ExpressionSpecification;
             map.addLayer(
               {
-                id: "3d-buildings", source: VECTOR_SOURCE, "source-layer": "building", type: "fill-extrusion", minzoom: 13,
+                id: "3d-buildings", source: bSource, "source-layer": "building", type: "fill-extrusion", minzoom: 13,
                 paint: {
                   // Edificios oscuros con degradado por altura (más alto = más claro).
                   "fill-extrusion-color": ["interpolate", ["linear"], H, 0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"] as ExpressionSpecification,
@@ -279,7 +284,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const maplibregl = await loadMapLibre().catch(() => null);
+      const maplibregl = await loadGl().catch(() => null);
       if (cancelled || !maplibregl) return;
       applyDriver(maplibregl);
       applyDest(maplibregl);
