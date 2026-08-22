@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
+import type { ExpressionSpecification, Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import type { LatLng } from "@/lib/route";
 
-// Estilo vectorial gratuito (sin token). OpenFreeMap = tiles OSM vectoriales.
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// Estilo vectorial gratuito (sin token). "positron" = base minimalista (gris
+// claro, calles sutiles) tipo Uber — mucho más limpio que "liberty".
+const STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 // Cargamos MapLibre desde CDN (no desde el bundle) para que su Web Worker se
 // auto-resuelva desde la URL del CDN. Con el bundler de Next el worker no cargaba
@@ -73,9 +74,11 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
           container: elRef.current,
           style: STYLE,
           center,
-          zoom: 17,
-          pitch: 60, // inclinación 3D (0 = plano, 60 = muy inclinado)
+          zoom: 17.5,
+          pitch: 62, // inclinación 3D cinematográfica
+          maxPitch: 85,
           bearing: 0,
+          antialias: true, // bordes suaves en los edificios 3D
           attributionControl: { compact: true },
         });
         mapRef.current = map;
@@ -104,32 +107,47 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
             if (e.sourceId === "openmaptiles" && e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
           });
 
-        // Edificios en 3D (fill-extrusion) — la sensación "Google 3D".
+        const mapAny = map as unknown as {
+          setSky?: (s: unknown) => void;
+          setLight?: (l: unknown) => void;
+        };
+
+        // Cielo con atmósfera → profundidad y horizonte reales (sensación 3D).
+        try { mapAny.setSky?.({ "sky-color": "#a9c8ff", "horizon-color": "#eaf1fb", "fog-color": "#eef2f7", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.4, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.9, 12, 0.3] }); } catch { /* estilos/versiones sin sky */ }
+
+        // Iluminación direccional → volumen y sombreado en los edificios.
+        try { mapAny.setLight?.({ anchor: "viewport", color: "#ffffff", intensity: 0.5, position: [1.4, 210, 30] }); } catch { /* opcional */ }
+
+        // Edificios en 3D con degradado por altura + sombreado vertical.
         try {
           const layers = (map.getStyle().layers ?? []) as Array<{ id: string; type: string }>;
           const firstSymbol = layers.find((l) => l.type === "symbol")?.id;
+          const H = ["coalesce", ["get", "render_height"], ["*", ["coalesce", ["get", "building:levels"], 3], 3], 9] as ExpressionSpecification;
           map.addLayer(
             {
               id: "3d-buildings",
               source: "openmaptiles",
               "source-layer": "building",
               type: "fill-extrusion",
-              minzoom: 14,
+              minzoom: 13,
               paint: {
-                "fill-extrusion-color": "#c9ccd3",
-                "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
-                "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-                "fill-extrusion-opacity": 0.65,
+                // Más altos = un poco más oscuros → sensación de profundidad.
+                "fill-extrusion-color": ["interpolate", ["linear"], H, 0, "#eef0f4", 25, "#dfe3ea", 80, "#cbd1db", 200, "#b9c0cc"] as ExpressionSpecification,
+                "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13, 0, 15.5, H] as ExpressionSpecification,
+                "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0] as ExpressionSpecification,
+                "fill-extrusion-opacity": 0.92,
+                "fill-extrusion-vertical-gradient": true,
               },
             },
             firstSymbol
           );
         } catch { /* si el estilo no trae edificios, se omite */ }
 
-        // Fuente + capas de la ruta (casing blanco + línea oscura).
+        // Ruta estilo Uber: glow azul suave + línea azul nítida encima.
         map.addSource("route", { type: "geojson", data: emptyLine() });
-        map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ffffff", "line-width": 11 } });
-        map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#111827", "line-width": 6 } });
+        map.addLayer({ id: "route-glow", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#3b82f6", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 8, 18, 22], "line-opacity": 0.28, "line-blur": 6 } });
+        map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#1e40af", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 6, 18, 14] } });
+        map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#3b82f6", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 3.5, 18, 9] } });
 
         applyRoute();
         applyDriver(maplibregl);
@@ -172,8 +190,13 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     if (!driver) { driverRef.current?.remove(); driverRef.current = null; return; }
     if (!driverRef.current) {
       const el = document.createElement("div");
-      el.innerHTML = `<div style="width:34px;height:34px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center">
-        <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:13px solid #fff;margin-top:-2px"></div></div>`;
+      // Puck de navegación tipo Uber: halo azul suave + disco con degradado y
+      // flecha (SVG) blanca. Se acuesta en el piso (rotationAlignment: map).
+      el.innerHTML = `<div style="position:relative;width:44px;height:44px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.35),rgba(59,130,246,0))"></div>
+        <div style="position:absolute;left:7px;top:7px;width:30px;height:30px;border-radius:50%;background:linear-gradient(180deg,#3b82f6,#1d4ed8);border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L20 21 L12 16 L4 21 Z"/></svg>
+        </div></div>`;
       driverRef.current = new maplibregl.Marker({ element: el, rotationAlignment: "map", pitchAlignment: "map" })
         .setLngLat([driver.lng, driver.lat]).addTo(map);
     } else {
