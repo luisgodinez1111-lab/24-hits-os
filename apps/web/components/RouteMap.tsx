@@ -42,7 +42,16 @@ async function fetchStreetGeometry(pts: LatLng[]): Promise<[number, number][] | 
 // Mapa navegador de la ruta (estilo Uber): base minimalista, tu posición EN VIVO
 // con halo que late, el destino como pin negro y el recorrido trazado por las
 // calles. Se muestra SIEMPRE — sin paradas centra en tu ubicación.
-export function RouteMap({ legs, driver, geometry, follow = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; geometry?: [number, number][] | null; follow?: boolean; height?: string }) {
+// Marcador del repartidor: flecha azul que apunta al rumbo (modo conducción) o
+// punto con halo cuando no hay rumbo (quieto).
+function driverIconHtml(heading: number | null): string {
+  if (heading == null) return `<div class="driver-dot"></div>`;
+  return `<div style="transform:rotate(${heading}deg);width:32px;height:32px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center">
+    <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:12px solid #fff;margin-top:-2px"></div>
+  </div>`;
+}
+
+export function RouteMap({ legs, driver, heading = null, geometry, follow = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; heading?: number | null; geometry?: [number, number][] | null; follow?: boolean; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const routeLayerRef = useRef<LayerGroup | null>(null);
@@ -50,6 +59,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   const LRef = useRef<typeof import("leaflet") | null>(null);
   const driverPos = useRef<LatLng | null>(null); // última posición para "recentrar"
   const didFitOnce = useRef(false); // primer encuadre en tu ubicación
+  const followZoomed = useRef(false); // ya se hizo el zoom de conducción
   const [ready, setReady] = useState(false);
   const [fallbackGeom, setFallbackGeom] = useState<[number, number][] | null>(null); // trazo por calles del cliente
   const [streetStatus, setStreetStatus] = useState<"idle" | "loading" | "ok" | "failed">("idle");
@@ -193,19 +203,26 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
       return;
     }
     driverPos.current = driver;
+    const icon = L.divIcon({ className: "", html: driverIconHtml(follow ? heading : null), iconSize: [32, 32], iconAnchor: [16, 16] });
     if (!driverRef.current) {
-      const dot = L.divIcon({ className: "", html: `<div class="driver-dot"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
-      driverRef.current = L.marker([driver.lat, driver.lng], { icon: dot, zIndexOffset: 1000 }).addTo(map).bindPopup("Tú (repartidor)");
+      driverRef.current = L.marker([driver.lat, driver.lng], { icon, zIndexOffset: 1000 }).addTo(map).bindPopup("Tú (repartidor)");
       if (!didFitOnce.current && legs.length === 0) {
         map.setView([driver.lat, driver.lng], 15);
         didFitOnce.current = true;
       }
     } else {
       driverRef.current.setLatLng([driver.lat, driver.lng]);
+      driverRef.current.setIcon(icon);
     }
-    // Modo navegación: el mapa persigue al repartidor (zoom cercano), como Uber.
-    if (follow) map.setView([driver.lat, driver.lng], Math.max(map.getZoom(), 16), { animate: true });
-  }, [ready, driver, follow, legs.length]);
+    // Modo navegación (conducción): zoom cercano la 1ª vez, luego paneo SUAVE
+    // siguiéndote — así se ve el mapa desplazándose por las calles, no a saltos.
+    if (follow) {
+      if (!followZoomed.current) { map.setView([driver.lat, driver.lng], 17, { animate: true }); followZoomed.current = true; }
+      else map.panTo([driver.lat, driver.lng], { animate: true, duration: 0.7 });
+    } else {
+      followZoomed.current = false;
+    }
+  }, [ready, driver, heading, follow, legs.length]);
 
   const recenter = () => {
     const map = mapRef.current;

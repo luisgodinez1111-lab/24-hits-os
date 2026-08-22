@@ -53,6 +53,19 @@ function arrivalAt(min: number): string {
   return new Date(Date.now() + min * 60000).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
+// Rumbo en grados (0=N, 90=E) del punto a al b. null si casi no hubo movimiento
+// (evita que la flecha gire errático estando quieto).
+function bearing(a: LatLng, b: LatLng): number | null {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const dLng = toRad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(toRad(b.lat));
+  const x = Math.cos(toRad(a.lat)) * Math.sin(toRad(b.lat)) - Math.sin(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.cos(dLng);
+  // Movimiento mínimo ~5 m para considerar el rumbo válido.
+  if (Math.abs(b.lat - a.lat) < 0.00004 && Math.abs(b.lng - a.lng) < 0.00004) return null;
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
 // Convierte una parada sin coordenadas en OptimizedStop (prioridad calculada en el front).
 function toOptStop(s: DeliveryStop): OptimizedStop {
   const minutesPending = Math.round((Date.now() - new Date(s.createdAt).getTime()) / 60000);
@@ -68,6 +81,7 @@ export default function RoutePage() {
   const [deliverStop, setDeliverStop] = useState<OptimizedStop | null>(null);
   const [navMode, setNavMode] = useState(false); // modo navegación in-app (mapa sigue al repartidor)
   const [voiceOn, setVoiceOn] = useState(true); // instrucciones habladas
+  const [heading, setHeading] = useState<number | null>(null); // rumbo (grados) para la flecha
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -79,11 +93,20 @@ export default function RoutePage() {
   // (la ruta NO se recalcula en cada tick — eso es bajo demanda, con Recalcular).
   // Además emite la ubicación (throttled ~10s) para el seguimiento del dueño.
   const lastSent = useRef(0);
+  const lastPos = useRef<LatLng | null>(null);
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) { setGeoMsg("Este dispositivo no permite ubicación."); return; }
     const id = navigator.geolocation.watchPosition(
       (p) => {
         const c = { lat: p.coords.latitude, lng: p.coords.longitude };
+        // Rumbo: el del GPS si viene; si no, se calcula del desplazamiento.
+        const gpsHeading = typeof p.coords.heading === "number" && !Number.isNaN(p.coords.heading) ? p.coords.heading : null;
+        if (gpsHeading != null) setHeading(gpsHeading);
+        else if (lastPos.current) {
+          const moved = bearing(lastPos.current, c);
+          if (moved != null) setHeading(moved);
+        }
+        lastPos.current = c;
         setPos(c);
         setStart((s) => s ?? c);
         setGeoMsg(null);
@@ -169,7 +192,7 @@ export default function RoutePage() {
           </span>
         </div>
         <div className="relative">
-          <RouteMap legs={legs} driver={pos} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
+          <RouteMap legs={legs} driver={pos} heading={heading} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
           <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
         </div>
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
