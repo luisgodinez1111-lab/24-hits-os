@@ -2,11 +2,40 @@
 
 import { useEffect, useRef } from "react";
 import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 import type { LatLng } from "@/lib/route";
 
 // Estilo vectorial gratuito (sin token). OpenFreeMap = tiles OSM vectoriales.
 const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
+// Cargamos MapLibre desde CDN (no desde el bundle) para que su Web Worker se
+// auto-resuelva desde la URL del CDN. Con el bundler de Next el worker no cargaba
+// y los tiles no se dibujaban (solo el fondo). Este patrón evita ese problema.
+const CDN_JS = "https://cdn.jsdelivr.net/npm/maplibre-gl@6.5.0/dist/maplibre-gl.js";
+const CDN_CSS = "https://cdn.jsdelivr.net/npm/maplibre-gl@6.5.0/dist/maplibre-gl.css";
+
+declare global {
+  interface Window { maplibregl?: typeof import("maplibre-gl"); }
+}
+
+let loaderPromise: Promise<typeof import("maplibre-gl")> | null = null;
+function loadMapLibre(): Promise<typeof import("maplibre-gl")> {
+  if (typeof window === "undefined") return Promise.reject(new Error("sin window"));
+  if (window.maplibregl) return Promise.resolve(window.maplibregl);
+  if (loaderPromise) return loaderPromise;
+  loaderPromise = new Promise((resolve, reject) => {
+    if (!document.querySelector("link[data-maplibre]")) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet"; link.href = CDN_CSS; link.setAttribute("data-maplibre", "1");
+      document.head.appendChild(link);
+    }
+    const script = document.createElement("script");
+    script.src = CDN_JS; script.async = true;
+    script.onload = () => (window.maplibregl ? resolve(window.maplibregl) : reject(new Error("maplibregl no definido")));
+    script.onerror = () => reject(new Error("no se pudo cargar maplibre-gl desde el CDN"));
+    document.head.appendChild(script);
+  });
+  return loaderPromise;
+}
 
 // Mapa de navegación 3D (estilo Google más nuevo): MapLibre GL con vista
 // inclinada (pitch), rotación heading-up y edificios en 3D. Motor vectorial.
@@ -35,7 +64,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     const fail = () => { if (!erroredOnce) { erroredOnce = true; onError?.(); } };
     void (async () => {
       try {
-        const maplibregl = await import("maplibre-gl");
+        const maplibregl = await loadMapLibre();
         if (cancelled || !elRef.current || mapRef.current) return;
         const center: [number, number] = driver ? [driver.lng, driver.lat] : [-106.069, 28.632];
         const map = new maplibregl.Map({
@@ -181,7 +210,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const maplibregl = await import("maplibre-gl");
+      const maplibregl = await loadMapLibre();
       if (cancelled) return;
       applyDriver(maplibregl);
       applyDest(maplibregl);
