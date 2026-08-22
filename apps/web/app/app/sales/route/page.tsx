@@ -3,13 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Crosshair, MapPin, Navigation2, Phone, Route as RouteIcon, X } from "lucide-react";
+import {
+  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, CornerUpLeft, CornerUpRight, Crosshair,
+  Flag, MapPin, Navigation2, Phone, RefreshCw, RotateCcw, Route as RouteIcon,
+  Volume2, VolumeX, X, type LucideIcon,
+} from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 import { navUrl, type LatLng, type Leg } from "@/lib/route";
+import { fmtDist, type ManeuverIcon } from "@/lib/navigation";
+import { useNavGuidance } from "@/lib/useNavGuidance";
 import { DeliverDialog } from "@/components/DeliverDialog";
+
+// Ícono de la maniobra (flecha de giro).
+const MANEUVER_ICONS: Record<ManeuverIcon, LucideIcon> = {
+  straight: ArrowUp, left: CornerUpLeft, right: CornerUpRight,
+  "slight-left": ArrowUpLeft, "slight-right": ArrowUpRight,
+  "sharp-left": CornerUpLeft, "sharp-right": CornerUpRight,
+  uturn: RotateCcw, roundabout: RefreshCw, depart: Navigation2, arrive: Flag, merge: ArrowUp,
+};
 
 // El mapa solo en cliente (Leaflet usa window).
 const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
@@ -53,6 +67,7 @@ export default function RoutePage() {
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
   const [deliverStop, setDeliverStop] = useState<OptimizedStop | null>(null);
   const [navMode, setNavMode] = useState(false); // modo navegación in-app (mapa sigue al repartidor)
+  const [voiceOn, setVoiceOn] = useState(true); // instrucciones habladas
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -101,27 +116,60 @@ export default function RoutePage() {
   const nextStop = stops[0] ?? null; // el siguiente pedido más cercano/prioritario
   const restStops = stops.slice(1);
 
-  // MODO NAVEGACIÓN (in-app): mapa a pantalla casi completa que sigue tu punto
-  // azul + bottom-sheet con el siguiente pedido, distancia, tiempo y ETA + las
-  // próximas paradas (para saber la secuencia cuando llevas 20-30 pedidos).
+  // Guía turn-by-turn hacia el siguiente pedido (maniobras + voz). Se llama
+  // SIEMPRE (regla de hooks); solo trabaja cuando navMode está activo.
+  const navDest = nextStop && nextStop.deliveryLat != null && nextStop.deliveryLng != null
+    ? { lat: nextStop.deliveryLat, lng: nextStop.deliveryLng }
+    : null;
+  const guidance = useNavGuidance(pos, navDest, navMode, voiceOn);
+
+  // MODO NAVEGACIÓN (in-app): banner de maniobra (gira aquí / sigue derecho) +
+  // mapa que te sigue con el trazo por calles + bottom-sheet del pedido.
   if (navMode && nextStop) {
     const upcoming = [...restStops, ...noCoords.map(toOptStop)];
+    const ManeuverIco = guidance.maneuver ? MANEUVER_ICONS[guidance.maneuver.icon] : Navigation2;
     return (
       <div>
+        {/* Banner de maniobra (estilo Google/Uber): qué hacer y a cuántos metros. */}
+        <div className="mb-2 flex items-center gap-3 rounded-2xl bg-gray-900 p-4 text-white shadow-md">
+          <ManeuverIco className="h-9 w-9 shrink-0" />
+          <div className="min-w-0 flex-1">
+            {guidance.arrived ? (
+              <p className="text-lg font-bold leading-tight">Llegaste a {nextStop.customer?.name ?? "tu destino"}</p>
+            ) : guidance.maneuver ? (
+              <>
+                <p className="text-2xl font-extrabold leading-none tabular-nums">{guidance.distToNext != null ? fmtDist(guidance.distToNext) : ""}</p>
+                <p className="truncate text-sm text-gray-200">{guidance.maneuver.text}</p>
+              </>
+            ) : guidance.loading ? (
+              <p className="text-sm text-gray-200">Calculando indicaciones…</p>
+            ) : guidance.failed ? (
+              <p className="text-sm text-amber-300">Sin indicaciones por voz (motor no disponible). Sigue la línea del mapa.</p>
+            ) : (
+              <p className="text-sm text-gray-200">Dirígete al destino</p>
+            )}
+          </div>
+          <button
+            onClick={() => setVoiceOn((v) => !v)}
+            aria-label={voiceOn ? "Silenciar voz" : "Activar voz"}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95"
+          >
+            {voiceOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5 text-gray-400" />}
+          </button>
+        </div>
+
         <div className="mb-3 flex items-center justify-between gap-2">
           <button onClick={() => setNavMode(false)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 active:scale-95">
             <X className="h-4 w-4" /> Salir
           </button>
-          <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">
-            Parada 1 de {total}
-          </span>
+          <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">Parada 1 de {total}</span>
           <span className="hidden text-sm font-medium text-gray-500 sm:inline">
             {route?.totalKm ? `~${route.totalKm.toFixed(1)} km` : ""}
             {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""} en total
           </span>
         </div>
         <div className="relative">
-          <RouteMap legs={legs} driver={pos} geometry={route?.geometry ?? null} follow height="72vh" />
+          <RouteMap legs={legs} driver={pos} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
           <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
         </div>
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
