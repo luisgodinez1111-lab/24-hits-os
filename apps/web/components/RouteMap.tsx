@@ -91,21 +91,21 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   }, [ready]);
 
   // Trazo por CALLES del cliente: si el backend NO manda geometría, la pedimos al
-  // motor público desde el navegador (mirror del backend: desde tu posición por
-  // las paradas en orden). Se refresca solo cuando cambia la ruta, no con el GPS.
+  // motor público desde el navegador (desde tu posición por las paradas en orden).
+  // Clave redondeada del GPS (~100 m) para refrescar al avanzar sin saturar.
+  const driverKey = driver ? `${driver.lat.toFixed(3)},${driver.lng.toFixed(3)}` : "";
   useEffect(() => {
     if (geometry && geometry.length >= 2) { setFallbackGeom(null); return; }
     const stops = legs.map((l) => l.stop).filter((s) => s.deliveryLat != null && s.deliveryLng != null);
-    if (stops.length < 1) { setFallbackGeom(null); return; }
     const waypoints: LatLng[] = [];
-    if (driverPos.current) waypoints.push(driverPos.current);
+    if (driver) waypoints.push({ lat: driver.lat, lng: driver.lng });
     for (const s of stops) waypoints.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
     if (waypoints.length < 2) { setFallbackGeom(null); return; }
     let cancelled = false;
     void fetchStreetGeometry(waypoints).then((g) => { if (!cancelled) setFallbackGeom(g); });
     return () => { cancelled = true; };
-    // Nota: intencionalmente NO dependemos de `driver` para no refetch en cada tick.
-  }, [legs, geometry]);
+    // driverKey redondeado: refetch al moverte ~100 m, no en cada tick.
+  }, [legs, geometry, driverKey]);
 
   // Paradas + ruta (se redibujan cuando cambia el orden o el trazo).
   useEffect(() => {
