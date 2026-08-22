@@ -188,9 +188,14 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
             if (m && t) {
               if (!animRef.current) animRef.current = { ...t };
               const a = animRef.current;
-              const k = 0.16; // suavizado (más alto = más pegado al GPS)
-              a.lat += (t.lat - a.lat) * k;
-              a.lng += (t.lng - a.lng) * k;
+              const k = 0.25; // suavizado (más alto = más pegado al GPS, menos lag)
+              // Salto grande (>~45 m): ir DIRECTO, sin arrastrar → exactitud.
+              if (Math.abs(t.lat - a.lat) > 0.0004 || Math.abs(t.lng - a.lng) > 0.0004) {
+                a.lat = t.lat; a.lng = t.lng;
+              } else {
+                a.lat += (t.lat - a.lat) * k;
+                a.lng += (t.lng - a.lng) * k;
+              }
               const db = ((t.bearing - a.bearing + 540) % 360) - 180; // giro por el camino corto
               a.bearing = (a.bearing + db * k + 360) % 360;
               driverRef.current?.setLngLat([a.lng, a.lat]);

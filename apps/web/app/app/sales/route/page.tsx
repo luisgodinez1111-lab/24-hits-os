@@ -88,6 +88,7 @@ export default function RoutePage() {
   const [voiceOn, setVoiceOn] = useState(true); // instrucciones habladas
   const [heading, setHeading] = useState<number | null>(null); // rumbo (grados) para la flecha
   const [headingUp, setHeadingUp] = useState(true); // rotación cámara detrás del carro
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null); // precisión en metros
   const [map3dFailed, setMap3dFailed] = useState(false); // el 3D no cargó → usar Leaflet
   const startNav = () => { setMap3dFailed(false); setNavMode(true); };
 
@@ -107,6 +108,7 @@ export default function RoutePage() {
     const id = navigator.geolocation.watchPosition(
       (p) => {
         const c = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setGpsAccuracy(typeof p.coords.accuracy === "number" ? p.coords.accuracy : null);
         // Rumbo: el del GPS si viene; si no, se calcula del desplazamiento.
         const gpsHeading = typeof p.coords.heading === "number" && !Number.isNaN(p.coords.heading) ? p.coords.heading : null;
         if (gpsHeading != null) setHeading(gpsHeading);
@@ -125,7 +127,7 @@ export default function RoutePage() {
         }
       },
       () => setGeoMsg("Activa el permiso de ubicación para verte en el mapa. Mientras, la ruta arranca desde el primer pedido."),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } // maximumAge:0 = nunca cacheado
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
@@ -200,6 +202,11 @@ export default function RoutePage() {
               <X className="h-4 w-4" /> Salir
             </button>
             <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-brand shadow">Parada 1 de {total}</span>
+            {gpsAccuracy != null && gpsAccuracy > 50 && (
+              <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow" title="Precisión del GPS de tu dispositivo">
+                GPS ±{Math.round(gpsAccuracy)} m
+              </span>
+            )}
             <div className="ml-auto flex items-center gap-2">
               <button onClick={() => setMap3dFailed((v) => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow active:scale-95">
                 {map3dFailed ? "3D" : "2D"}
