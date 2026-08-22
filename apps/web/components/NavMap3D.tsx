@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ExpressionSpecification, Map as MlMap, Marker as MlMarker } from "maplibre-gl";
+import { Crosshair } from "lucide-react";
 import type { LatLng } from "@/lib/route";
 
 // Estilo vectorial gratuito (sin token). "positron" = base minimalista (gris
@@ -63,6 +64,8 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
   const rafRef = useRef<number | null>(null);
   const headingUpRef = useRef(headingUp);
   headingUpRef.current = headingUp;
+  const userMovedRef = useRef(false); // el usuario tomó control del mapa (pausa follow)
+  const [paused, setPaused] = useState(false); // muestra botón "recentrar"
 
   // Init (una vez).
   useEffect(() => {
@@ -72,10 +75,11 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     let erroredOnce = false;
     const fail = () => { if (!erroredOnce) { erroredOnce = true; onError?.(); } };
 
-    // Padding: coloca el centro (el conductor) en el TERCIO INFERIOR → ves adelante.
+    // Padding: coloca al conductor ~1/3 desde arriba → ves mucho camino adelante
+    // y queda por ENCIMA de la tarjeta de entrega (bottom) y del banner (top).
     const padding = () => {
       const h = elRef.current?.clientHeight ?? 480;
-      return { top: Math.round(h * 0.58), bottom: 24, left: 0, right: 0 };
+      return { top: Math.round(h * 0.10), bottom: Math.round(h * 0.45), left: 0, right: 0 };
     };
 
     void (async () => {
@@ -99,6 +103,14 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
         failTimer = setTimeout(() => { if (!readyRef.current) fail(); }, 9000);
         map.on("error", (e: { error?: { message?: string } }) => {
           if (!readyRef.current && (e?.error?.message ?? "")) fail();
+        });
+
+        // Si el usuario arrastra/zoom/rota con el dedo, pausamos el auto-seguimiento
+        // (si no, el mapa "se le escapa"). Reanuda con el botón recentrar.
+        (["dragstart", "zoomstart", "rotatestart", "pitchstart"] as const).forEach((ev) => {
+          map.on(ev, (e: { originalEvent?: unknown }) => {
+            if (e && e.originalEvent) { userMovedRef.current = true; setPaused(true); }
+          });
         });
 
         map.on("load", () => {
@@ -183,7 +195,10 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
               a.bearing = (a.bearing + db * k + 360) % 360;
               driverRef.current?.setLngLat([a.lng, a.lat]);
               driverRef.current?.setRotation(a.bearing);
-              m.jumpTo({ center: [a.lng, a.lat], bearing: headingUpRef.current ? a.bearing : 0, pitch: PITCH, padding: padding() });
+              // Mueve la cámara solo si el usuario NO tomó control (si no, lo pisa).
+              if (!userMovedRef.current) {
+                m.jumpTo({ center: [a.lng, a.lat], bearing: headingUpRef.current ? a.bearing : 0, pitch: PITCH, padding: padding() });
+              }
             }
             rafRef.current = requestAnimationFrame(tick);
           };
@@ -270,5 +285,24 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     return () => { cancelled = true; };
   }, [driver?.lat, driver?.lng, heading, destination?.lat, destination?.lng]);
 
-  return <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />;
+  const recenter = () => {
+    userMovedRef.current = false;
+    setPaused(false);
+    const m = mapRef.current;
+    const a = animRef.current;
+    if (m && a) m.easeTo({ center: [a.lng, a.lat], zoom: 18, pitch: PITCH, bearing: headingUpRef.current ? a.bearing : 0, duration: 500 });
+  };
+
+  return (
+    <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden bg-gray-100">
+      {paused && (
+        <button
+          onClick={recenter}
+          className="absolute bottom-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand shadow-lg active:scale-95"
+        >
+          <Crosshair className="h-4 w-4" /> Recentrar
+        </button>
+      )}
+    </div>
+  );
 }

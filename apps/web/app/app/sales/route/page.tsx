@@ -160,69 +160,60 @@ export default function RoutePage() {
     const upcoming = [...restStops, ...noCoords.map(toOptStop)];
     const ManeuverIco = guidance.maneuver ? MANEUVER_ICONS[guidance.maneuver.icon] : Navigation2;
     return (
-      <div>
-        {/* Banner de maniobra (estilo Google/Uber): qué hacer y a cuántos metros. */}
-        <div className="mb-2 flex items-center gap-3 rounded-2xl bg-gray-900 p-4 text-white shadow-md">
-          <ManeuverIco className="h-9 w-9 shrink-0" />
-          <div className="min-w-0 flex-1">
-            {guidance.arrived ? (
-              <p className="text-lg font-bold leading-tight">Llegaste a {nextStop.customer?.name ?? "tu destino"}</p>
-            ) : guidance.maneuver ? (
-              <>
-                <p className="text-2xl font-extrabold leading-none tabular-nums">{guidance.distToNext != null ? fmtDist(guidance.distToNext) : ""}</p>
-                <p className="truncate text-sm text-gray-200">{guidance.maneuver.text}</p>
-              </>
-            ) : guidance.loading ? (
-              <p className="text-sm text-gray-200">Calculando indicaciones…</p>
-            ) : guidance.failed ? (
-              <p className="text-sm text-amber-300">Sin indicaciones por voz (motor no disponible). Sigue la línea del mapa.</p>
-            ) : (
-              <p className="text-sm text-gray-200">Dirígete al destino</p>
-            )}
-          </div>
-          <button
-            onClick={() => setVoiceOn((v) => !v)}
-            aria-label={voiceOn ? "Silenciar voz" : "Activar voz"}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95"
-          >
-            {voiceOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5 text-gray-400" />}
-          </button>
+      <div className="fixed inset-0 z-30 bg-gray-100">
+        {/* MAPA a pantalla completa (inmersivo, tipo Uber). */}
+        <div className="absolute inset-0">
+          {map3dFailed ? (
+            <RouteMap legs={legs} driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="100%" />
+          ) : (
+            <NavMap3D driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} destination={navDest} onError={() => setMap3dFailed(true)} height="100%" />
+          )}
         </div>
 
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <button onClick={() => setNavMode(false)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 active:scale-95">
-            <X className="h-4 w-4" /> Salir
-          </button>
-          <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-bold text-brand">Parada 1 de {total}</span>
-          <span className="hidden text-sm font-medium text-gray-500 sm:inline">
-            {route?.totalKm ? `~${route.totalKm.toFixed(1)} km` : ""}
-            {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""} en total
-          </span>
+        {/* OVERLAY SUPERIOR: banner de maniobra + controles, flotando sobre el mapa. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 space-y-2 p-3">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-gray-900/95 p-4 text-white shadow-lg backdrop-blur">
+            <ManeuverIco className="h-9 w-9 shrink-0" />
+            <div className="min-w-0 flex-1">
+              {guidance.arrived ? (
+                <p className="text-lg font-bold leading-tight">Llegaste a {nextStop.customer?.name ?? "tu destino"}</p>
+              ) : guidance.maneuver ? (
+                <>
+                  <p className="text-2xl font-extrabold leading-none tabular-nums">{guidance.distToNext != null ? fmtDist(guidance.distToNext) : ""}</p>
+                  <p className="truncate text-sm text-gray-200">{guidance.maneuver.text}</p>
+                </>
+              ) : guidance.loading ? (
+                <p className="text-sm text-gray-200">Calculando indicaciones…</p>
+              ) : guidance.failed ? (
+                <p className="text-sm text-amber-300">Sin indicaciones por voz. Sigue la línea del mapa.</p>
+              ) : (
+                <p className="text-sm text-gray-200">Dirígete al destino</p>
+              )}
+            </div>
+            <button onClick={() => setVoiceOn((v) => !v)} aria-label={voiceOn ? "Silenciar voz" : "Activar voz"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 active:scale-95">
+              {voiceOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5 text-gray-400" />}
+            </button>
+          </div>
+          {/* Controles: salir · parada · 2D/3D · brújula. */}
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button onClick={() => setNavMode(false)} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow active:scale-95">
+              <X className="h-4 w-4" /> Salir
+            </button>
+            <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-brand shadow">Parada 1 de {total}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => setMap3dFailed((v) => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow active:scale-95">
+                {map3dFailed ? "3D" : "2D"}
+              </button>
+              <button onClick={() => setHeadingUp((v) => !v)} aria-label="Rotación" className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white shadow active:scale-95">
+                <Compass className={`h-5 w-5 ${headingUp ? "text-brand" : "text-gray-500"}`} />
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="relative">
-          {map3dFailed ? (
-            <RouteMap legs={legs} driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
-          ) : (
-            <NavMap3D driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} destination={navDest} onError={() => setMap3dFailed(true)} height="64vh" />
-          )}
-          {/* Alterna 3D vectorial (MapLibre) / 2D (Leaflet), por si el 3D no carga. */}
-          <button
-            onClick={() => setMap3dFailed((v) => !v)}
-            className="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow-lg active:scale-95"
-          >
-            {map3dFailed ? "3D" : "2D"}
-          </button>
-          {/* Brújula: alterna cámara detrás del carro (heading-up) / norte arriba. */}
-          <button
-            onClick={() => setHeadingUp((v) => !v)}
-            aria-label={headingUp ? "Norte arriba" : "Cámara detrás del carro"}
-            title={headingUp ? "Cambiar a norte arriba" : "Cambiar a cámara detrás del carro"}
-            className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-gray-200 bg-white shadow-lg active:scale-95"
-          >
-            <Compass className={`h-5 w-5 ${headingUp ? "text-brand" : "text-gray-500"}`} />
-          </button>
-          <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
-        </div>
+
+        {/* TARJETA DE ENTREGA flotando sobre el mapa (integrada). */}
+        <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
+
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
       </div>
     );
