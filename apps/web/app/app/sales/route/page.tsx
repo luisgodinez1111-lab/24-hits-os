@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, CornerUpLeft, CornerUpRight, Crosshair,
+  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, Compass, CornerUpLeft, CornerUpRight, Crosshair,
   Flag, MapPin, Navigation2, Phone, RefreshCw, RotateCcw, Route as RouteIcon,
   Volume2, VolumeX, X, type LucideIcon,
 } from "lucide-react";
@@ -82,6 +82,7 @@ export default function RoutePage() {
   const [navMode, setNavMode] = useState(false); // modo navegación in-app (mapa sigue al repartidor)
   const [voiceOn, setVoiceOn] = useState(true); // instrucciones habladas
   const [heading, setHeading] = useState<number | null>(null); // rumbo (grados) para la flecha
+  const [headingUp, setHeadingUp] = useState(true); // rotación cámara detrás del carro
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -192,7 +193,16 @@ export default function RoutePage() {
           </span>
         </div>
         <div className="relative">
-          <RouteMap legs={legs} driver={pos} heading={heading} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
+          <RouteMap legs={legs} driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
+          {/* Brújula: alterna cámara detrás del carro (heading-up) / norte arriba. */}
+          <button
+            onClick={() => setHeadingUp((v) => !v)}
+            aria-label={headingUp ? "Norte arriba" : "Cámara detrás del carro"}
+            title={headingUp ? "Cambiar a norte arriba" : "Cambiar a cámara detrás del carro"}
+            className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-gray-200 bg-white shadow-lg active:scale-95"
+          >
+            <Compass className={`h-5 w-5 ${headingUp ? "text-brand" : "text-gray-500"}`} />
+          </button>
           <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
         </div>
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />

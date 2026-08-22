@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { LayerGroup, Map as LMap, Marker } from "leaflet";
+import type { LayerGroup, Map as LMap, MapOptions, Marker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Crosshair } from "lucide-react";
 import type { LatLng, Leg } from "@/lib/route";
@@ -51,7 +51,7 @@ function driverIconHtml(heading: number | null): string {
   </div>`;
 }
 
-export function RouteMap({ legs, driver, heading = null, geometry, follow = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; heading?: number | null; geometry?: [number, number][] | null; follow?: boolean; height?: string }) {
+export function RouteMap({ legs, driver, heading = null, geometry, follow = false, headingUp = false, height = "58vh" }: { legs: Leg[]; driver: LatLng | null; heading?: number | null; geometry?: [number, number][] | null; follow?: boolean; headingUp?: boolean; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const routeLayerRef = useRef<LayerGroup | null>(null);
@@ -70,9 +70,12 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
     const timers: ReturnType<typeof setTimeout>[] = [];
     void (async () => {
       const L = (await import("leaflet")).default;
+      await import("leaflet-rotate"); // parcha L.Map con rotación (setBearing)
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView([28.632, -106.069], 12);
+      // rotate: habilita heading-up (cámara detrás del carro). Sin gestos de
+      // rotación manual ni brújula del dispositivo: el rumbo lo fija el GPS.
+      const map = L.map(elRef.current, { zoomControl: true, attributionControl: true, rotate: true, rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false, bearing: 0 } as MapOptions).setView([28.632, -106.069], 12);
       // Base minimalista tipo Uber (CartoDB Positron), sin API key.
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
@@ -203,7 +206,11 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
       return;
     }
     driverPos.current = driver;
-    const icon = L.divIcon({ className: "", html: driverIconHtml(follow ? heading : null), iconSize: [32, 32], iconAnchor: [16, 16] });
+    // Con heading-up el mapa rota, así que la flecha va fija apuntando arriba;
+    // sin rotación, la flecha gira según el rumbo.
+    const rotating = follow && headingUp && heading != null;
+    const iconHeading = follow ? (rotating ? 0 : heading) : null;
+    const icon = L.divIcon({ className: "", html: driverIconHtml(iconHeading), iconSize: [32, 32], iconAnchor: [16, 16] });
     if (!driverRef.current) {
       driverRef.current = L.marker([driver.lat, driver.lng], { icon, zIndexOffset: 1000 }).addTo(map).bindPopup("Tú (repartidor)");
       if (!didFitOnce.current && legs.length === 0) {
@@ -214,6 +221,10 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
       driverRef.current.setLatLng([driver.lat, driver.lng]);
       driverRef.current.setIcon(icon);
     }
+    // Rotación heading-up (cámara detrás del carro): el mapa gira para que tu
+    // dirección de avance quede hacia arriba. Sin rotación → norte arriba.
+    const rot = map as unknown as { setBearing?: (d: number) => void };
+    if (rot.setBearing) rot.setBearing(rotating ? heading! : 0);
     // Modo navegación (conducción): zoom cercano la 1ª vez, luego paneo SUAVE
     // siguiéndote — así se ve el mapa desplazándose por las calles, no a saltos.
     if (follow) {
@@ -222,7 +233,7 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
     } else {
       followZoomed.current = false;
     }
-  }, [ready, driver, heading, follow, legs.length]);
+  }, [ready, driver, heading, follow, headingUp, legs.length]);
 
   const recenter = () => {
     const map = mapRef.current;
