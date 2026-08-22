@@ -5,9 +5,10 @@ import type { ExpressionSpecification, Map as MlMap, Marker as MlMarker } from "
 import { Crosshair } from "lucide-react";
 import type { LatLng } from "@/lib/route";
 
-// Estilo vectorial gratuito (sin token). "positron" = base minimalista (gris
-// claro, calles sutiles) tipo Uber — mucho más limpio que "liberty".
-const STYLE = "https://tiles.openfreemap.org/styles/positron";
+// Estilo vectorial oscuro PROFESIONAL (CARTO dark-matter, gratis, sin token) —
+// look nocturno tipo Uber. Mucho más premium que un mapa claro genérico.
+const STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const VECTOR_SOURCE = "carto"; // nombre del source vectorial de este estilo
 
 // v4 trae build UMD (define window.maplibregl) y su worker se auto-resuelve
 // desde el CDN. La v6 es solo ESM (sin UMD) y por eso no cargaba por <script>.
@@ -124,14 +125,14 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
           const tilesTimer = setTimeout(() => { if (!tilesOk) fail(); }, 7000);
           resizeTimers.push(tilesTimer);
           map.on("sourcedata", (e: { sourceId?: string; isSourceLoaded?: boolean }) => {
-            if (e.sourceId === "openmaptiles" && e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
+            if (e.sourceId === VECTOR_SOURCE && e.isSourceLoaded) { tilesOk = true; clearTimeout(tilesTimer); }
           });
 
           const mapAny = map as unknown as { setSky?: (s: unknown) => void; setLight?: (l: unknown) => void };
-          // Cielo con atmósfera → profundidad/horizonte reales.
-          try { mapAny.setSky?.({ "sky-color": "#a9c8ff", "horizon-color": "#eaf1fb", "fog-color": "#eef2f7", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.4 }); } catch { /* versión sin sky */ }
+          // Cielo NOCTURNO con atmósfera → profundidad/horizonte tipo Uber noche.
+          try { mapAny.setSky?.({ "sky-color": "#0b1020", "horizon-color": "#1b2740", "fog-color": "#0b1020", "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.5, "fog-ground-blend": 0.5 }); } catch { /* versión sin sky */ }
           // Iluminación → volumen en los edificios.
-          try { mapAny.setLight?.({ anchor: "viewport", color: "#ffffff", intensity: 0.5, position: [1.4, 210, 30] }); } catch { /* opcional */ }
+          try { mapAny.setLight?.({ anchor: "viewport", color: "#dbe4ff", intensity: 0.45, position: [1.4, 210, 30] }); } catch { /* opcional */ }
 
           // Nombres de calle SIEMPRE legibles: etiquetas rectas frente a la cámara
           // (no tumbadas con la perspectiva) — clave para el look Uber.
@@ -147,15 +148,16 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
           try {
             const layers = (map.getStyle().layers ?? []) as Array<{ id: string; type: string }>;
             const firstSymbol = layers.find((l) => l.type === "symbol")?.id;
-            const H = ["coalesce", ["get", "render_height"], ["*", ["coalesce", ["get", "building:levels"], 3], 3], 9] as ExpressionSpecification;
+            const H = ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 3], 3], 12] as ExpressionSpecification;
             map.addLayer(
               {
-                id: "3d-buildings", source: "openmaptiles", "source-layer": "building", type: "fill-extrusion", minzoom: 13,
+                id: "3d-buildings", source: VECTOR_SOURCE, "source-layer": "building", type: "fill-extrusion", minzoom: 13,
                 paint: {
-                  "fill-extrusion-color": ["interpolate", ["linear"], H, 0, "#eef0f4", 25, "#dfe3ea", 80, "#cbd1db", 200, "#b9c0cc"] as ExpressionSpecification,
+                  // Edificios oscuros con degradado por altura (más alto = más claro).
+                  "fill-extrusion-color": ["interpolate", ["linear"], H, 0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"] as ExpressionSpecification,
                   "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 13, 0, 15.5, H] as ExpressionSpecification,
                   "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0] as ExpressionSpecification,
-                  "fill-extrusion-opacity": 0.92,
+                  "fill-extrusion-opacity": 0.95,
                   "fill-extrusion-vertical-gradient": true,
                 },
               },
@@ -264,7 +266,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     if (!destination) { destRef.current?.remove(); destRef.current = null; return; }
     if (!destRef.current) {
       const el = document.createElement("div");
-      el.innerHTML = `<div style="width:26px;height:32px"><div style="width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#111827;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.45)"></div></div>`;
+      el.innerHTML = `<div style="width:28px;height:34px"><div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#f43f5e;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.6)"></div></div>`;
       destRef.current = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([destination.lng, destination.lat]).addTo(map);
     } else {
       destRef.current.setLngLat([destination.lng, destination.lat]);
@@ -299,7 +301,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
   };
 
   return (
-    <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden bg-gray-100">
+    <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden bg-[#0b1020]">
       {paused && (
         <button
           onClick={recenter}

@@ -242,8 +242,8 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
   };
 
   return (
-    <div className="relative">
-      <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />
+    <div className="relative" style={{ height }}>
+      <div ref={elRef} style={{ height: "100%", width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />
       {/* Estado del trazo por calles (diagnóstico + UX honesta). */}
       {streetStatus !== "idle" && (
         <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full bg-white/95 px-3 py-1 text-xs font-medium shadow">
