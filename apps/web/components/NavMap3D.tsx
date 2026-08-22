@@ -10,12 +10,13 @@ const STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 // Mapa de navegación 3D (estilo Google más nuevo): MapLibre GL con vista
 // inclinada (pitch), rotación heading-up y edificios en 3D. Motor vectorial.
-export function NavMap3D({ driver, heading, headingUp, geometry, destination, height = "64vh" }: {
+export function NavMap3D({ driver, heading, headingUp, geometry, destination, onError, height = "64vh" }: {
   driver: LatLng | null;
   heading: number | null;
   headingUp: boolean;
   geometry: [number, number][] | null; // [lat,lng]
   destination: LatLng | null;
+  onError?: () => void; // el 3D no cargó → el padre cae a Leaflet
   height?: string;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
@@ -28,24 +29,40 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, he
   // Init (una vez).
   useEffect(() => {
     let cancelled = false;
+    let failTimer: ReturnType<typeof setTimeout> | undefined;
+    const resizeTimers: ReturnType<typeof setTimeout>[] = [];
+    let erroredOnce = false;
+    const fail = () => { if (!erroredOnce) { erroredOnce = true; onError?.(); } };
     void (async () => {
-      const maplibregl = await import("maplibre-gl");
-      if (cancelled || !elRef.current || mapRef.current) return;
-      const center: [number, number] = driver ? [driver.lng, driver.lat] : [-106.069, 28.632];
-      const map = new maplibregl.Map({
-        container: elRef.current,
-        style: STYLE,
-        center,
-        zoom: 17,
-        pitch: 60, // inclinación 3D (0 = plano, 60 = muy inclinado)
-        bearing: 0,
-        attributionControl: { compact: true },
-      });
-      mapRef.current = map;
+      try {
+        const maplibregl = await import("maplibre-gl");
+        if (cancelled || !elRef.current || mapRef.current) return;
+        const center: [number, number] = driver ? [driver.lng, driver.lat] : [-106.069, 28.632];
+        const map = new maplibregl.Map({
+          container: elRef.current,
+          style: STYLE,
+          center,
+          zoom: 17,
+          pitch: 60, // inclinación 3D (0 = plano, 60 = muy inclinado)
+          bearing: 0,
+          attributionControl: { compact: true },
+        });
+        mapRef.current = map;
 
-      map.on("load", () => {
-        if (cancelled) return;
-        readyRef.current = true;
+        // Si el estilo/worker no carga en 9s, avisamos al padre (→ cae a Leaflet).
+        failTimer = setTimeout(() => { if (!readyRef.current) fail(); }, 9000);
+        // Error fatal del motor (WebGL/worker/estilo) → fallback.
+        map.on("error", (e: { error?: { message?: string } }) => {
+          const msg = e?.error?.message ?? "";
+          if (!readyRef.current && msg) fail();
+        });
+
+        map.on("load", () => {
+          if (cancelled) return;
+          if (failTimer) clearTimeout(failTimer);
+          readyRef.current = true;
+          // Igual que Leaflet: recalcular tamaño por si el contenedor arrancó sin él.
+          [0, 150, 400].forEach((ms) => resizeTimers.push(setTimeout(() => mapRef.current?.resize(), ms)));
 
         // Edificios en 3D (fill-extrusion) — la sensación "Google 3D".
         try {
@@ -78,10 +95,15 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, he
         applyDriver(maplibregl);
         applyDest(maplibregl);
         applyCamera();
-      });
+        });
+      } catch {
+        fail(); // el import/creación de MapLibre falló → el padre usa Leaflet
+      }
     })();
     return () => {
       cancelled = true;
+      if (failTimer) clearTimeout(failTimer);
+      resizeTimers.forEach(clearTimeout);
       readyRef.current = false;
       centeredRef.current = false;
       driverRef.current = null;

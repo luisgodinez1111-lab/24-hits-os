@@ -88,6 +88,8 @@ export default function RoutePage() {
   const [voiceOn, setVoiceOn] = useState(true); // instrucciones habladas
   const [heading, setHeading] = useState<number | null>(null); // rumbo (grados) para la flecha
   const [headingUp, setHeadingUp] = useState(true); // rotación cámara detrás del carro
+  const [map3dFailed, setMap3dFailed] = useState(false); // el 3D no cargó → usar Leaflet
+  const startNav = () => { setMap3dFailed(false); setNavMode(true); };
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
@@ -198,7 +200,18 @@ export default function RoutePage() {
           </span>
         </div>
         <div className="relative">
-          <NavMap3D driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} destination={navDest} height="64vh" />
+          {map3dFailed ? (
+            <RouteMap legs={legs} driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
+          ) : (
+            <NavMap3D driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} destination={navDest} onError={() => setMap3dFailed(true)} height="64vh" />
+          )}
+          {/* Alterna 3D vectorial (MapLibre) / 2D (Leaflet), por si el 3D no carga. */}
+          <button
+            onClick={() => setMap3dFailed((v) => !v)}
+            className="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow-lg active:scale-95"
+          >
+            {map3dFailed ? "3D" : "2D"}
+          </button>
           {/* Brújula: alterna cámara detrás del carro (heading-up) / norte arriba. */}
           <button
             onClick={() => setHeadingUp((v) => !v)}
@@ -227,7 +240,7 @@ export default function RoutePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {nextStop && <Button onClick={() => setNavMode(true)}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>}
+          {nextStop && <Button onClick={startNav}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>}
           <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
         </div>
       </div>
@@ -263,7 +276,7 @@ export default function RoutePage() {
         ) : (
           <>
             {/* SIGUIENTE PEDIDO — tarjeta grande, lo primero que ves. */}
-            {nextStop && <NextCard stop={nextStop} onNavigate={() => setNavMode(true)} onDeliver={() => setDeliverStop(nextStop)} />}
+            {nextStop && <NextCard stop={nextStop} onNavigate={startNav} onDeliver={() => setDeliverStop(nextStop)} />}
 
             {/* El resto de la ruta, en orden. */}
             {(restStops.length > 0 || noCoords.length > 0) && (
