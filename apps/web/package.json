@@ -19,7 +19,7 @@
     "leaflet": "^1.9.4",
     "leaflet-rotate": "0.2.8",
     "lucide-react": "^0.469.0",
-    "maplibre-gl": "6.5.0",
+    "maplibre-gl": "4.7.1",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

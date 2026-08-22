@@ -10,8 +10,10 @@ const STYLE = "https://tiles.openfreemap.org/styles/liberty";
 // Cargamos MapLibre desde CDN (no desde el bundle) para que su Web Worker se
 // auto-resuelva desde la URL del CDN. Con el bundler de Next el worker no cargaba
 // y los tiles no se dibujaban (solo el fondo). Este patrón evita ese problema.
-const CDN_JS = "https://cdn.jsdelivr.net/npm/maplibre-gl@6.5.0/dist/maplibre-gl.js";
-const CDN_CSS = "https://cdn.jsdelivr.net/npm/maplibre-gl@6.5.0/dist/maplibre-gl.css";
+// v4 trae build UMD (define window.maplibregl) y su worker se auto-resuelve
+// desde el CDN. La v6 es solo ESM (sin UMD) y por eso no cargaba por <script>.
+const CDN_JS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+const CDN_CSS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
 
 declare global {
   interface Window { maplibregl?: typeof import("maplibre-gl"); }
