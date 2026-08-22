@@ -345,57 +345,65 @@ function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavi
   );
 }
 
-// Bottom-sheet de navegación (estilo Uber): tiempo/distancia/ETA + info del
-// cliente + próximas paradas, encima del mapa. Acción principal "Entregar aquí".
+// Bottom-sheet de navegación tipo Uber: COMPACTO por defecto (no tapa el mapa)
+// y expandible para ver las próximas paradas. Acción principal "Entregar aquí".
 function NavSheet({ stop, upcoming, onDeliver }: { stop: OptimizedStop; upcoming: OptimizedStop[]; onDeliver: () => void }) {
+  const [expanded, setExpanded] = useState(false);
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   const nav = navUrl(stop);
   const min = etaMin(stop);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[62%] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.14)]">
-      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" />
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
-        {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
-        <span className="text-2xl font-extrabold tabular-nums">{min != null ? `${min} min` : "—"}</span>
-        {stop.legKm != null && <span className="text-lg font-semibold text-gray-500">· {stop.legKm.toFixed(1)} km</span>}
-        {min != null && <span className="ml-auto text-sm text-gray-400">llegada ~{arrivalAt(min)}</span>}
+    <div className="absolute inset-x-0 bottom-0 z-40 rounded-t-2xl border-t border-gray-200 bg-white p-3 shadow-[0_-4px_20px_rgba(0,0,0,0.18)]">
+      <button onClick={() => setExpanded((v) => !v)} className="mx-auto mb-2 block h-1.5 w-12 rounded-full bg-gray-300" aria-label="Expandir" />
+      {/* Fila compacta: tiempo/km/ETA + prioridad. */}
+      <div className="flex items-center gap-2">
+        <span className="text-xl font-extrabold tabular-nums">{min != null ? `${min} min` : "—"}</span>
+        {stop.legKm != null && <span className="text-sm font-semibold text-gray-500">· {stop.legKm.toFixed(1)} km</span>}
+        {stop.priority === "urgent" && <Badge tone="red">Urgente</Badge>}
+        {stop.priority === "priority" && <Badge tone="amber">Prioritario</Badge>}
+        {min != null && <span className="ml-auto text-xs text-gray-400">llegada ~{arrivalAt(min)}</span>}
       </div>
-      <p className="mt-1 text-base font-bold leading-tight">{stop.customer?.name ?? "Mostrador"}</p>
-      <p className="text-sm text-gray-500">{stop.deliveryAddress ?? "Sin dirección"}</p>
-      <p className="font-mono text-xs text-gray-400">{stop.number} · {money(stop.total)}{stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}</p>
-      <div className="mt-3 flex items-center gap-2">
+      <p className="mt-0.5 truncate text-base font-bold leading-tight">{stop.customer?.name ?? "Mostrador"}</p>
+      <p className="truncate text-sm text-gray-500">{stop.deliveryAddress ?? "Sin dirección"}</p>
+      <div className="mt-2.5 flex items-center gap-2">
         <Button className="flex-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar aquí</Button>
         {phone && (
           <a href={`tel:${phone}`} aria-label="Llamar" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gray-300 text-gray-700 active:scale-95">
             <Phone className="h-5 w-5" />
           </a>
         )}
+        {upcoming.length > 0 && (
+          <button onClick={() => setExpanded((v) => !v)} className="grid h-11 shrink-0 place-items-center rounded-xl border border-gray-300 px-3 text-xs font-semibold text-gray-600 active:scale-95">
+            +{upcoming.length}
+          </button>
+        )}
       </div>
 
-      {/* Próximas paradas: para saber la secuencia con muchos pedidos. */}
-      {upcoming.length > 0 && (
-        <div className="mt-4 border-t border-gray-100 pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Después ({upcoming.length})</p>
-          <ol className="space-y-1.5">
-            {upcoming.slice(0, 6).map((s, i) => (
-              <li key={s.id} className="flex items-center gap-2 text-sm">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">{i + 2}</span>
-                <span className="truncate font-medium">{s.customer?.name ?? "Mostrador"}</span>
-                <span className="truncate text-gray-400">{s.deliveryAddress ?? "sin ubicación"}</span>
-                {s.legKm != null && <span className="ml-auto shrink-0 text-xs text-gray-400">{s.legKm.toFixed(1)} km</span>}
-              </li>
-            ))}
-            {upcoming.length > 6 && <li className="pl-8 text-xs text-gray-400">y {upcoming.length - 6} más…</li>}
-          </ol>
+      {/* Detalle expandible: pedido + próximas paradas + voz. */}
+      {expanded && (
+        <div className="mt-3 max-h-[40vh] overflow-y-auto border-t border-gray-100 pt-3">
+          <p className="font-mono text-xs text-gray-400">{stop.number} · {money(stop.total)}{stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}</p>
+          {upcoming.length > 0 && (
+            <>
+              <p className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Después ({upcoming.length})</p>
+              <ol className="space-y-1.5">
+                {upcoming.map((s, i) => (
+                  <li key={s.id} className="flex items-center gap-2 text-sm">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">{i + 2}</span>
+                    <span className="truncate font-medium">{s.customer?.name ?? "Mostrador"}</span>
+                    <span className="truncate text-gray-400">{s.deliveryAddress ?? "sin ubicación"}</span>
+                    {s.legKm != null && <span className="ml-auto shrink-0 text-xs text-gray-400">{s.legKm.toFixed(1)} km</span>}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          {nav && (
+            <a href={nav} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs text-gray-400 underline">
+              ¿Prefieres indicaciones por voz? Abrir en Maps
+            </a>
+          )}
         </div>
-      )}
-
-      {/* Opción secundaria para quien quiera indicaciones por voz. */}
-      {nav && (
-        <a href={nav} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs text-gray-400 underline">
-          ¿Prefieres indicaciones por voz? Abrir en Maps
-        </a>
       )}
     </div>
   );

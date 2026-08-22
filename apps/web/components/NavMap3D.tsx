@@ -38,7 +38,7 @@ function loadMapLibre(): Promise<typeof import("maplibre-gl")> {
   return loaderPromise;
 }
 
-const PITCH = 60;
+const PITCH = 66; // inclinación alta = vista "en la calle" tipo Uber
 
 // Mapa de navegación 3D tipo Uber conductor: cámara en el tercio inferior (ves
 // hacia adelante), seguimiento FLUIDO interpolado entre lecturas de GPS, rotación
@@ -75,11 +75,11 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     let erroredOnce = false;
     const fail = () => { if (!erroredOnce) { erroredOnce = true; onError?.(); } };
 
-    // Padding: coloca al conductor ~1/3 desde arriba → ves mucho camino adelante
-    // y queda por ENCIMA de la tarjeta de entrega (bottom) y del banner (top).
+    // Padding: coloca al conductor ABAJO (≈65% de la pantalla) como Uber → ves
+    // mucho camino adelante hacia el horizonte; deja ~180 px abajo para la tarjeta.
     const padding = () => {
       const h = elRef.current?.clientHeight ?? 480;
-      return { top: Math.round(h * 0.10), bottom: Math.round(h * 0.45), left: 0, right: 0 };
+      return { top: Math.round(h * 0.50), bottom: 180, left: 0, right: 0 };
     };
 
     void (async () => {
