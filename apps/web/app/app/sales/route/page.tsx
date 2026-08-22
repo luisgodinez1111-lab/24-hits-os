@@ -25,10 +25,15 @@ const MANEUVER_ICONS: Record<ManeuverIcon, LucideIcon> = {
   uturn: RotateCcw, roundabout: RefreshCw, depart: Navigation2, arrive: Flag, merge: ArrowUp,
 };
 
-// El mapa solo en cliente (Leaflet usa window).
+// El mapa solo en cliente (Leaflet/MapLibre usan window).
 const RouteMap = dynamic(() => import("@/components/RouteMap").then((m) => m.RouteMap), {
   ssr: false,
   loading: () => <Skeleton className="h-[58vh] w-full" />,
+});
+// Mapa 3D vectorial (MapLibre) para el modo navegación.
+const NavMap3D = dynamic(() => import("@/components/NavMap3D").then((m) => m.NavMap3D), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[64vh] w-full" />,
 });
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
@@ -193,7 +198,7 @@ export default function RoutePage() {
           </span>
         </div>
         <div className="relative">
-          <RouteMap legs={legs} driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} follow height="64vh" />
+          <NavMap3D driver={pos} heading={heading} headingUp={headingUp} geometry={guidance.geometry ?? route?.geometry ?? null} destination={navDest} height="64vh" />
           {/* Brújula: alterna cámara detrás del carro (heading-up) / norte arriba. */}
           <button
             onClick={() => setHeadingUp((v) => !v)}
