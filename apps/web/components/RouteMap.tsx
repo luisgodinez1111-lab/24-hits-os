@@ -19,10 +19,14 @@ const OSRM_DEMO = "https://router.project-osrm.org";
 
 async function fetchStreetGeometry(pts: LatLng[]): Promise<[number, number][] | null> {
   if (pts.length < 2) return null;
+  // AbortController + setTimeout (compatible con Safari/iOS antiguos, donde
+  // AbortSignal.timeout no existe y tiraba error → caía a línea recta).
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10000);
   try {
     const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `${OSRM_DEMO}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) return null;
     const j = (await res.json()) as { code?: string; routes?: Array<{ geometry?: { coordinates?: [number, number][] } }> };
     const geo = j.routes?.[0]?.geometry?.coordinates;
@@ -30,6 +34,8 @@ async function fetchStreetGeometry(pts: LatLng[]): Promise<[number, number][] | 
     return geo.map(([lng, lat]) => [lat, lng] as [number, number]);
   } catch {
     return null;
+  } finally {
+    clearTimeout(t);
   }
 }
 
@@ -46,6 +52,7 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   const didFitOnce = useRef(false); // primer encuadre en tu ubicación
   const [ready, setReady] = useState(false);
   const [fallbackGeom, setFallbackGeom] = useState<[number, number][] | null>(null); // trazo por calles del cliente
+  const [streetStatus, setStreetStatus] = useState<"idle" | "loading" | "ok" | "failed">("idle");
 
   // Inicializa el mapa (una vez).
   useEffect(() => {
@@ -95,14 +102,19 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   // Clave redondeada del GPS (~100 m) para refrescar al avanzar sin saturar.
   const driverKey = driver ? `${driver.lat.toFixed(3)},${driver.lng.toFixed(3)}` : "";
   useEffect(() => {
-    if (geometry && geometry.length >= 2) { setFallbackGeom(null); return; }
+    if (geometry && geometry.length >= 2) { setFallbackGeom(null); setStreetStatus("ok"); return; }
     const stops = legs.map((l) => l.stop).filter((s) => s.deliveryLat != null && s.deliveryLng != null);
     const waypoints: LatLng[] = [];
     if (driver) waypoints.push({ lat: driver.lat, lng: driver.lng });
     for (const s of stops) waypoints.push({ lat: s.deliveryLat!, lng: s.deliveryLng! });
-    if (waypoints.length < 2) { setFallbackGeom(null); return; }
+    if (waypoints.length < 2) { setFallbackGeom(null); setStreetStatus("idle"); return; }
     let cancelled = false;
-    void fetchStreetGeometry(waypoints).then((g) => { if (!cancelled) setFallbackGeom(g); });
+    setStreetStatus("loading");
+    void fetchStreetGeometry(waypoints).then((g) => {
+      if (cancelled) return;
+      setFallbackGeom(g);
+      setStreetStatus(g ? "ok" : "failed");
+    });
     return () => { cancelled = true; };
     // driverKey redondeado: refetch al moverte ~100 m, no en cada tick.
   }, [legs, geometry, driverKey]);
@@ -204,6 +216,14 @@ export function RouteMap({ legs, driver, geometry, follow = false, height = "58v
   return (
     <div className="relative">
       <div ref={elRef} style={{ height, width: "100%", minHeight: 240 }} className="relative z-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-100" />
+      {/* Estado del trazo por calles (diagnóstico + UX honesta). */}
+      {streetStatus !== "idle" && (
+        <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full bg-white/95 px-3 py-1 text-xs font-medium shadow">
+          {streetStatus === "loading" && <span className="text-gray-500">Trazando ruta por calles…</span>}
+          {streetStatus === "ok" && <span className="text-gray-700">Ruta por calles</span>}
+          {streetStatus === "failed" && <span className="text-amber-700">Ruta aproximada (recta) — motor no disponible</span>}
+        </div>
+      )}
       <button
         type="button"
         onClick={recenter}
