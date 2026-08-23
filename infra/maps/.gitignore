@@ -1,0 +1,4 @@
+planetiler.jar
+data/
+*.pmtiles
+node_modules/

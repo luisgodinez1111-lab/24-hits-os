@@ -13,10 +13,31 @@ const MAPLIBRE_CSS = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
 // Estilo del mapa. Se toma de NEXT_PUBLIC_MAP_STYLE_URL → apunta a TU estilo
 // self-hosted (tiles propios) cuando lo tengas. Si no, respaldo oscuro gratuito.
 const FALLBACK_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-const STYLE = process.env.NEXT_PUBLIC_MAP_STYLE_URL || FALLBACK_DARK;
+const CUSTOM_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "";
+const STYLE = CUSTOM_STYLE || FALLBACK_DARK;
 
 declare global {
-  interface Window { maplibregl?: typeof import("maplibre-gl"); }
+  interface Window {
+    maplibregl?: typeof import("maplibre-gl");
+    pmtiles?: { Protocol: new () => { tile: unknown } };
+  }
+}
+
+// Protocolo PMTiles: permite que un estilo apunte a tu archivo .pmtiles propio
+// (self-hosted, sin servidor de tiles). Se carga solo si usas un estilo propio.
+let pmLoader: Promise<NonNullable<Window["pmtiles"]>> | null = null;
+let pmRegistered = false;
+function loadPmtiles(): Promise<NonNullable<Window["pmtiles"]>> {
+  if (window.pmtiles) return Promise.resolve(window.pmtiles);
+  if (pmLoader) return pmLoader;
+  pmLoader = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"; s.async = true;
+    s.onload = () => (window.pmtiles ? resolve(window.pmtiles) : reject(new Error("pmtiles no definido")));
+    s.onerror = () => reject(new Error("no se pudo cargar pmtiles"));
+    document.head.appendChild(s);
+  });
+  return pmLoader;
 }
 
 let loaderPromise: Promise<typeof import("maplibre-gl")> | null = null;
@@ -86,6 +107,15 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     void (async () => {
       try {
         const maplibregl = await loadGl();
+        // Si usas tu estilo propio, registra el protocolo pmtiles:// (self-hosted).
+        if (CUSTOM_STYLE && !pmRegistered) {
+          try {
+            const pm = await loadPmtiles();
+            const proto = new pm.Protocol();
+            (maplibregl as unknown as { addProtocol: (n: string, f: unknown) => void }).addProtocol("pmtiles", proto.tile);
+            pmRegistered = true;
+          } catch { /* solo se necesita si tu estilo usa pmtiles:// */ }
+        }
         if (cancelled || !elRef.current || mapRef.current) return;
         const center: [number, number] = driver ? [driver.lng, driver.lat] : [-106.069, 28.632];
         const map = new maplibregl.Map({

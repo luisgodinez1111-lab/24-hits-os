@@ -25,19 +25,22 @@ OpenStreetMap (extracto)  ──planetiler──▶  chihuahua.pmtiles  ──(a
                                              + estilo propio (JSON) + glyphs + sprites
 ```
 
-## Paso 1 — Generar los tiles (una vez, en cualquier PC con Java)
+## Scaffolding ejecutable (en esta carpeta)
 
-[planetiler](https://github.com/onthegomap/planetiler) convierte un extracto de
-OSM a un `.pmtiles`. Rápido y gratis.
+- `generate.sh` — descarga planetiler y genera `data/<area>.pmtiles`.
+- `serve-dev.sh` — sirve local con range requests + CORS para probar.
+- `style.dark.json` — estilo oscuro base (editable en Maputnik).
+- `.gitignore` — ignora el jar y los .pmtiles (pesados).
+
+## Paso 1 — Generar los tiles (una vez, en cualquier PC con Java 21+)
 
 ```bash
-# Requiere Java 21+. Descarga planetiler.jar de sus releases.
-# Extracto de Chihuahua (o toda México si quieres):
-java -Xmx4g -jar planetiler.jar \
-  --download --area=chihuahua \
-  --output=chihuahua.pmtiles
+cd infra/maps
+./generate.sh                 # Chihuahua (por defecto) → data/chihuahua.pmtiles
+# AREA=mexico ./generate.sh   # todo México (más pesado)
 ```
-(El área usa los extractos de Geofabrik; para México: `--area=mexico`.)
+[planetiler](https://github.com/onthegomap/planetiler) convierte el extracto de
+OSM a un solo `.pmtiles`. Usa los extractos de Geofabrik por nombre de área.
 
 ## Paso 2 — Publicar el archivo (estático, tu infra)
 
@@ -51,19 +54,26 @@ de MapLibre / openmaptiles). Pueden vivir junto al pmtiles.
 
 ## Paso 3 — Estilo propio (el look premium)
 
-Un estilo MapLibre es un JSON. Parte de una base oscura profesional y ajústala
-(colores de calles, agua, edificios, tipografía) hasta el look que quieras.
-Bases recomendadas para partir:
-- **dark-matter** (la que usamos de respaldo) — clónala y edítala.
-- Editor visual gratuito: **Maputnik** (https://maputnik.github.io) — abres tu
-  pmtiles + tocas colores en vivo y exportas el `style.json`.
+Ya hay una base editable: **`style.dark.json`** (esquema OpenMapTiles, que es lo
+que genera planetiler). Ábrela en **Maputnik** (https://maputnik.github.io) para
+refinar colores/tipografía en vivo y exportar tu versión.
 
-El `style.json` debe apuntar a TUS urls: el source `{ "type":"vector",
-"url":"pmtiles://https://tu-dominio/chihuahua.pmtiles" }`, tus glyphs y sprite.
+Reemplaza en el JSON `TU-DOMINIO` por donde publiques:
+- el `.pmtiles` (source `pmtiles://https://TU-DOMINIO/chihuahua.pmtiles`),
+- los **glyphs** (fuentes) `https://TU-DOMINIO/fonts/{fontstack}/{range}.pbf`
+  — descárgalos una vez del repo `openmaptiles/fonts` y publícalos igual.
 
-> Para leer `pmtiles://` en el navegador hay que registrar el protocolo pmtiles
-> en MapLibre (librería `pmtiles`). Cuando tengas el archivo listo, se agrega en
-> `apps/web/components/NavMap3D.tsx` (2 líneas) — pendiente hasta el paso 2.
+> El protocolo `pmtiles://` YA está cableado en el mapa
+> (`apps/web/components/NavMap3D.tsx`): se registra automáticamente cuando
+> defines `NEXT_PUBLIC_MAP_STYLE_URL`. No hay que tocar código.
+
+### Probar local antes de publicar
+```bash
+./serve-dev.sh   # sirve esta carpeta en http://localhost:8080 (range + CORS)
+# En apps/web/.env.local:
+#   NEXT_PUBLIC_MAP_STYLE_URL=http://localhost:8080/style.dark.json
+# (edita style.dark.json: usa http://localhost:8080/... en vez de TU-DOMINIO)
+```
 
 ## Paso 4 — Conectarlo (1 variable)
 
