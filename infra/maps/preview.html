@@ -25,21 +25,23 @@
       container: "map",
       style: "./style.local.json",     // estilo apuntando al pmtiles LOCAL
       center: [-106.0889, 28.6353],    // Chihuahua centro
-      zoom: 15,
-      pitch: 60,
+      zoom: 16,
+      pitch: 45,                        // inclinación menor = mucho más ligero
+      maxPitch: 70,
       bearing: 0,
-      antialias: true,
+      antialias: false,                 // antialias satura la GPU integrada
+      maxTileCacheSize: 256,
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-    // Edificios 3D (mismo criterio que la app).
+    // Edificios 3D solo de cerca (minzoom 15) → mucho menos que dibujar.
     map.on("load", () => {
       try {
         const layers = map.getStyle().layers || [];
         const firstSymbol = (layers.find(l => l.type === "symbol") || {}).id;
         map.addLayer({
           id: "3d-buildings", source: "openmaptiles", "source-layer": "building",
-          type: "fill-extrusion", minzoom: 13,
+          type: "fill-extrusion", minzoom: 15,
           paint: {
             "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","render_height"], 10],
               0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"],

@@ -60,7 +60,7 @@ function loadGl(): Promise<typeof import("maplibre-gl")> {
   return loaderPromise;
 }
 
-const PITCH = 66; // inclinación alta = vista "en la calle" tipo Uber
+const PITCH = 60; // inclinación de conducción (equilibrio inmersión/rendimiento)
 
 // Mapa de navegación 3D tipo Uber conductor: cámara en el tercio inferior (ves
 // hacia adelante), seguimiento FLUIDO interpolado entre lecturas de GPS, rotación
@@ -186,7 +186,7 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
             const H = ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["coalesce", ["get", "levels"], ["get", "building:levels"], 3], 3], 12] as ExpressionSpecification;
             map.addLayer(
               {
-                id: "3d-buildings", source: bSource, "source-layer": "building", type: "fill-extrusion", minzoom: 13,
+                id: "3d-buildings", source: bSource, "source-layer": "building", type: "fill-extrusion", minzoom: 15,
                 paint: {
                   // Edificios oscuros con degradado por altura (más alto = más claro).
                   "fill-extrusion-color": ["interpolate", ["linear"], H, 0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"] as ExpressionSpecification,
@@ -226,20 +226,25 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
               if (!animRef.current) animRef.current = { ...t };
               const a = animRef.current;
               const k = 0.25; // suavizado (más alto = más pegado al GPS, menos lag)
+              const dLat = t.lat - a.lat, dLng = t.lng - a.lng;
               // Salto grande (>~45 m): ir DIRECTO, sin arrastrar → exactitud.
-              if (Math.abs(t.lat - a.lat) > 0.0004 || Math.abs(t.lng - a.lng) > 0.0004) {
+              if (Math.abs(dLat) > 0.0004 || Math.abs(dLng) > 0.0004) {
                 a.lat = t.lat; a.lng = t.lng;
               } else {
-                a.lat += (t.lat - a.lat) * k;
-                a.lng += (t.lng - a.lng) * k;
+                a.lat += dLat * k;
+                a.lng += dLng * k;
               }
               const db = ((t.bearing - a.bearing + 540) % 360) - 180; // giro por el camino corto
               a.bearing = (a.bearing + db * k + 360) % 360;
-              driverRef.current?.setLngLat([a.lng, a.lat]);
-              driverRef.current?.setRotation(a.bearing);
-              // Mueve la cámara solo si el usuario NO tomó control (si no, lo pisa).
-              if (!userMovedRef.current) {
-                m.jumpTo({ center: [a.lng, a.lat], bearing: headingUpRef.current ? a.bearing : 0, pitch: PITCH, padding: padding() });
+              // PERF: solo redibuja si algo cambió de verdad (si estás quieto, el
+              // mapa NO se re-renderiza 60 veces/seg → menos GPU y batería).
+              const moved = Math.abs(dLat) > 1e-6 || Math.abs(dLng) > 1e-6 || Math.abs(db) > 0.05;
+              if (moved) {
+                driverRef.current?.setLngLat([a.lng, a.lat]);
+                driverRef.current?.setRotation(a.bearing);
+                if (!userMovedRef.current) {
+                  m.jumpTo({ center: [a.lng, a.lat], bearing: headingUpRef.current ? a.bearing : 0, pitch: PITCH, padding: padding() });
+                }
               }
             }
             rafRef.current = requestAnimationFrame(tick);
