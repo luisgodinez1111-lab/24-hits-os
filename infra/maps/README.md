@@ -27,10 +27,22 @@ OpenStreetMap (extracto)  ──planetiler──▶  chihuahua.pmtiles  ──(a
 
 ## Scaffolding ejecutable (en esta carpeta)
 
-- `generate.sh` — descarga planetiler y genera `data/<area>.pmtiles`.
+- `generate.sh` — genera `data/chihuahua.pmtiles` (calles/labels desde OSM).
+- `buildings.sh` — genera `data/buildings.pmtiles` con **edificios 3D** de
+  Microsoft Global Buildings (mejor cobertura que OSM; asigna alturas variadas
+  porque el dato no trae altura para México). Requiere `tippecanoe`.
 - `serve-dev.sh` — sirve local con range requests + CORS para probar.
+- `preview.html` — abre el mapa (calles + edificios 3D) sin levantar la app.
 - `style.dark.json` — estilo oscuro base (editable en Maputnik).
-- `.gitignore` — ignora el jar y los .pmtiles (pesados).
+- `.gitignore` — ignora jar, .pmtiles y descargas pesadas.
+
+### Ver el mapa completo (calles + edificios 3D) local
+```bash
+./generate.sh      # data/chihuahua.pmtiles (calles)
+brew install tippecanoe
+./buildings.sh     # data/buildings.pmtiles (edificios 3D)
+./serve-dev.sh     # y abre http://localhost:8080/preview.html
+```
 
 ## Paso 1 — Generar los tiles (una vez, en cualquier PC con Java 21+)
 

@@ -34,20 +34,22 @@
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-    // Edificios 3D solo de cerca (minzoom 15) → mucho menos que dibujar.
+    // Edificios 3D desde TU pmtiles de edificios (Microsoft, 160k en Chihuahua).
     map.on("load", () => {
       try {
         const layers = map.getStyle().layers || [];
         const firstSymbol = (layers.find(l => l.type === "symbol") || {}).id;
+        map.addSource("bld", { type: "vector", url: "pmtiles://http://localhost:8080/data/buildings.pmtiles" });
         map.addLayer({
-          id: "3d-buildings", source: "openmaptiles", "source-layer": "building",
-          type: "fill-extrusion", minzoom: 15,
+          id: "3d-buildings", source: "bld", "source-layer": "building",
+          type: "fill-extrusion", minzoom: 14,
           paint: {
-            "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","render_height"], 10],
-              0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"],
-            "fill-extrusion-height": ["coalesce", ["get","render_height"], 10],
-            "fill-extrusion-base": ["coalesce", ["get","render_min_height"], 0],
-            "fill-extrusion-opacity": 0.95,
+            "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","h"], 6],
+              0, "#232838", 8, "#2b3247", 16, "#38415a", 30, "#4a557a"],
+            "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 16, ["coalesce", ["get","h"], 6]],
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.92,
+            "fill-extrusion-vertical-gradient": true,
           }
         }, firstSymbol);
       } catch (e) { console.warn("buildings:", e); }

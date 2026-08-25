@@ -3,3 +3,5 @@ data/
 *.pmtiles
 node_modules/
 style.local.json
+bld/
+ms-links.csv
