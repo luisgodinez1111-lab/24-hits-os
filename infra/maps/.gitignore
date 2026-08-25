@@ -2,3 +2,4 @@ planetiler.jar
 data/
 *.pmtiles
 node_modules/
+style.local.json

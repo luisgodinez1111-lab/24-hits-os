@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview — 24 HITS mapa self-hosted</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
+  <style>
+    html, body, #map { margin: 0; height: 100%; background: #0b1020; }
+    #hud { position: absolute; top: 10px; left: 10px; z-index: 2; background: rgba(0,0,0,.6);
+      color: #fff; font: 12px system-ui; padding: 6px 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="hud">Preview de tu estilo · arrastra/zoom para explorar</div>
+  <script>
+    // Registra el protocolo pmtiles:// para leer tu archivo local.
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+
+    const map = new maplibregl.Map({
+      container: "map",
+      style: "./style.local.json",     // estilo apuntando al pmtiles LOCAL
+      center: [-106.0889, 28.6353],    // Chihuahua centro
+      zoom: 15,
+      pitch: 60,
+      bearing: 0,
+      antialias: true,
+    });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+
+    // Edificios 3D (mismo criterio que la app).
+    map.on("load", () => {
+      try {
+        const layers = map.getStyle().layers || [];
+        const firstSymbol = (layers.find(l => l.type === "symbol") || {}).id;
+        map.addLayer({
+          id: "3d-buildings", source: "openmaptiles", "source-layer": "building",
+          type: "fill-extrusion", minzoom: 13,
+          paint: {
+            "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","render_height"], 10],
+              0, "#232838", 25, "#2b3247", 80, "#38415a", 200, "#465073"],
+            "fill-extrusion-height": ["coalesce", ["get","render_height"], 10],
+            "fill-extrusion-base": ["coalesce", ["get","render_min_height"], 0],
+            "fill-extrusion-opacity": 0.95,
+          }
+        }, firstSymbol);
+      } catch (e) { console.warn("buildings:", e); }
+    });
+
+    map.on("error", (e) => {
+      document.getElementById("hud").textContent = "Error: " + (e && e.error && e.error.message || e);
+    });
+  </script>
+</body>
+</html>
