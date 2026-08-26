@@ -42,10 +42,6 @@
       "layout": { "line-cap": "round", "line-join": "round" },
       "paint": { "line-color": "#5b6890", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 16, 11, 19, 22] } },
 
-    { "id": "building", "type": "fill", "source": "openmaptiles", "source-layer": "building",
-      "minzoom": 13,
-      "paint": { "fill-color": "#1a2030", "fill-opacity": 0.7 } },
-
     { "id": "road-label", "type": "symbol", "source": "openmaptiles", "source-layer": "transportation_name",
       "minzoom": 13,
       "layout": { "symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 12 },

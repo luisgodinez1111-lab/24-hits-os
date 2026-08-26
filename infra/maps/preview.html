@@ -37,8 +37,8 @@
     // Edificios 3D desde TU pmtiles de edificios (Microsoft, 160k en Chihuahua).
     map.on("load", () => {
       try {
-        const layers = map.getStyle().layers || [];
-        const firstSymbol = (layers.find(l => l.type === "symbol") || {}).id;
+        // Inserta los edificios ANTES de las calles → las calles quedan encima
+        // y siempre se ven (si no, los edificios las tapan).
         map.addSource("bld", { type: "vector", url: "pmtiles://http://localhost:8080/data/buildings.pmtiles" });
         map.addLayer({
           id: "3d-buildings", source: "bld", "source-layer": "building",
@@ -51,7 +51,7 @@
             "fill-extrusion-opacity": 0.92,
             "fill-extrusion-vertical-gradient": true,
           }
-        }, firstSymbol);
+        }, "road-minor");   // beforeId = primera capa de calles → calles encima
       } catch (e) { console.warn("buildings:", e); }
     });
 
