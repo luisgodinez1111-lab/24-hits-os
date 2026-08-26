@@ -17,29 +17,30 @@
   <div id="map"></div>
   <div id="hud">Preview de tu estilo · arrastra/zoom para explorar</div>
   <script>
-    // Registra el protocolo pmtiles:// para leer tu archivo local.
+    const hud = document.getElementById("hud");
+    const S = "http://localhost:8080";
+    // Registra el protocolo pmtiles y AÑADE explícitamente los dos archivos
+    // (calles + edificios). Sin esto, con 2 pmtiles a veces falla uno.
     const protocol = new pmtiles.Protocol();
     maplibregl.addProtocol("pmtiles", protocol.tile);
+    protocol.add(new pmtiles.PMTiles(S + "/data/chihuahua.pmtiles"));
+    protocol.add(new pmtiles.PMTiles(S + "/data/buildings.pmtiles"));
 
     const map = new maplibregl.Map({
       container: "map",
-      style: "./style.local.json",     // estilo apuntando al pmtiles LOCAL
-      center: [-106.0889, 28.6353],    // Chihuahua centro
-      zoom: 16,
-      pitch: 45,                        // inclinación menor = mucho más ligero
-      maxPitch: 70,
-      bearing: 0,
-      antialias: false,                 // antialias satura la GPU integrada
-      maxTileCacheSize: 256,
+      style: "./style.local.json",
+      center: [-106.0889, 28.6353],
+      zoom: 16, pitch: 45, maxPitch: 70, bearing: 0,
+      antialias: false, maxTileCacheSize: 256,
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-    // Edificios 3D desde TU pmtiles de edificios (Microsoft, 160k en Chihuahua).
+    let lastErr = "";
+    map.on("error", (e) => { lastErr = (e && e.error && e.error.message) || String(e); });
+
     map.on("load", () => {
       try {
-        // Inserta los edificios ANTES de las calles → las calles quedan encima
-        // y siempre se ven (si no, los edificios las tapan).
-        map.addSource("bld", { type: "vector", url: "pmtiles://http://localhost:8080/data/buildings.pmtiles" });
+        map.addSource("bld", { type: "vector", url: "pmtiles://" + S + "/data/buildings.pmtiles" });
         map.addLayer({
           id: "3d-buildings", source: "bld", "source-layer": "building",
           type: "fill-extrusion", minzoom: 14,
@@ -47,16 +48,18 @@
             "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","h"], 6],
               0, "#232838", 8, "#2b3247", 16, "#38415a", 30, "#4a557a"],
             "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 16, ["coalesce", ["get","h"], 6]],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.92,
-            "fill-extrusion-vertical-gradient": true,
+            "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true,
           }
-        }, "road-minor");   // beforeId = primera capa de calles → calles encima
-      } catch (e) { console.warn("buildings:", e); }
+        }, "road-minor");
+      } catch (e) { lastErr = "buildings: " + e.message; }
     });
 
-    map.on("error", (e) => {
-      document.getElementById("hud").textContent = "Error: " + (e && e.error && e.error.message || e);
+    // DIAGNÓSTICO: cuenta lo que realmente se está dibujando y lo muestra.
+    map.on("idle", () => {
+      let roads = 0, blds = 0;
+      try { roads = map.queryRenderedFeatures({ layers: ["road-minor","road-secondary","road-primary","road-major"] }).length; } catch (e) {}
+      try { blds = map.queryRenderedFeatures({ layers: ["3d-buildings"] }).length; } catch (e) {}
+      hud.innerHTML = `calles dibujadas: <b>${roads}</b> · edificios: <b>${blds}</b>` + (lastErr ? `<br><span style="color:#fca5a5">${lastErr}</span>` : "");
     });
   </script>
 </body>
