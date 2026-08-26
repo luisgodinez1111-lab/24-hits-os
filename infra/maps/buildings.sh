@@ -63,11 +63,21 @@ for q,u in urls.items():
 out.close(); print(f"   edificios dentro del bbox: {kept}")
 PY
 
-echo "==> Tilando con tippecanoe → data/buildings.pmtiles…"
-tippecanoe -o data/buildings.pmtiles -l building -Z13 -z16 \
-  --drop-densest-as-needed --extend-zooms-if-still-dropping -y h --force bld/buildings.geojsonl
+# zoom máx 14 = IGUAL que las calles (chihuahua.pmtiles). Clave: si los edificios
+# llegan a z16 y las calles solo a z14, al combinar los tiles z15-16 quedan SIN
+# calles y el mapa las pierde. Mismo maxzoom → el mapa sobre-escala ambos.
+echo "==> Tilando edificios (zoom máx 14, sin descartar) → data/buildings.pmtiles…"
+tippecanoe -o data/buildings.pmtiles -l building -Z13 -z14 \
+  --no-tile-size-limit --no-feature-limit -y h --force bld/buildings.geojsonl
 
-echo ""
-echo "✅ Listo: data/buildings.pmtiles"
-echo "   El preview (preview.html) ya lo usa. En producción, publícalo junto al"
-echo "   chihuahua.pmtiles y añade el source 'bld' a tu style.json."
+# Combina calles + edificios en UN solo archivo (con 2 archivos, MapLibre a veces
+# no carga uno). Requiere data/chihuahua.pmtiles (corre ./generate.sh antes).
+if [ -f data/chihuahua.pmtiles ]; then
+  echo "==> Combinando calles + edificios → data/chihuahua-city.pmtiles…"
+  tile-join -o data/chihuahua-city.pmtiles --force data/chihuahua.pmtiles data/buildings.pmtiles
+  echo "✅ Listo: data/chihuahua-city.pmtiles (calles + edificios 3D en un archivo)"
+else
+  echo "⚠️  Falta data/chihuahua.pmtiles — corre ./generate.sh y vuelve a correr esto."
+fi
+echo "   El preview (preview.html) ya lo usa. En producción publica ese único"
+echo "   archivo y apunta tu style.json a él."
