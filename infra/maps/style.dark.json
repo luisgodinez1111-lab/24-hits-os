@@ -6,7 +6,7 @@
   "sources": {
     "openmaptiles": {
       "type": "vector",
-      "url": "pmtiles://https://TU-DOMINIO/chihuahua.pmtiles"
+      "url": "pmtiles://https://TU-DOMINIO/chihuahua-city.pmtiles"
     }
   },
   "layers": [

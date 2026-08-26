@@ -18,13 +18,9 @@
   <div id="hud">Preview de tu estilo · arrastra/zoom para explorar</div>
   <script>
     const hud = document.getElementById("hud");
-    const S = "http://localhost:8080";
-    // Registra el protocolo pmtiles y AÑADE explícitamente los dos archivos
-    // (calles + edificios). Sin esto, con 2 pmtiles a veces falla uno.
+    // Un solo pmtiles (calles + edificios combinados) → sin conflicto entre dos.
     const protocol = new pmtiles.Protocol();
     maplibregl.addProtocol("pmtiles", protocol.tile);
-    protocol.add(new pmtiles.PMTiles(S + "/data/chihuahua.pmtiles"));
-    protocol.add(new pmtiles.PMTiles(S + "/data/buildings.pmtiles"));
 
     const map = new maplibregl.Map({
       container: "map",
@@ -40,9 +36,10 @@
 
     map.on("load", () => {
       try {
-        map.addSource("bld", { type: "vector", url: "pmtiles://" + S + "/data/buildings.pmtiles" });
+        // Edificios 3D desde la MISMA fuente (source-layer "building"), insertados
+        // antes de las calles para que las calles queden encima.
         map.addLayer({
-          id: "3d-buildings", source: "bld", "source-layer": "building",
+          id: "3d-buildings", source: "openmaptiles", "source-layer": "building",
           type: "fill-extrusion", minzoom: 14,
           paint: {
             "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","h"], 6],
