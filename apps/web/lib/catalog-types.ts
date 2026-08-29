@@ -211,6 +211,11 @@ export interface Order {
     lineTotal: string;
     fulfilledQuantity: string;
     unitCostSnapshot: string | null;
+    // Enriquecido por GET /orders/:id para que el repartidor vea qué entrega.
+    productName: string | null; // modelo
+    flavorName: string | null; // sabor
+    variantName: string | null;
+    sku: string | null;
   }>;
 }
 

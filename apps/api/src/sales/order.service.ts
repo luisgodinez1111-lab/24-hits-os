@@ -46,9 +46,40 @@ export class OrderService {
   }
 
   async get(organizationId: string, id: string) {
-    const order = await this.prisma.withTenant(organizationId, (tx) =>
-      tx.order.findFirst({ where: { id }, include: { items: true, customer: true } })
-    );
+    const order = await this.prisma.withTenant(organizationId, async (tx) => {
+      const found = await tx.order.findFirst({ where: { id }, include: { items: true, customer: true } });
+      if (!found) return null;
+      // OrderItem no tiene relación FK a ProductVariant (variantId escalar), así que
+      // resolvemos modelo/sabor con una consulta extra y lo adjuntamos a cada renglón.
+      // Objetivo: que el repartidor vea QUÉ entrega (modelo + sabor) sin escanear primero.
+      const variantIds = [...new Set(found.items.map((it) => it.variantId))];
+      const variants = variantIds.length
+        ? await tx.productVariant.findMany({
+            where: { id: { in: variantIds } },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              product: { select: { name: true } },
+              flavor: { select: { name: true } },
+            },
+          })
+        : [];
+      const byId = new Map(variants.map((v) => [v.id, v]));
+      return {
+        ...found,
+        items: found.items.map((it) => {
+          const v = byId.get(it.variantId);
+          return {
+            ...it,
+            productName: v?.product?.name ?? null, // modelo
+            flavorName: v?.flavor?.name ?? null, // sabor
+            variantName: v?.name ?? null,
+            sku: v?.sku ?? null,
+          };
+        }),
+      };
+    });
     if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
     return order;
   }

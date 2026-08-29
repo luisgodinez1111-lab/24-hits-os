@@ -30,6 +30,23 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
   }, [order]);
   const totalNeeded = [...needed.values()].reduce((a, b) => a + b, 0);
 
+  // Lo que se entrega, por renglón: modelo · sabor · cantidad. Es lo primero que
+  // ve el repartidor al abrir la entrega (antes de escanear), para saber qué lleva.
+  const lines = useMemo(() => {
+    const m = new Map<string, { label: string; need: number }>();
+    for (const it of order?.items ?? []) {
+      const model = it.productName?.trim() || null;
+      const flavor = it.flavorName?.trim() || null;
+      const variant = it.variantName?.trim() || null;
+      const label = model && flavor ? `${model} · ${flavor}`
+        : model && variant ? `${model} · ${variant}`
+        : variant || model || it.sku || "Producto";
+      const prev = m.get(it.variantId);
+      m.set(it.variantId, { label, need: (prev?.need ?? 0) + Number(it.quantity) });
+    }
+    return [...m.entries()].map(([variantId, v]) => ({ variantId, ...v }));
+  }, [order]);
+
   const [verified, setVerified] = useState<Map<string, { name: string; count: number }>>(new Map());
   const [override, setOverride] = useState(false);
   const [method, setMethod] = useState("CASH");
@@ -99,18 +116,31 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
             <div className="h-1.5 rounded-full bg-brand transition-all" style={{ width: `${totalNeeded > 0 ? Math.min(100, (totalVerified / totalNeeded) * 100) : 0}%` }} />
           </div>
 
-          {!ready && <BarcodeScanner continuous onScan={(c) => void onScan(c)} />}
-
-          {verified.size > 0 && (
-            <ul className="space-y-1 text-sm">
-              {[...verified.entries()].map(([id, v]) => (
-                <li key={id} className="flex items-center justify-between rounded-md bg-green-50 px-2 py-1 text-green-800">
-                  <span className="truncate pr-2">{v.name}</span>
-                  <span className="shrink-0 font-semibold">×{v.count}</span>
-                </li>
-              ))}
-            </ul>
+          {/* Lo que debe entregar: modelo · sabor · cantidad, visible al abrir. */}
+          {lines.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Lo que entregas</p>
+              <ul className="space-y-1 text-sm">
+                {lines.map((l) => {
+                  const done = verified.get(l.variantId)?.count ?? 0;
+                  const complete = done >= l.need;
+                  return (
+                    <li key={l.variantId} className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 ${complete ? "bg-green-50 text-green-800" : "bg-gray-50 text-gray-700"}`}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="shrink-0 font-bold tabular-nums">{l.need}×</span>
+                        <span className="truncate">{l.label}</span>
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums">
+                        {complete ? <Check className="h-4 w-4" /> : `${done}/${l.need}`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
+
+          {!ready && <BarcodeScanner continuous onScan={(c) => void onScan(c)} />}
 
           <label className="flex items-center gap-2 text-xs text-gray-500">
             <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" checked={override} onChange={(e) => setOverride(e.target.checked)} />
