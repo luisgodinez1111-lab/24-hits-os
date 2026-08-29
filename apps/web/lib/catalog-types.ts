@@ -43,6 +43,7 @@ export interface Variant {
   name: string;
   status: string;
   flavor?: { name: string } | null;
+  product?: { name: string } | null;
   barcodes?: Array<{ barcode: string; type: string }>;
 }
 

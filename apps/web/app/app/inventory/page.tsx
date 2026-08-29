@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, Search } from "lucide-react";
+import { Boxes, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import {
-  Badge, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
+  Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
 } from "@24hits/ui";
 import type { InventoryBalanceRow } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
 import { api } from "@/lib/api";
+import { hasPermission, useMe } from "@/lib/me";
+import { StockAdjustDialog } from "@/components/StockAdjustDialog";
 
 const reorderTone: Record<InventoryBalanceRow["reorderStatus"], "green" | "amber" | "red"> = {
   OK: "green", LOW: "amber", OUT_OF_STOCK: "red",
@@ -27,6 +29,9 @@ export default function InventoryPage() {
   const [warehouseId, setWarehouseId] = useState("");
   const [lowStock, setLowStock] = useState(false);
   const [search, setSearch] = useState("");
+  const [stockDialog, setStockDialog] = useState<{ variantId?: string; warehouseId?: string } | null>(null);
+  const { data: me } = useMe();
+  const canAdjust = hasPermission(me, "inventory.adjust");
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
 
   // En pivote traemos TODOS los almacenes (columnas por bodega). En detalle
@@ -87,8 +92,17 @@ export default function InventoryPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Existencias</h1>
-      <p className="mb-6 text-sm text-gray-500">Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="mb-1 text-2xl font-bold">Existencias</h1>
+          <p className="text-sm text-gray-500">Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)</p>
+        </div>
+        {canAdjust && (
+          <Button onClick={() => setStockDialog({})}>
+            <PackagePlus className="h-4 w-4" /> Cargar / ajustar stock
+          </Button>
+        )}
+      </div>
 
       <Card className="mb-6">
         <CardBody className="flex flex-wrap items-end gap-4">
@@ -183,6 +197,7 @@ export default function InventoryPage() {
               <TH className="text-right">On hand</TH><TH className="text-right">Reservado</TH>
               <TH className="text-right">Disponible</TH><TH className="text-right">Dañado</TH>
               <TH className="text-right">Tránsito</TH><TH>Reorden</TH>
+              {canAdjust && <TH>Ajuste</TH>}
             </TR>
           </THead>
           <TBody>
@@ -198,10 +213,30 @@ export default function InventoryPage() {
                 <TD className="text-right text-gray-500">{qty(r.damaged)}</TD>
                 <TD className="text-right text-gray-500">{qty(r.inTransitIncoming)}</TD>
                 <TD><Badge tone={reorderTone[r.reorderStatus]}>{reorderLabel[r.reorderStatus]}</Badge></TD>
+                {canAdjust && (
+                  <TD>
+                    <button
+                      onClick={() => setStockDialog({ variantId: r.variantId, warehouseId: r.warehouseId })}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 active:scale-95"
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" /> Ajustar
+                    </button>
+                  </TD>
+                )}
               </TR>
             ))}
           </TBody>
         </Table>
+      )}
+
+      {canAdjust && (
+        <StockAdjustDialog
+          open={stockDialog !== null}
+          prefill={stockDialog}
+          warehouses={warehouses ?? []}
+          onClose={() => setStockDialog(null)}
+          onDone={() => setStockDialog(null)}
+        />
       )}
     </div>
   );
