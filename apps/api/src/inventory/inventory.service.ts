@@ -314,18 +314,21 @@ export class InventoryService {
           ...(filters.variantId ? { variantId: filters.variantId } : {}),
         },
         orderBy: { updatedAt: "desc" },
-        take: 200,
+        take: 1000,
       });
       const variantIds = [...new Set(balances.map((b) => b.variantId))];
-      const [variants, policies] = await Promise.all([
+      const warehouseIds = [...new Set(balances.map((b) => b.warehouseId))];
+      const [variants, policies, warehouses] = await Promise.all([
         tx.productVariant.findMany({
           where: { id: { in: variantIds } },
           select: { id: true, sku: true, name: true, product: { select: { name: true } }, flavor: { select: { name: true } } },
         }),
         tx.inventoryPolicy.findMany({ where: { variantId: { in: variantIds } } }),
+        tx.warehouse.findMany({ where: { id: { in: warehouseIds } }, select: { id: true, name: true } }),
       ]);
       const vMap = new Map(variants.map((v) => [v.id, v]));
       const pMap = new Map(policies.map((p) => [`${p.warehouseId}:${p.variantId}`, p]));
+      const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
 
       const rows = balances.map((b) => {
         const available = this.balances.available(b);
@@ -335,6 +338,7 @@ export class InventoryService {
         return {
           variantId: b.variantId,
           warehouseId: b.warehouseId,
+          warehouseName: whMap.get(b.warehouseId) ?? null,
           sku: vMap.get(b.variantId)?.sku ?? null,
           product: vMap.get(b.variantId)?.product?.name ?? null,
           flavor: vMap.get(b.variantId)?.flavor?.name ?? null,

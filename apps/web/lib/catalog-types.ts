@@ -49,6 +49,7 @@ export interface Variant {
 export interface InventoryBalanceRow {
   variantId: string;
   warehouseId: string;
+  warehouseName: string | null;
   sku: string | null;
   product: string | null;
   flavor: string | null;
