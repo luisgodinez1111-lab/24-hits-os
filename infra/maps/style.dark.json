@@ -29,7 +29,7 @@
       "type": "fill-extrusion",
       "source": "openmaptiles",
       "source-layer": "building",
-      "minzoom": 14,
+      "minzoom": 13,
       "paint": {
         "fill-extrusion-color": "#3a4560",
         "fill-extrusion-height": [
