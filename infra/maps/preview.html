@@ -1,63 +1,12 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Preview — 24 HITS mapa self-hosted</title>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
-  <style>
-    html, body, #map { margin: 0; height: 100%; background: #0b1020; }
-    #hud { position: absolute; top: 10px; left: 10px; z-index: 2; background: rgba(0,0,0,.6);
-      color: #fff; font: 12px system-ui; padding: 6px 10px; border-radius: 8px; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div id="hud">Preview de tu estilo · arrastra/zoom para explorar</div>
-  <script>
-    const hud = document.getElementById("hud");
-    // Un solo pmtiles (calles + edificios combinados) → sin conflicto entre dos.
-    const protocol = new pmtiles.Protocol();
-    maplibregl.addProtocol("pmtiles", protocol.tile);
-
-    const map = new maplibregl.Map({
-      container: "map",
-      style: "./style.local.json",
-      center: [-106.0889, 28.6353],
-      zoom: 16, pitch: 45, maxPitch: 70, bearing: 0,
-      antialias: false, maxTileCacheSize: 256,
-    });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
-
-    let lastErr = "";
-    map.on("error", (e) => { lastErr = (e && e.error && e.error.message) || String(e); });
-
-    map.on("load", () => {
-      try {
-        // Edificios 3D desde la MISMA fuente (source-layer "building"), insertados
-        // antes de las calles para que las calles queden encima.
-        map.addLayer({
-          id: "3d-buildings", source: "openmaptiles", "source-layer": "building",
-          type: "fill-extrusion", minzoom: 14,
-          paint: {
-            "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get","h"], 6],
-              0, "#232838", 8, "#2b3247", 16, "#38415a", 30, "#4a557a"],
-            "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 16, ["coalesce", ["get","h"], 6]],
-            "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true,
-          }
-        }, "road-minor");
-      } catch (e) { lastErr = "buildings: " + e.message; }
-    });
-
-    // DIAGNÓSTICO: cuenta lo que realmente se está dibujando y lo muestra.
-    map.on("idle", () => {
-      let roads = 0, blds = 0;
-      try { roads = map.queryRenderedFeatures({ layers: ["road-minor","road-secondary","road-primary","road-major"] }).length; } catch (e) {}
-      try { blds = map.queryRenderedFeatures({ layers: ["3d-buildings"] }).length; } catch (e) {}
-      hud.innerHTML = `calles dibujadas: <b>${roads}</b> · edificios: <b>${blds}</b>` + (lastErr ? `<br><span style="color:#fca5a5">${lastErr}</span>` : "");
-    });
-  </script>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>html,body,#m{margin:0;height:100%;background:#0b1020}#h{position:absolute;top:8px;left:8px;z-index:2;background:rgba(0,0,0,.6);color:#fff;font:12px system-ui;padding:6px 10px;border-radius:8px}</style>
+</head><body><div id="m"></div><div id="h">cargando...</div>
+<script>
+const map=new maplibregl.Map({container:"m",style:{"version": 8, "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf", "sources": {"o": {"type": "vector", "tiles": ["http://localhost:8082/chihuahua-city/{z}/{x}/{y}.mvt"], "minzoom": 0, "maxzoom": 14}}, "layers": [{"id": "bg", "type": "background", "paint": {"background-color": "#0b1020"}}, {"id": "water", "type": "fill", "source": "o", "source-layer": "water", "paint": {"fill-color": "#12233d"}}, {"id": "3d-buildings", "type": "fill-extrusion", "source": "o", "source-layer": "building", "minzoom": 14, "paint": {"fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["coalesce", ["get", "render_height"], ["get", "h"], 6], "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true}}, {"id": "road-minor", "type": "line", "source": "o", "source-layer": "transportation", "filter": ["in", ["get", "class"], ["literal", ["minor", "service", "track", "path"]]], "layout": {"line-cap": "round", "line-join": "round"}, "paint": {"line-color": "#4b5568", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.6, 16, 3.5, 19, 9]}}, {"id": "road-secondary", "type": "line", "source": "o", "source-layer": "transportation", "filter": ["in", ["get", "class"], ["literal", ["secondary", "tertiary"]]], "layout": {"line-cap": "round", "line-join": "round"}, "paint": {"line-color": "#63708f", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.8, 16, 6, 19, 14]}}, {"id": "road-primary", "type": "line", "source": "o", "source-layer": "transportation", "filter": ["==", ["get", "class"], "primary"], "layout": {"line-cap": "round", "line-join": "round"}, "paint": {"line-color": "#7d8cb0", "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1, 16, 9, 19, 18]}}, {"id": "road-major", "type": "line", "source": "o", "source-layer": "transportation", "filter": ["in", ["get", "class"], ["literal", ["motorway", "trunk", "busway"]]], "layout": {"line-cap": "round", "line-join": "round"}, "paint": {"line-color": "#9aa9d0", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 16, 11, 19, 22]}}, {"id": "road-label", "type": "symbol", "source": "o", "source-layer": "transportation_name", "minzoom": 13, "layout": {"symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 12, "text-pitch-alignment": "viewport"}, "paint": {"text-color": "#c7d0e6", "text-halo-color": "#0b1020", "text-halo-width": 1.4}}, {"id": "place-label", "type": "symbol", "source": "o", "source-layer": "place", "filter": ["in", ["get", "class"], ["literal", ["city", "town", "village", "suburb", "neighbourhood"]]], "layout": {"text-field": ["get", "name"], "text-font": ["Noto Sans Bold"], "text-size": ["interpolate", ["linear"], ["zoom"], 8, 12, 14, 18], "text-pitch-alignment": "viewport"}, "paint": {"text-color": "#e6ebf7", "text-halo-color": "#0b1020", "text-halo-width": 1.6}}]},center:[-106.0889,28.6353],zoom:16,pitch:45,maxPitch:75,antialias:false});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}));
+let err="";map.on("error",e=>{err=(e&&e.error&&e.error.message)||"";});
+map.on("idle",()=>{const q=ids=>{try{return map.queryRenderedFeatures({layers:ids}).length}catch(e){return 0}};
+ document.getElementById("h").innerHTML="calles:<b>"+q(["road-minor","road-secondary","road-primary","road-major"])+"</b> edificios:<b>"+q(["3d-buildings"])+"</b> nombres:<b>"+q(["road-label","place-label"])+"</b>"+(err?"<br><span style=color:#f88>"+err+"</span>":"");});
+</script></body></html>

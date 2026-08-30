@@ -98,6 +98,16 @@ cae, el sistema regresa solo al respaldo.
 
 ---
 
+## Ver el mapa (rápido)
+
+```bash
+cd infra/maps
+./run.sh                 # levanta los 2 servidores locales (déjalo abierto)
+# abre http://localhost:8080/preview.html
+```
+Nota: el estilo usa fuentes "Noto Sans Regular" y "Noto Sans Bold" (existen en el
+proveedor de glyphs). "Noto Sans Medium" NO existe y rompe el estilo entero.
+
 ## Realidad / esfuerzo
 
 - Generar tiles: minutos–horas según el área (Chihuahua es rápido).
