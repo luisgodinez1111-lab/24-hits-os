@@ -108,6 +108,21 @@ cd infra/maps
 Nota: el estilo usa fuentes "Noto Sans Regular" y "Noto Sans Bold" (existen en el
 proveedor de glyphs). "Noto Sans Medium" NO existe y rompe el estilo entero.
 
+
+## Producción (sin servidor): subir el mapa a R2/S3
+
+PMTiles vive como archivo estático en almacenamiento de objetos con range
+requests. Recomendado: **Cloudflare R2** (10 GB gratis, S3-compatible, CORS).
+
+```bash
+./publish.sh https://TU-URL-PUBLICA        # arma dist/ con tu dominio
+# sube dist/ (chihuahua-city.pmtiles + style.json + fonts/) al bucket
+# habilita CORS (GET + Range)
+# Vercel → NEXT_PUBLIC_MAP_STYLE_URL = https://TU-URL-PUBLICA/style.json  → redeploy
+```
+Verificado: el mapa funciona leyendo el pmtiles estático vía protocolo pmtiles://
+(no necesita tile server en producción).
+
 ## Realidad / esfuerzo
 
 - Generar tiles: minutos–horas según el área (Chihuahua es rápido).

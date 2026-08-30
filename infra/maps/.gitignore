@@ -5,3 +5,4 @@ node_modules/
 style.local.json
 bld/
 ms-links.csv
+dist/
