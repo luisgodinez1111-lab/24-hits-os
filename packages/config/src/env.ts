@@ -45,6 +45,11 @@ export const envSchema = z.object({
   // "off": SOLO para recuperación de emergencia (deja arrancar y avisa por log).
   RLS_STARTUP_CHECK: z.enum(["on", "off"]).default("on"),
 
+  // Secreto para el endpoint de mantenimiento (jobs de inventario disparados por un
+  // cron gratis: Vercel Cron / GitHub Actions). Vercel Cron envía automáticamente
+  // Authorization: Bearer $CRON_SECRET. Sin él, el endpoint queda deshabilitado.
+  CRON_SECRET: z.string().optional(),
+
   // Observabilidad
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default("hits-api"),
