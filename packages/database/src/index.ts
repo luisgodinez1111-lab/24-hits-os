@@ -15,3 +15,8 @@ export {
   type BalanceKeyLite,
 } from "./inventory-compute.js";
 export { scanLowStockForOrg } from "./notifications.js";
+export {
+  reconcileOrphanOrderHolds,
+  type OrphanHoldReleased,
+  type ReconcileOptions,
+} from "./reservations-reconcile.js";

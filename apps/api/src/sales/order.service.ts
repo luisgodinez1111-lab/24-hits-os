@@ -512,8 +512,28 @@ export class OrderService {
       }
     } catch (err) {
       // Compensación: libera lo que sí se reservó para no dejar holds huérfanos.
+      // Si una liberación FALLA, no la tragamos en silencio: la registramos en
+      // auditoría para que el hold huérfano sea visible y reconciliable. La red de
+      // seguridad es el job del worker `reconcileOrphanOrderHolds`, que libera las
+      // reservas ACTIVE cuyo pedido ya no las sostiene.
       for (const c of created) {
-        await this.reservations.release(organizationId, c.reservationId).catch(() => undefined);
+        try {
+          await this.reservations.release(organizationId, c.reservationId);
+        } catch (releaseErr) {
+          await this.audit
+            .record({
+              action: "inventory.reservation_release_failed",
+              organizationId,
+              entityType: "InventoryReservation",
+              entityId: c.reservationId,
+              metadata: {
+                orderId: order.id,
+                reason: "order_confirm_compensation",
+                error: releaseErr instanceof Error ? releaseErr.message : String(releaseErr),
+              },
+            })
+            .catch(() => undefined);
+        }
       }
       throw err;
     }

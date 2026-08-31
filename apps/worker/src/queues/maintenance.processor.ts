@@ -4,12 +4,14 @@ import type { ExtendedPrismaClient } from "@24hits/database";
 import { expireReservations } from "../inventory/expire-reservations.js";
 import { verifyInventoryDrift } from "../inventory/verify-drift.js";
 import { scanLowStock } from "../inventory/low-stock.js";
+import { reconcileOrphanOrderHolds } from "../inventory/reconcile-orphan-holds.js";
 import type { RedisConnection } from "./email.processor.js";
 
 export const MAINTENANCE_QUEUE_NAME = "maintenance";
 export const JOB_RESERVATION_EXPIRE = "reservation.expire";
 export const JOB_BALANCE_VERIFY = "inventory.balance.verify";
 export const JOB_LOW_STOCK_SCAN = "inventory.low_stock.scan";
+export const JOB_ORPHAN_HOLDS_RECONCILE = "inventory.orphan_holds.reconcile";
 
 // Programa los jobs repetibles (cron) y arranca el worker de mantenimiento de inventario.
 export async function startMaintenanceWorker(params: {
@@ -25,6 +27,8 @@ export async function startMaintenanceWorker(params: {
   await queue.add(JOB_BALANCE_VERIFY, {}, { repeat: { every: 300_000 }, jobId: "balance-verify", removeOnComplete: 100, removeOnFail: 100 });
   // Escaneo de stock bajo cada 10 min (notificaciones deduplicadas 24h).
   await queue.add(JOB_LOW_STOCK_SCAN, {}, { repeat: { every: 600_000 }, jobId: "low-stock-scan", removeOnComplete: 100, removeOnFail: 100 });
+  // Reconciliación de holds de inventario huérfanos cada 10 min (red de seguridad).
+  await queue.add(JOB_ORPHAN_HOLDS_RECONCILE, {}, { repeat: { every: 600_000 }, jobId: "orphan-holds-reconcile", removeOnComplete: 100, removeOnFail: 100 });
 
   const worker = new Worker(
     MAINTENANCE_QUEUE_NAME,
@@ -39,6 +43,10 @@ export async function startMaintenanceWorker(params: {
       }
       if (job.name === JOB_LOW_STOCK_SCAN) {
         await scanLowStock(prisma, logger);
+        return;
+      }
+      if (job.name === JOB_ORPHAN_HOLDS_RECONCILE) {
+        await reconcileOrphanOrderHolds(prisma, logger);
         return;
       }
       logger.warn("Job de mantenimiento desconocido", { name: job.name });
