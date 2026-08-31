@@ -99,6 +99,22 @@ export class PricingService {
     return item;
   }
 
+  // Fija el precio de venta de una variante sin pedir la lista: usa la lista
+  // RETAIL activa (la crea si no existe) y delega en setItemPrice (historial).
+  // Pensado para editar el precio del sabor desde el catálogo.
+  async setVariantPrice(organizationId: string, userId: string, variantId: string, price: number, currency = "MXN") {
+    const listId = await this.prisma.withTenant(organizationId, async (tx) => {
+      const list =
+        (await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true } })) ??
+        (await tx.priceList.create({
+          data: { organizationId, name: "Lista de precios", type: "RETAIL", status: "ACTIVE", currency: currency.toUpperCase() },
+          select: { id: true },
+        }));
+      return list.id;
+    });
+    return this.setItemPrice(organizationId, userId, listId, { variantId, price });
+  }
+
   priceHistory(organizationId: string, variantId: string) {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.priceHistory.findMany({ where: { variantId }, orderBy: { createdAt: "desc" }, take: 100 })

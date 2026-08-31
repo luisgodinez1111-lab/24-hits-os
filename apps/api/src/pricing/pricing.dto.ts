@@ -23,6 +23,12 @@ export const setPriceItemSchema = z
   });
 export type SetPriceItemInput = z.infer<typeof setPriceItemSchema>;
 
+export const setVariantPriceSchema = z.object({
+  price: z.coerce.number().nonnegative(),
+  currency: z.string().length(3).default("MXN"),
+});
+export type SetVariantPriceInput = z.infer<typeof setVariantPriceSchema>;
+
 export const initCostSchema = z.object({
   unitCost: z.coerce.number().nonnegative(),
 });

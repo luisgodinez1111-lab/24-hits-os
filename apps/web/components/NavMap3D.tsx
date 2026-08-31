@@ -289,12 +289,16 @@ export function NavMap3D({ driver, heading, headingUp, geometry, destination, on
     if (!driver) { driverRef.current?.remove(); driverRef.current = null; return; }
     if (!driverRef.current) {
       const el = document.createElement("div");
-      // Puck de navegación tipo Uber: halo azul + disco con degradado y flecha.
-      el.innerHTML = `<div style="position:relative;width:44px;height:44px">
-        <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.35),rgba(59,130,246,0))"></div>
-        <div style="position:absolute;left:7px;top:7px;width:30px;height:30px;border-radius:50%;background:linear-gradient(180deg,#3b82f6,#1d4ed8);border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L20 21 L12 16 L4 21 Z"/></svg>
-        </div></div>`;
+      // Auto visto desde arriba (estilo Google/CarPlay): halo azul + carrocería
+      // con parabrisas. Apunta a tu dirección (rotationAlignment: map).
+      el.innerHTML = `<div style="position:relative;width:46px;height:46px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.30),rgba(59,130,246,0))"></div>
+        <svg style="position:absolute;left:12px;top:6px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.5))" width="22" height="34" viewBox="0 0 22 34">
+          <rect x="2" y="2" width="18" height="30" rx="6" fill="#2563eb" stroke="#eaf1ff" stroke-width="1.5"/>
+          <path d="M5 9 q6 -4 12 0 l-1.5 7 h-9 z" fill="#bfdbfe"/>
+          <rect x="5.5" y="20" width="11" height="7" rx="2.5" fill="#1e3a8a"/>
+          <circle cx="6" cy="6" r="1.4" fill="#fde68a"/><circle cx="16" cy="6" r="1.4" fill="#fde68a"/>
+        </svg></div>`;
       driverRef.current = new maplibregl.Marker({ element: el, rotationAlignment: "map", pitchAlignment: "map" })
         .setLngLat([driver.lng, driver.lat]).addTo(map);
     }

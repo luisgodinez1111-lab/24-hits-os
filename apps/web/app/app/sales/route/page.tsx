@@ -89,6 +89,7 @@ export default function RoutePage() {
   const [heading, setHeading] = useState<number | null>(null); // rumbo (grados) para la flecha
   const [headingUp, setHeadingUp] = useState(true); // rotación cámara detrás del carro
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null); // precisión en metros
+  const [speedKmh, setSpeedKmh] = useState<number | null>(null); // velocidad (km/h) del GPS
   const [map3dFailed, setMap3dFailed] = useState(false); // el 3D no cargó → usar Leaflet
   const startNav = () => { setMap3dFailed(false); setNavMode(true); };
 
@@ -109,6 +110,7 @@ export default function RoutePage() {
       (p) => {
         const c = { lat: p.coords.latitude, lng: p.coords.longitude };
         setGpsAccuracy(typeof p.coords.accuracy === "number" ? p.coords.accuracy : null);
+        setSpeedKmh(typeof p.coords.speed === "number" && p.coords.speed >= 0 ? p.coords.speed * 3.6 : null);
         // Rumbo: el del GPS si viene; si no, se calcula del desplazamiento.
         const gpsHeading = typeof p.coords.heading === "number" && !Number.isNaN(p.coords.heading) ? p.coords.heading : null;
         if (gpsHeading != null) setHeading(gpsHeading);
@@ -217,6 +219,14 @@ export default function RoutePage() {
             </div>
           </div>
         </div>
+
+        {/* VELOCÍMETRO (estilo Google/CarPlay): círculo con km/h, abajo-izquierda. */}
+        {speedKmh != null && (
+          <div className="pointer-events-none absolute bottom-[42%] left-4 z-10 grid h-16 w-16 place-items-center rounded-full bg-gray-900/90 text-white shadow-lg backdrop-blur">
+            <span className="text-2xl font-extrabold leading-none tabular-nums">{Math.round(speedKmh)}</span>
+            <span className="text-[10px] font-semibold text-gray-300">km/h</span>
+          </div>
+        )}
 
         {/* TARJETA DE ENTREGA flotando sobre el mapa (integrada). */}
         <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
