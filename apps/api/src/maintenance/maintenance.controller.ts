@@ -1,7 +1,12 @@
 import { Controller, Get, Headers, Inject } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { Env } from "@24hits/config";
-import { reconcileOrphanOrderHolds } from "@24hits/database";
+import {
+  detectInventoryDrift,
+  expireDueReservations,
+  reconcileOrphanOrderHolds,
+  scanLowStockAllOrgs,
+} from "@24hits/database";
 import { ENV } from "../config/app-config.module.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { Public } from "../common/decorators/public.decorator.js";
@@ -24,14 +29,23 @@ export class MaintenanceController {
   @Get("run")
   async run(@Headers("authorization") authorization?: string) {
     this.assertSecret(authorization);
+    const prisma = this.prisma.client;
 
-    // Red de seguridad: libera holds de inventario huérfanos (ver ADR/reconcile).
-    const orphanHolds = await reconcileOrphanOrderHolds(this.prisma.client);
+    // Las 4 redes de seguridad de inventario (cross-tenant). Cada una es idempotente;
+    // se corren en secuencia y se reporta el resumen. Un fallo en una no se traga:
+    // propaga y el cron marca la corrida como fallida (visible en Vercel).
+    const orphanHolds = await reconcileOrphanOrderHolds(prisma);
+    const expiredReservations = await expireDueReservations(prisma);
+    const lowStockNotifications = await scanLowStockAllOrgs(prisma);
+    const drift = await detectInventoryDrift(prisma);
 
     return {
       ok: true,
       ranAt: new Date().toISOString(),
       orphanHoldsReleased: orphanHolds.length,
+      expiredReservations,
+      lowStockNotifications,
+      inventoryDrift: drift.length, // >0 = inconsistencias proyección↔ledger a revisar
     };
   }
 

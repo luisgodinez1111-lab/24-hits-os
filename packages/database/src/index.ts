@@ -20,3 +20,9 @@ export {
   type OrphanHoldReleased,
   type ReconcileOptions,
 } from "./reservations-reconcile.js";
+export {
+  expireDueReservations,
+  detectInventoryDrift,
+  scanLowStockAllOrgs,
+  type DriftEntry,
+} from "./maintenance.js";
