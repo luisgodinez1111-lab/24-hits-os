@@ -7,10 +7,13 @@ import {
   Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
-import type { Brand, Category, Flavor, ProductListItem, ProductPage, Unit, Variant } from "@/lib/catalog-types";
+import type { Brand, Category, Flavor, ProductListItem, ProductPage, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
+
+// Referencia mínima a un modelo (lo único que necesita el editor de sabores).
+type ModelRef = { id: string; name: string };
 
 const statusTone: Record<ProductListItem["status"], "green" | "gray" | "amber" | "red"> = {
   ACTIVE: "green", DRAFT: "amber", INACTIVE: "gray", DISCONTINUED: "red",
@@ -24,7 +27,7 @@ export default function ProductsPage() {
   const [status, setStatus] = useState("");
   const [creating, setCreating] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
-  const [variantsFor, setVariantsFor] = useState<ProductListItem | null>(null);
+  const [flavorsFor, setFlavorsFor] = useState<ModelRef | null>(null);
 
   const { data: brands } = useQuery({ queryKey: ["brands"], queryFn: () => api.get<Brand[]>("/brands") });
   const params = new URLSearchParams();
@@ -41,23 +44,23 @@ export default function ProductsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Productos</h1>
-          <p className="text-sm text-gray-500">Catálogo de productos y variantes</p>
+          <h1 className="text-2xl font-bold">Modelos</h1>
+          <p className="text-sm text-gray-500">Marca → modelo → sabores</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setQuickOpen(true)}>
             <ScanLine className="h-4 w-4" /> Alta por escaneo
           </Button>
           <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Nuevo producto
+            <Plus className="h-4 w-4" /> Nuevo modelo
           </Button>
         </div>
       </div>
 
       <Card className="mb-6">
         <CardBody className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <FormField label="Buscar (nombre o SKU)">
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Hyper Bar…" />
+          <FormField label="Buscar (modelo o SKU)">
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Elfbar BC5000…" />
           </FormField>
           <FormField label="Marca">
             <Combobox
@@ -82,11 +85,11 @@ export default function ProductsPage() {
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : !data || data.items.length === 0 ? (
-        <EmptyState icon={<Package className="h-8 w-8 text-gray-400" />} title="Sin productos" description="Crea el primero." />
+        <EmptyState icon={<Package className="h-8 w-8 text-gray-400" />} title="Sin modelos" description="Crea el primero con “Nuevo modelo”." />
       ) : (
         <Table>
           <THead>
-            <TR><TH>Producto</TH><TH>Marca</TH><TH>Categoría</TH><TH className="text-right">Variantes</TH><TH>Estado</TH><TH>{" "}</TH></TR>
+            <TR><TH>Modelo</TH><TH>Marca</TH><TH>Categoría</TH><TH className="text-right">Sabores</TH><TH>Estado</TH><TH>{" "}</TH></TR>
           </THead>
           <TBody>
             {data.items.map((p) => (
@@ -97,7 +100,7 @@ export default function ProductsPage() {
                 <TD className="text-right">{p._count.variants}</TD>
                 <TD><Badge tone={statusTone[p.status]}>{p.status}</Badge></TD>
                 <TD className="text-right">
-                  <Button size="sm" variant="outline" onClick={() => setVariantsFor(p)}>Variantes</Button>
+                  <Button size="sm" variant="outline" onClick={() => setFlavorsFor(p)}>Sabores</Button>
                 </TD>
               </TR>
             ))}
@@ -105,36 +108,41 @@ export default function ProductsPage() {
         </Table>
       )}
 
-      <CreateProductDialog open={creating} onClose={() => setCreating(false)} brands={brands ?? []}
-        onCreated={async () => { setCreating(false); await qc.invalidateQueries({ queryKey: ["products"] }); toast.push("Producto creado", "success"); }} />
+      <CreateModelDialog open={creating} onClose={() => setCreating(false)} brands={brands ?? []}
+        onCreated={async (model) => {
+          setCreating(false);
+          await qc.invalidateQueries({ queryKey: ["products"] });
+          toast.push("Modelo creado — ahora agrega sus sabores", "success");
+          setFlavorsFor(model); // abre el editor de sabores del nuevo modelo
+        }} />
       <QuickRegisterDialog open={quickOpen} onClose={() => setQuickOpen(false)}
         onRegistered={async () => { await qc.invalidateQueries({ queryKey: ["products"] }); }} />
-      <VariantsDialog product={variantsFor} onClose={() => setVariantsFor(null)}
+      <FlavorsDialog model={flavorsFor} onClose={() => setFlavorsFor(null)}
         onChanged={() => qc.invalidateQueries({ queryKey: ["products"] })} />
     </div>
   );
 }
 
-function CreateProductDialog({ open, onClose, brands, onCreated }: {
-  open: boolean; onClose: () => void; brands: Brand[]; onCreated: () => void;
+function CreateModelDialog({ open, onClose, brands, onCreated }: {
+  open: boolean; onClose: () => void; brands: Brand[]; onCreated: (model: ModelRef) => void;
 }) {
   const toast = useToast();
   const qc = useQueryClient();
   const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => api.get<Category[]>("/categories") });
-  const [form, setForm] = useState({ name: "", brandId: "", categoryId: "", status: "DRAFT" });
+  const [form, setForm] = useState({ name: "", brandId: "", categoryId: "", status: "ACTIVE" });
   const create = useMutation({
-    mutationFn: () => api.post("/products", {
+    mutationFn: () => api.post<ModelRef>("/products", {
       name: form.name, brandId: form.brandId || undefined, categoryId: form.categoryId || undefined, status: form.status,
     }),
-    onSuccess: () => { setForm({ name: "", brandId: "", categoryId: "", status: "DRAFT" }); onCreated(); },
+    onSuccess: (model) => { setForm({ name: "", brandId: "", categoryId: "", status: "ACTIVE" }); onCreated(model); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
   return (
-    <Dialog open={open} onClose={onClose} title="Nuevo producto"
+    <Dialog open={open} onClose={onClose} title="Nuevo modelo"
       footer={<><Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" loading={create.isPending} onClick={() => form.name.trim() && create.mutate()}>Crear</Button></>}>
+        <Button size="sm" loading={create.isPending} onClick={() => form.name.trim() && create.mutate()}>Crear modelo</Button></>}>
       <div className="space-y-3">
-        <FormField label="Nombre"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
+        <FormField label="Nombre del modelo"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ej. Elfbar BC5000" /></FormField>
         <FormField label="Marca">
           <Combobox
             value={form.brandId}
@@ -149,7 +157,7 @@ function CreateProductDialog({ open, onClose, brands, onCreated }: {
             }}
           />
         </FormField>
-        <FormField label="Categoría">
+        <FormField label="Categoría (opcional)">
           <Combobox
             value={form.categoryId}
             onChange={(v) => setForm({ ...form, categoryId: v })}
@@ -165,41 +173,52 @@ function CreateProductDialog({ open, onClose, brands, onCreated }: {
         </FormField>
         <FormField label="Estado">
           <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            <option value="DRAFT">Borrador</option><option value="ACTIVE">Activo</option>
+            <option value="ACTIVE">Activo</option><option value="DRAFT">Borrador</option>
           </Select>
         </FormField>
+        <p className="text-[11px] text-gray-400">Después de crear el modelo, agregarás sus sabores.</p>
       </div>
     </Dialog>
   );
 }
 
-function VariantsDialog({ product, onClose, onChanged }: {
-  product: ProductListItem | null; onClose: () => void; onChanged: () => void;
+// Editor de sabores de un modelo. Alta fácil: escribe el sabor (y su precio
+// opcional) — el SKU y la unidad se generan solos. El código de barras se agrega
+// por sabor (escaneándolo) más abajo.
+function FlavorsDialog({ model, onClose, onChanged }: {
+  model: ModelRef | null; onClose: () => void; onChanged: () => void;
 }) {
   const toast = useToast();
   const qc = useQueryClient();
-  const enabled = Boolean(product);
+  const enabled = Boolean(model);
   const { data: detail, refetch } = useQuery({
-    queryKey: ["product", product?.id],
-    queryFn: () => api.get<{ variants: Variant[] }>(`/products/${product!.id}`),
+    queryKey: ["product", model?.id],
+    queryFn: () => api.get<{ variants: Variant[] }>(`/products/${model!.id}`),
     enabled,
   });
-  const { data: units } = useQuery({ queryKey: ["units"], queryFn: () => api.get<Unit[]>("/units"), enabled });
   const { data: flavors } = useQuery({ queryKey: ["flavors"], queryFn: () => api.get<Flavor[]>("/flavors"), enabled });
-  const [form, setForm] = useState({ sku: "", name: "", flavorId: "", unitId: "" });
+  const [flavorName, setFlavorName] = useState("");
+  const [price, setPrice] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const create = useMutation({
-    mutationFn: () => api.post(`/products/${product!.id}/variants`, {
-      sku: form.sku, name: form.name, flavorId: form.flavorId || undefined,
-      purchaseUnitId: form.unitId, salesUnitId: form.unitId,
+    mutationFn: () => api.post(`/products/${model!.id}/variants`, {
+      flavorName: flavorName.trim(),
+      name: flavorName.trim(),
+      ...(price.trim() ? { price: Number(price) } : {}),
     }),
-    onSuccess: async () => { setForm({ sku: "", name: "", flavorId: "", unitId: "" }); await refetch(); onChanged(); toast.push("Variante creada", "success"); },
+    onSuccess: async () => {
+      setFlavorName(""); setPrice("");
+      await refetch();
+      void qc.invalidateQueries({ queryKey: ["flavors"] });
+      onChanged();
+      toast.push("Sabor agregado", "success");
+    },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
   return (
-    <Dialog open={enabled} onClose={onClose} title={`Variantes — ${product?.name ?? ""}`}>
+    <Dialog open={enabled} onClose={onClose} title={`Sabores — ${model?.name ?? ""}`}>
       <div className="space-y-3">
         {detail?.variants?.length ? (
           <div className="space-y-1">
@@ -207,9 +226,9 @@ function VariantsDialog({ product, onClose, onChanged }: {
               <div key={v.id} className="rounded-lg border border-gray-200">
                 <button type="button" onClick={() => setExpanded(expanded === v.id ? null : v.id)}
                   className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50">
-                  <span><span className="font-mono text-xs">{v.sku}</span> · {v.name}</span>
+                  <span className="font-medium">{v.flavor?.name ?? v.name}</span>
                   <span className="flex items-center gap-2">
-                    {v.flavor?.name ? <Badge tone="brand">{v.flavor.name}</Badge> : null}
+                    <span className="font-mono text-[11px] text-gray-400">{v.sku}</span>
                     <Badge tone={v.barcodes && v.barcodes.length ? "green" : "gray"}>
                       <Barcode className="mr-1 inline h-3 w-3" />{v.barcodes?.length ?? 0}
                     </Badge>
@@ -218,48 +237,33 @@ function VariantsDialog({ product, onClose, onChanged }: {
                 </button>
                 {expanded === v.id && (
                   <div className="border-t border-gray-100 px-3 py-3">
+                    <p className="mb-2 text-xs font-semibold text-gray-500">Código(s) de barras de este sabor</p>
                     <VariantBarcodes variant={v} onChanged={refetch} />
                   </div>
                 )}
               </div>
             ))}
           </div>
-        ) : <p className="text-sm text-gray-400">Sin variantes.</p>}
+        ) : <p className="text-sm text-gray-400">Aún no hay sabores. Agrega el primero abajo.</p>}
 
         <div className="rounded-lg border border-gray-200 p-3">
-          <p className="mb-2 text-xs font-semibold text-gray-600">Nueva variante</p>
+          <p className="mb-2 text-xs font-semibold text-gray-600">Agregar sabor</p>
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-            <Input placeholder="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Combobox
-              value={form.flavorId}
-              onChange={(v) => setForm({ ...form, flavorId: v })}
-              placeholder="Sin sabor"
-              options={[{ value: "", label: "Sin sabor" }, ...(flavors ?? []).map((f) => ({ value: f.id, label: f.name }))]}
+              value={flavorName}
+              onChange={setFlavorName}
+              placeholder="Sabor (ej. Sandía)"
+              options={(flavors ?? []).map((f) => ({ value: f.name, label: f.name }))}
               allowCreate
-              onCreate={async (name) => {
-                const f = await api.post<Flavor>("/flavors", { name });
-                await qc.invalidateQueries({ queryKey: ["flavors"] });
-                return f.id;
-              }}
+              onCreate={async (name) => name.trim()}
             />
-            <Combobox
-              value={form.unitId}
-              onChange={(v) => setForm({ ...form, unitId: v })}
-              placeholder="Unidad…"
-              options={(units ?? []).map((u) => ({ value: u.id, label: u.code }))}
-              allowCreate
-              onCreate={async (code) => {
-                const u = await api.post<Unit>("/units", { code: code.toUpperCase().slice(0, 20), name: code });
-                await qc.invalidateQueries({ queryKey: ["units"] });
-                return u.id;
-              }}
-            />
+            <Input type="number" inputMode="decimal" min="0" placeholder="Precio (opcional)" value={price} onChange={(e) => setPrice(e.target.value)} />
           </div>
           <Button size="sm" className="mt-2" loading={create.isPending}
-            onClick={() => form.sku && form.name && form.unitId ? create.mutate() : toast.push("SKU, nombre y unidad requeridos", "error")}>
-            Agregar variante
+            onClick={() => flavorName.trim() ? create.mutate() : toast.push("Escribe el sabor", "error")}>
+            <Plus className="h-4 w-4" /> Agregar sabor
           </Button>
+          <p className="mt-1.5 text-[11px] text-gray-400">SKU y unidad “Pieza” automáticos. El código de barras se agrega después escaneándolo.</p>
         </div>
       </div>
     </Dialog>

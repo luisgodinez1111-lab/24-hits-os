@@ -27,17 +27,23 @@ export const createProductSchema = z.object({
 });
 export const updateProductSchema = createProductSchema.partial();
 
+// Alta de un SABOR (variante) de un modelo. Diseño "fácil": basta el nombre del
+// sabor — SKU y unidad se autogeneran si no se indican. Precio y código de barras
+// son opcionales (el código suele escanearse después).
 export const createVariantSchema = z.object({
-  sku: z.string().min(1).max(64),
-  name: z.string().min(1).max(200),
+  sku: z.string().min(1).max(64).optional(), // autogenerado si se omite
+  name: z.string().min(1).max(200).optional(), // por defecto = nombre del sabor
   flavorId: z.string().uuid().optional(),
-  purchaseUnitId: z.string().uuid(),
-  salesUnitId: z.string().uuid(),
+  flavorName: z.string().min(1).max(120).optional(), // se busca/crea por nombre
+  purchaseUnitId: z.string().uuid().optional(), // por defecto = unidad "Pieza"
+  salesUnitId: z.string().uuid().optional(),
   unitsPerPurchaseUnit: z.coerce.number().int().positive().default(1),
   trackInventory: z.boolean().default(true),
   allowBackorder: z.boolean().default(false),
   barcode: z.string().max(64).optional(),
   barcodeType: z.enum(["EAN", "UPC", "CODE128", "QR_INTERNAL", "OTHER"]).optional(),
+  price: z.coerce.number().nonnegative().optional(), // precio de venta (lista RETAIL)
+  currency: z.string().length(3).default("MXN"),
 });
 
 export const addBarcodeSchema = z.object({

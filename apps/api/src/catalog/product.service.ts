@@ -117,21 +117,60 @@ export class ProductService {
     return after;
   }
 
+  // SKU legible autogenerado: abreviatura del modelo + sabor + sufijo aleatorio
+  // corto (para que sea único sin pedírselo al usuario).
+  private generateSku(productName: string, label: string): string {
+    const abbr = (s: string) => slugify(s).replace(/-/g, "").slice(0, 6).toUpperCase();
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const base = [abbr(productName), abbr(label)].filter(Boolean).join("-");
+    return base ? `${base}-${rand}` : `SKU-${rand}`;
+  }
+
+  // Alta de un sabor (variante). Diseño fácil: con el nombre del sabor basta.
+  // SKU y unidad "Pieza" se autogeneran; precio y código de barras son opcionales.
   async createVariant(organizationId: string, productId: string, input: CreateVariant) {
-    const product = await this.prisma.withTenant(organizationId, (tx) => tx.product.findFirst({ where: { id: productId }, select: { id: true } }));
+    const product = await this.prisma.withTenant(organizationId, (tx) => tx.product.findFirst({ where: { id: productId }, select: { id: true, name: true } }));
     if (!product) throw new AppException(404, ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado");
 
     try {
       const variant = await this.prisma.withTenant(organizationId, async (tx) => {
+        // Sabor: por id, o por nombre (se reutiliza/crea por nombre normalizado).
+        let flavorId = input.flavorId ?? null;
+        let flavorLabel: string | null = null;
+        if (!flavorId && input.flavorName?.trim()) {
+          const normalizedName = normalize(input.flavorName);
+          const flavor =
+            (await tx.flavor.findFirst({ where: { normalizedName }, select: { id: true, name: true } })) ??
+            (await tx.flavor.create({ data: { organizationId, name: input.flavorName.trim(), normalizedName }, select: { id: true, name: true } }));
+          flavorId = flavor.id;
+          flavorLabel = flavor.name;
+        } else if (flavorId) {
+          flavorLabel = (await tx.flavor.findFirst({ where: { id: flavorId }, select: { name: true } }))?.name ?? null;
+        }
+
+        // Unidad: la indicada o la de "Pieza" por defecto (se crea si no existe).
+        let purchaseUnitId = input.purchaseUnitId ?? null;
+        let salesUnitId = input.salesUnitId ?? null;
+        if (!purchaseUnitId || !salesUnitId) {
+          const unit =
+            (await tx.unitOfMeasure.findFirst({ where: {}, select: { id: true }, orderBy: { createdAt: "asc" } })) ??
+            (await tx.unitOfMeasure.create({ data: { organizationId, code: "PZ", name: "Pieza" }, select: { id: true } }));
+          purchaseUnitId = purchaseUnitId ?? unit.id;
+          salesUnitId = salesUnitId ?? unit.id;
+        }
+
+        const name = input.name?.trim() || flavorLabel || "Estándar";
+        const sku = input.sku?.trim() || this.generateSku(product.name, flavorLabel ?? name);
+
         const v = await tx.productVariant.create({
           data: {
             organizationId,
             productId,
-            flavorId: input.flavorId ?? null,
-            sku: input.sku,
-            name: input.name,
-            purchaseUnitId: input.purchaseUnitId,
-            salesUnitId: input.salesUnitId,
+            flavorId,
+            sku,
+            name,
+            purchaseUnitId,
+            salesUnitId,
             unitsPerPurchaseUnit: input.unitsPerPurchaseUnit,
             trackInventory: input.trackInventory,
             allowBackorder: input.allowBackorder,
@@ -139,13 +178,19 @@ export class ProductService {
         });
         if (input.barcode) {
           await tx.productBarcode.create({
-            data: {
-              organizationId,
-              variantId: v.id,
-              barcode: input.barcode,
-              type: input.barcodeType ?? "OTHER",
-              isPrimary: true,
-            },
+            data: { organizationId, variantId: v.id, barcode: input.barcode, type: input.barcodeType ?? "OTHER", isPrimary: true },
+          });
+        }
+        // Precio (opcional): lista RETAIL activa (reutiliza o crea) + ítem vigente.
+        if (input.price != null) {
+          const list =
+            (await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true } })) ??
+            (await tx.priceList.create({
+              data: { organizationId, name: "Lista de precios", type: "RETAIL", status: "ACTIVE", currency: input.currency },
+              select: { id: true },
+            }));
+          await tx.priceListItem.create({
+            data: { organizationId, priceListId: list.id, variantId: v.id, price: new Prisma.Decimal(input.price) },
           });
         }
         return v;
