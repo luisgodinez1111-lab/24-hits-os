@@ -62,18 +62,36 @@ export class ProductService {
   }
 
   async getById(organizationId: string, id: string) {
-    const product = await this.prisma.withTenant(organizationId, (tx) =>
-      tx.product.findFirst({
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const product = await tx.product.findFirst({
         where: { id },
         include: {
           brand: true,
           category: true,
           variants: { include: { flavor: true, barcodes: true } },
         },
-      })
-    );
-    if (!product) throw new AppException(404, ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado");
-    return product;
+      });
+      if (!product) throw new AppException(404, ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado");
+
+      // Precio de venta vigente (RETAIL) por sabor, para mostrarlo/editarlo aquí.
+      const variantIds = product.variants.map((v) => v.id);
+      const list = variantIds.length
+        ? await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true } })
+        : null;
+      const items = list
+        ? await tx.priceListItem.findMany({
+            where: { priceListId: list.id, variantId: { in: variantIds }, validTo: null },
+            orderBy: { validFrom: "asc" },
+            select: { variantId: true, price: true },
+          })
+        : [];
+      const priceMap = new Map(items.map((i) => [i.variantId, i.price.toString()]));
+
+      return {
+        ...product,
+        variants: product.variants.map((v) => ({ ...v, price: priceMap.get(v.id) ?? null })),
+      };
+    });
   }
 
   async createProduct(organizationId: string, input: CreateProduct) {

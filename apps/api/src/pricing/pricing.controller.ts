@@ -6,7 +6,7 @@ import { RequirePermissions } from "../common/decorators/require-permissions.dec
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { PricingService } from "./pricing.service.js";
-import { createPriceListSchema, setPriceItemSchema, type CreatePriceListInput, type SetPriceItemInput } from "./pricing.dto.js";
+import { createPriceListSchema, setPriceItemSchema, setVariantPriceSchema, type CreatePriceListInput, type SetPriceItemInput, type SetVariantPriceInput } from "./pricing.dto.js";
 
 @ApiTags("pricing")
 @Controller("pricing")
@@ -41,6 +41,13 @@ export class PricingController {
   @RequirePermissions("pricing.read")
   currentPrice(@CurrentUser() u: AuthContext, @Param("variantId") variantId: string, @Query("type") type?: string) {
     return this.pricing.currentPrice(u.organizationId!, variantId, (type as PriceListType) ?? "RETAIL");
+  }
+
+  // Fija el precio de venta (RETAIL) de una variante sin manejar listas.
+  @Post("variants/:variantId/price")
+  @RequirePermissions("pricing.manage")
+  setVariantPrice(@CurrentUser() u: AuthContext, @Param("variantId") variantId: string, @Body(new ZodValidationPipe(setVariantPriceSchema)) b: SetVariantPriceInput) {
+    return this.pricing.setVariantPrice(u.organizationId!, u.userId, variantId, b.price, b.currency);
   }
 
   @Get("variants/:variantId/history")

@@ -45,6 +45,7 @@ export interface Variant {
   flavor?: { name: string } | null;
   product?: { name: string } | null;
   barcodes?: Array<{ barcode: string; type: string }>;
+  price?: string | null; // precio de venta RETAIL vigente (lo enriquece GET /products/:id)
 }
 
 export interface InventoryBalanceRow {
