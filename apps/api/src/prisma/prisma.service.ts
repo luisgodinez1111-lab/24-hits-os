@@ -21,10 +21,12 @@ import { ENV } from "../config/app-config.module.js";
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   public readonly client: ExtendedPrismaClient;
   private readonly nodeEnv: Env["NODE_ENV"];
+  private readonly rlsStartupCheck: Env["RLS_STARTUP_CHECK"];
 
   constructor(@Inject(ENV) env: Env) {
     this.client = createPrismaClient(env.DATABASE_URL);
     this.nodeEnv = env.NODE_ENV;
+    this.rlsStartupCheck = env.RLS_STARTUP_CHECK;
   }
 
   async onModuleInit(): Promise<void> {
@@ -38,28 +40,43 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   // el proceso muere en vez de arrancar sirviendo datos de todos los tenants en
   // silencio. Convierte "en Neon seguro es no-superusuario" en una garantía probada
   // en cada boot. Ver ADR-004 (RLS por current_setting('app.current_org_id')).
+  //
+  // Válvula de escape: RLS_STARTUP_CHECK=off degrada el fallo a un WARNING (solo para
+  // recuperación de emergencia; deja arrancar con un rol inseguro y lo registra).
   private async assertRlsEnforceable(): Promise<void> {
     if (this.nodeEnv !== "production") return;
+
+    // Si el check está deshabilitado, no bloquea el arranque (modo emergencia).
+    const fail = (msg: string): void => {
+      if (this.rlsStartupCheck === "off") {
+        // eslint-disable-next-line no-console
+        console.warn(`${msg} — RLS_STARTUP_CHECK=off: se arranca de todas formas (INSEGURO).`);
+        return;
+      }
+      throw new Error(msg);
+    };
 
     const [role] = await this.client.$queryRaw<
       Array<{ rolsuper: boolean; rolbypassrls: boolean }>
     >`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
     if (!role) {
-      throw new Error("[RLS] No se pudo determinar el rol de conexión (pg_roles).");
+      fail("[RLS] No se pudo determinar el rol de conexión (pg_roles).");
+      return;
     }
     if (role.rolsuper || role.rolbypassrls) {
-      throw new Error(
+      fail(
         "[RLS] El rol de conexión de la BD puede saltarse Row-Level Security " +
           `(superuser=${role.rolsuper}, bypassrls=${role.rolbypassrls}). ` +
           "Usa un rol de aplicación NOSUPERUSER NOBYPASSRLS en producción."
       );
+      return;
     }
 
     const [forced] = await this.client.$queryRaw<
       Array<{ n: number }>
     >`SELECT count(*)::int AS n FROM pg_class WHERE relforcerowsecurity`;
     if (!forced || forced.n === 0) {
-      throw new Error(
+      fail(
         "[RLS] Ninguna tabla tiene FORCE ROW LEVEL SECURITY aplicado. " +
           "Verifica que las migraciones de RLS corrieron en esta base."
       );

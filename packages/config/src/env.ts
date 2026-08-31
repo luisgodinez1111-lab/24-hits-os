@@ -40,6 +40,11 @@ export const envSchema = z.object({
     .default("true")
     .transform((v) => v === "true"),
 
+  // Seguridad — blindaje de arranque de RLS. "on" (por defecto): en producción el
+  // API se niega a arrancar si el rol de BD puede saltarse RLS o falta FORCE RLS.
+  // "off": SOLO para recuperación de emergencia (deja arrancar y avisa por log).
+  RLS_STARTUP_CHECK: z.enum(["on", "off"]).default("on"),
+
   // Observabilidad
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default("hits-api"),
