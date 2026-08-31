@@ -5,12 +5,13 @@ import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp, ArrowUpLeft, ArrowUpRight, Check, Compass, CornerUpLeft, CornerUpRight, Crosshair,
-  Flag, MapPin, Navigation2, Phone, RefreshCw, RotateCcw, Route as RouteIcon,
+  Flag, MapPin, Navigation2, Phone, Power, RefreshCw, RotateCcw, Route as RouteIcon,
   Volume2, VolumeX, X, type LucideIcon,
 } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
+import { useMe, hasPermission } from "@/lib/me";
 import { money } from "@/lib/format";
 import { navUrl, type LatLng, type Leg } from "@/lib/route";
 import { fmtDist, type ManeuverIcon } from "@/lib/navigation";
@@ -93,6 +94,28 @@ export default function RoutePage() {
   const [map3dFailed, setMap3dFailed] = useState(false); // el 3D no cargó → usar Leaflet
   const startNav = () => { setMap3dFailed(false); setNavMode(true); };
 
+  // ¿El usuario puede repartir? (rol Driver o cualquier rol con el permiso
+  // orders.deliver: admin, gerente, etc.). Solo estos ven el switch "En línea".
+  const { data: me } = useMe();
+  const canDeliver = hasPermission(me, "orders.deliver");
+
+  // EN LÍNEA / FUERA DE LÍNEA: cuando está en línea, el repartidor emite su GPS al
+  // tablero del dueño; fuera de línea deja de aparecer. El mapa/navegación siguen
+  // funcionando en ambos casos (verse a sí mismo no depende de estar en línea).
+  const [online, setOnline] = useState(false);
+  const onlineRef = useRef(false);
+  useEffect(() => { onlineRef.current = online; }, [online]);
+  const toggleOnline = () => {
+    setOnline((v) => {
+      const next = !v;
+      if (!next) void api.post("/delivery/offline", {}).catch(() => undefined);
+      else if (lastPos.current) void api.post("/delivery/location", lastPos.current).catch(() => undefined);
+      return next;
+    });
+  };
+  // Al salir de la página, si quedó en línea, avísale al backend que se va.
+  useEffect(() => () => { if (onlineRef.current) void api.post("/delivery/offline", {}).catch(() => undefined); }, []);
+
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
   const { data: route, isLoading } = useQuery({
     queryKey: ["route", start?.lat ?? null, start?.lng ?? null],
@@ -122,8 +145,9 @@ export default function RoutePage() {
         setPos(c);
         setStart((s) => s ?? c);
         setGeoMsg(null);
+        // Solo transmite al tablero del dueño cuando está EN LÍNEA (throttled ~10s).
         const now = Date.now();
-        if (now - lastSent.current > 10000) {
+        if (onlineRef.current && now - lastSent.current > 10000) {
           lastSent.current = now;
           void api.post("/delivery/location", { lat: c.lat, lng: c.lng }).catch(() => undefined);
         }
@@ -204,6 +228,19 @@ export default function RoutePage() {
               <X className="h-4 w-4" /> Salir
             </button>
             <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-brand shadow">Parada 1 de {total}</span>
+            {canDeliver && (
+              <button
+                onClick={toggleOnline}
+                aria-pressed={online}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow active:scale-95 ${
+                  online ? "bg-green-500 text-white" : "bg-white text-gray-500"
+                }`}
+                title={online ? "En línea (visible para el dueño). Toca para desconectarte." : "Fuera de línea. Toca para conectarte."}
+              >
+                <span className={`h-2 w-2 rounded-full ${online ? "animate-pulse bg-white" : "bg-gray-400"}`} />
+                {online ? "En línea" : "Fuera de línea"}
+              </button>
+            )}
             {gpsAccuracy != null && gpsAccuracy > 50 && (
               <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow" title="Precisión del GPS de tu dispositivo">
                 GPS ±{Math.round(gpsAccuracy)} m
@@ -247,7 +284,22 @@ export default function RoutePage() {
             {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canDeliver && (
+            <button
+              onClick={toggleOnline}
+              aria-pressed={online}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
+                online
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-gray-300 bg-white text-gray-500"
+              }`}
+              title={online ? "Estás visible para el dueño. Toca para desconectarte." : "Actívate para aparecer en el tablero de reparto."}
+            >
+              <span className={`h-2 w-2 rounded-full ${online ? "animate-pulse bg-green-500" : "bg-gray-400"}`} />
+              <Power className="h-4 w-4" /> {online ? "En línea" : "Fuera de línea"}
+            </button>
+          )}
           {nextStop && <Button onClick={startNav}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>}
           <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
         </div>

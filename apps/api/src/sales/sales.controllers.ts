@@ -148,7 +148,7 @@ export class OrderController {
   }
 
   @Patch(":id/delivery")
-  @RequirePermissions("orders.create")
+  @RequirePermissions("orders.deliver")
   updateDelivery(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateDeliverySchema)) b: UpdateDeliveryInput) {
     return this.orders.updateDelivery(u.organizationId!, id, u.userId, b);
   }
@@ -162,11 +162,19 @@ export class DeliveryController {
     private readonly orders: OrderService
   ) {}
 
-  // El repartidor emite su ubicación (mientras tiene la Ruta abierta).
+  // El repartidor emite su ubicación (mientras está EN LÍNEA con la Ruta abierta).
   @Post("location")
-  @RequirePermissions("orders.create")
+  @RequirePermissions("orders.deliver")
   async report(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(driverLocationSchema)) b: DriverLocationInput) {
     await this.tracking.report(u.organizationId!, u.userId, b.lat, b.lng);
+    return { ok: true };
+  }
+
+  // El repartidor se pone FUERA DE LÍNEA: deja de aparecer en el tablero del dueño.
+  @Post("offline")
+  @RequirePermissions("orders.deliver")
+  async offline(@CurrentUser() u: AuthContext) {
+    await this.tracking.goOffline(u.organizationId!, u.userId);
     return { ok: true };
   }
 

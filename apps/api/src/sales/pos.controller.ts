@@ -13,8 +13,10 @@ export class PosController {
   constructor(private readonly pos: PosService) {}
 
   // Escaneo: resuelve el código de barras a la variante (precio + disponible).
+  // Es una lectura de catálogo (la usan POS y el repartidor al verificar entrega),
+  // por eso basta con products.read — no exige poder crear pedidos.
   @Get("lookup")
-  @RequirePermissions("orders.create")
+  @RequirePermissions("products.read")
   lookup(@CurrentUser() u: AuthContext, @Query(new ZodValidationPipe(posLookupSchema)) q: PosLookupInput) {
     return this.pos.lookup(u.organizationId!, q);
   }

@@ -42,6 +42,12 @@ export class DeliveryTrackingService {
     await this.redis.expire(this.key(organizationId), HASH_TTL_SEC);
   }
 
+  // El repartidor se declara fuera de línea: se borra su ubicación del hash, así
+  // desaparece de inmediato del tablero del dueño (no espera a que expire por viejo).
+  async goOffline(organizationId: string, userId: string): Promise<void> {
+    await this.redis.hdel(this.key(organizationId), userId).catch(() => undefined);
+  }
+
   async live(organizationId: string): Promise<LiveDriver[]> {
     const all = await this.redis.hgetall(this.key(organizationId));
     const now = Date.now();

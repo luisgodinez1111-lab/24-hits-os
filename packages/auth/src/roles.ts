@@ -56,7 +56,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "suppliers.read", "suppliers.manage", "purchasing.read",
       "purchase.order.create", "purchase.order.approve", "purchase.receipt.post", "purchase.return",
       "customers.read", "customers.manage",
-      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill", "orders.deliver",
       "sales.note.read", "sales.note.issue", "sales.note.cancel",
       "sales.credit.read", "sales.credit.issue",
       "payments.read", "cash.read", "cash.manage", "cash.session.open", "cash.session.close", "cash.movement",
@@ -78,7 +78,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       "inventory.transfer.create", "inventory.transfer.receive",
       "inventory.count",
       "customers.read", "customers.manage",
-      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill", "orders.deliver",
       "sales.note.read", "sales.note.issue", "sales.note.cancel",
       "sales.credit.read", "sales.credit.issue",
       "payments.read", "payments.record", "payments.reverse",
@@ -122,7 +122,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     permissions: [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
       "customers.read", "customers.manage",
-      "orders.read", "orders.create", "orders.confirm",
+      "orders.read", "orders.create", "orders.confirm", "orders.deliver",
       "sales.note.read", "sales.note.issue",
       "sales.credit.read",
       "payments.read", "payments.record", "cash.read",
@@ -135,7 +135,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     permissions: [
       "catalog.read", "products.read", "pricing.read", "inventory.read",
       "customers.read", "customers.manage",
-      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill",
+      "orders.read", "orders.create", "orders.cancel", "orders.confirm", "orders.fulfill", "orders.deliver",
       "sales.note.read", "sales.note.issue",
       "sales.credit.read",
       "payments.read", "payments.record", "cash.read",
@@ -149,7 +149,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     permissions: [
       "catalog.read", "products.read", "pricing.read",
       "customers.read",
-      "orders.read", "orders.create", "orders.confirm", "orders.fulfill",
+      "orders.read", "orders.create", "orders.confirm", "orders.fulfill", "orders.deliver",
       "sales.note.read", "sales.note.issue",
       "sales.credit.read", "sales.credit.issue",
       "payments.read", "payments.record",
@@ -160,8 +160,14 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   {
     key: "driver",
     name: "Driver",
-    description: "Reparto de pedidos",
-    permissions: ["orders.read"],
+    description: "Reparto de pedidos: navega la ruta, corrige ubicación, cierra la entrega y cobra",
+    permissions: [
+      "catalog.read", "products.read",
+      "customers.read",
+      "orders.read", "orders.deliver",
+      "sales.note.read",
+      "payments.read", "payments.record",
+    ],
   },
   {
     key: "finance",

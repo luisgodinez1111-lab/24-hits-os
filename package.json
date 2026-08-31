@@ -18,6 +18,7 @@
     "test:e2e": "turbo run test:e2e",
     "db:migrate": "pnpm --filter @24hits/database db:migrate",
     "db:seed": "pnpm --filter @24hits/database db:seed",
+    "db:sync-rbac": "pnpm --filter @24hits/database db:sync-rbac",
     "db:studio": "pnpm --filter @24hits/database db:studio",
     "db:generate": "pnpm --filter @24hits/database db:generate",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",

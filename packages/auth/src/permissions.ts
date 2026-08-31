@@ -28,6 +28,7 @@ export const PERMISSIONS = [
   { key: "orders.read", category: "orders", description: "Ver pedidos" },
   { key: "orders.create", category: "orders", description: "Crear pedidos" },
   { key: "orders.cancel", category: "orders", description: "Cancelar pedidos" },
+  { key: "orders.deliver", category: "orders", description: "Repartir en ruta: emitir GPS, corregir ubicación y cerrar entrega" },
 
   { key: "finance.read", category: "finance", description: "Ver finanzas" },
   { key: "profits.read", category: "finance", description: "Ver utilidades" },
