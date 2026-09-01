@@ -118,7 +118,7 @@ export class CashService {
       const counted = new Prisma.Decimal(input.countedCash);
       const difference = counted.minus(expected);
 
-      return tx.cashSession.update({
+      const updated = await tx.cashSession.update({
         where: { id: sessionId },
         data: {
           status: "CLOSED",
@@ -130,6 +130,29 @@ export class CashService {
           notes: input.notes ?? s.notes,
         },
       });
+
+      // "Que los números cuadren": si el arqueo NO cuadra, se alerta al dueño para
+      // revisión (no se corrige nada). Notifica cualquier diferencia distinta de cero;
+      // el título lleva el monto para que se vea la magnitud de un vistazo.
+      if (!difference.isZero()) {
+        const kind = difference.isNegative() ? "faltante" : "sobrante";
+        const abs = difference.abs().toString();
+        await tx.notification.create({
+          data: {
+            organizationId,
+            recipientUserId: null,
+            type: "SYSTEM",
+            severity: "WARNING",
+            title: `Descuadre de caja: ${kind} de ${abs}`,
+            body: `El cierre del turno tiene un ${kind} de ${abs} (esperado ${expected.toString()}, contado ${counted.toString()}). Revisa el arqueo.`,
+            entityType: "CashSession",
+            entityId: sessionId,
+            dedupeKey: `cash-diff:${sessionId}`,
+          },
+        });
+      }
+
+      return updated;
     });
     await this.audit.record({
       action: "cash_session.closed",
