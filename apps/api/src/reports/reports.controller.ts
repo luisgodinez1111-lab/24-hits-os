@@ -59,4 +59,11 @@ export class ReportsController {
   cashCut(@CurrentUser() u: AuthContext, @Param("sessionId") sessionId: string) {
     return this.reports.cashCut(u.organizationId!, sessionId);
   }
+
+  // Cuentas por cobrar (foto al momento): total, antigüedad (30/60/90+) y mayores deudores.
+  @Get("receivables")
+  @RequirePermissions("reports.read")
+  receivables(@CurrentUser() u: AuthContext) {
+    return this.reports.receivables(u.organizationId!);
+  }
 }

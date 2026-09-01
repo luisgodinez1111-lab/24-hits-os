@@ -96,6 +96,70 @@ export class ReportsService {
     };
   }
 
+  // Cuentas por cobrar (FOTO al momento, no por rango): cuánto te deben ahora.
+  // Por cada pedido no cancelado con pago pendiente/parcial, saldo = total − Σ pagos
+  // COMPLETED. Se agrupa por antigüedad (edad del pedido) y por cliente (mayores deudores).
+  async receivables(organizationId: string, now: Date = new Date()) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const orders = await tx.order.findMany({
+        where: { status: { not: "CANCELLED" }, paymentStatus: { in: ["PENDING", "PARTIAL"] } },
+        select: {
+          id: true, total: true, createdAt: true, customerId: true,
+          customer: { select: { name: true } },
+        },
+      });
+
+      const aging = { d0_30: ZERO, d31_60: ZERO, d61_90: ZERO, d90plus: ZERO };
+      const byCustomer = new Map<string, { name: string; amount: Prisma.Decimal }>();
+      let total = ZERO;
+      let orderCount = 0;
+
+      if (orders.length > 0) {
+        const sums = await tx.payment.groupBy({
+          by: ["orderId"],
+          where: { orderId: { in: orders.map((o) => o.id) }, status: "COMPLETED" },
+          _sum: { amount: true },
+        });
+        const netById = new Map(sums.map((s) => [s.orderId ?? "", new Prisma.Decimal(s._sum.amount ?? 0)]));
+
+        for (const o of orders) {
+          const outstanding = new Prisma.Decimal(o.total).minus(netById.get(o.id) ?? ZERO);
+          if (outstanding.lte(0)) continue; // cubierto (defensa; no debería con PENDING/PARTIAL)
+          total = total.plus(outstanding);
+          orderCount += 1;
+
+          const ageDays = Math.floor((now.getTime() - o.createdAt.getTime()) / 86_400_000);
+          if (ageDays <= 30) aging.d0_30 = aging.d0_30.plus(outstanding);
+          else if (ageDays <= 60) aging.d31_60 = aging.d31_60.plus(outstanding);
+          else if (ageDays <= 90) aging.d61_90 = aging.d61_90.plus(outstanding);
+          else aging.d90plus = aging.d90plus.plus(outstanding);
+
+          const key = o.customerId ?? "sin-cliente";
+          const entry = byCustomer.get(key) ?? { name: o.customer?.name ?? "Sin cliente", amount: ZERO };
+          entry.amount = entry.amount.plus(outstanding);
+          byCustomer.set(key, entry);
+        }
+      }
+
+      const topDebtors = [...byCustomer.entries()]
+        .map(([customerId, v]) => ({ customerId, name: v.name, amount: v.amount.toString() }))
+        .sort((a, b) => Number(b.amount) - Number(a.amount))
+        .slice(0, 10);
+
+      return {
+        total: total.toString(),
+        orderCount,
+        aging: {
+          d0_30: aging.d0_30.toString(),
+          d31_60: aging.d31_60.toString(),
+          d61_90: aging.d61_90.toString(),
+          d90plus: aging.d90plus.toString(),
+        },
+        topDebtors,
+      };
+    });
+  }
+
   // Utilidad = Σ (precio − descuento) de renglones entregados − Σ COGS snapshot.
   private async computeProfit(tx: TenantTx, from: Date, to: Date, branchId?: string) {
     const items = await tx.orderItem.findMany({

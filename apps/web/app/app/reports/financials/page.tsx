@@ -15,6 +15,13 @@ function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
+interface Receivables {
+  total: string;
+  orderCount: number;
+  aging: { d0_30: string; d31_60: string; d61_90: string; d90plus: string };
+  topDebtors: { customerId: string; name: string; amount: string }[];
+}
+
 export default function ReportsPage() {
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoDaysAgo(0));
@@ -30,6 +37,11 @@ export default function ReportsPage() {
   const { data: byProduct } = useQuery({
     queryKey: ["report-profit", from, to],
     queryFn: () => api.get<ProfitByProductRow[]>(`/reports/profit-by-product?${qs}`).catch(() => [] as ProfitByProductRow[]),
+  });
+  // Cuentas por cobrar: foto al momento, independiente del rango de fechas.
+  const { data: receivables } = useQuery({
+    queryKey: ["report-receivables"],
+    queryFn: () => api.get<Receivables>("/reports/receivables").catch(() => null),
   });
 
   const showProfit = summary?.grossProfit != null;
@@ -100,6 +112,37 @@ export default function ReportsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* CUENTAS POR COBRAR — foto al momento (no depende del rango de arriba). */}
+      {receivables && (
+        <div className="mt-8">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-400">
+            Cuentas por cobrar <span className="text-gray-400 normal-case">· al momento</span>
+          </h2>
+          <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+            <Kpi label="Total por cobrar" value={money(receivables.total)} sub={`${receivables.orderCount} pedido(s)`} accent />
+            <Kpi label="0–30 días" value={money(receivables.aging.d0_30)} />
+            <Kpi label="31–60 días" value={money(receivables.aging.d31_60)} />
+            <Kpi label="61–90 días" value={money(receivables.aging.d61_90)} />
+            <Kpi label="90+ días" value={money(receivables.aging.d90plus)} sub={Number(receivables.aging.d90plus) > 0 ? "⚠️ vencido" : undefined} />
+          </div>
+          {receivables.topDebtors.length > 0 ? (
+            <Table>
+              <THead><TR><TH>Cliente</TH><TH className="text-right">Debe</TH></TR></THead>
+              <TBody>
+                {receivables.topDebtors.map((d) => (
+                  <TR key={d.customerId}>
+                    <TD className="font-medium">{d.name}</TD>
+                    <TD className="text-right font-semibold">{money(d.amount)}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          ) : (
+            <EmptyState icon={<TrendingUp className="h-8 w-8 text-gray-400" />} title="Nadie te debe — todo cobrado" />
+          )}
+        </div>
       )}
     </div>
   );
