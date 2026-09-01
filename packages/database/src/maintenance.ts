@@ -93,6 +93,50 @@ export async function detectInventoryDrift(prisma: ExtendedPrismaClient): Promis
   return drifts;
 }
 
+const DRIFT_DEDUPE_MS = 24 * 60 * 60 * 1000;
+
+// Convierte el drift detectado en una alerta ACCIONABLE: crea una notificación
+// INVENTORY_DRIFT crítica por organización afectada (deduplicada 24h para no repetir
+// la misma alerta a diario). Sin esto, el descuadre es solo un número que nadie ve.
+export async function notifyInventoryDrift(
+  prisma: ExtendedPrismaClient,
+  drifts: DriftEntry[],
+  now: Date = new Date()
+): Promise<number> {
+  if (drifts.length === 0) return 0;
+
+  const byOrg = new Map<string, number>();
+  for (const d of drifts) byOrg.set(d.organizationId, (byOrg.get(d.organizationId) ?? 0) + 1);
+
+  const since = new Date(now.getTime() - DRIFT_DEDUPE_MS);
+  let created = 0;
+  for (const [organizationId, count] of byOrg) {
+    created += await withTenant(prisma, organizationId, async (tx) => {
+      const dedupeKey = "inventory-drift";
+      const recent = await tx.notification.findFirst({
+        where: { organizationId, dedupeKey, createdAt: { gt: since } },
+        select: { id: true },
+      });
+      if (recent) return 0; // ya avisado en las últimas 24h
+      await tx.notification.create({
+        data: {
+          organizationId,
+          recipientUserId: null,
+          type: "INVENTORY_DRIFT",
+          severity: "CRITICAL",
+          title: "Descuadre de inventario detectado",
+          body: `${count} inconsistencia(s) entre el inventario mostrado y el ledger (fuente de verdad). Revisa y reconstruye los balances afectados.`,
+          entityType: "InventoryBalance",
+          entityId: null,
+          dedupeKey,
+        },
+      });
+      return 1;
+    });
+  }
+  return created;
+}
+
 // Genera notificaciones LOW_STOCK (deduplicadas 24h) para todas las organizaciones
 // activas. Devuelve cuántas notificaciones nuevas creó.
 export async function scanLowStockAllOrgs(

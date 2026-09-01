@@ -4,6 +4,7 @@ import type { Env } from "@24hits/config";
 import {
   detectInventoryDrift,
   expireDueReservations,
+  notifyInventoryDrift,
   reconcileOrphanOrderHolds,
   scanLowStockAllOrgs,
 } from "@24hits/database";
@@ -38,6 +39,8 @@ export class MaintenanceController {
     const expiredReservations = await expireDueReservations(prisma);
     const lowStockNotifications = await scanLowStockAllOrgs(prisma);
     const drift = await detectInventoryDrift(prisma);
+    // El descuadre de inventario no se queda como número: se alerta al dueño (in-app).
+    const driftAlerts = await notifyInventoryDrift(prisma, drift);
 
     return {
       ok: true,
@@ -46,6 +49,7 @@ export class MaintenanceController {
       expiredReservations,
       lowStockNotifications,
       inventoryDrift: drift.length, // >0 = inconsistencias proyección↔ledger a revisar
+      driftAlerts, // notificaciones CRÍTICAS creadas por descuadre
     };
   }
 

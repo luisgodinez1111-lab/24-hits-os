@@ -23,6 +23,7 @@ export {
 export {
   expireDueReservations,
   detectInventoryDrift,
+  notifyInventoryDrift,
   scanLowStockAllOrgs,
   type DriftEntry,
 } from "./maintenance.js";
