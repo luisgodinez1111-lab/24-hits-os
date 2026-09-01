@@ -3,8 +3,10 @@ import { ApiTags } from "@nestjs/swagger";
 import type { Env } from "@24hits/config";
 import {
   detectInventoryDrift,
+  detectPaymentDrift,
   expireDueReservations,
   notifyInventoryDrift,
+  notifyPaymentDrift,
   reconcileOrphanOrderHolds,
   scanLowStockAllOrgs,
 } from "@24hits/database";
@@ -39,8 +41,10 @@ export class MaintenanceController {
     const expiredReservations = await expireDueReservations(prisma);
     const lowStockNotifications = await scanLowStockAllOrgs(prisma);
     const drift = await detectInventoryDrift(prisma);
-    // El descuadre de inventario no se queda como número: se alerta al dueño (in-app).
+    // Los descuadres no se quedan como número: se alertan al dueño (in-app).
     const driftAlerts = await notifyInventoryDrift(prisma, drift);
+    const paymentDrift = await detectPaymentDrift(prisma);
+    const paymentDriftAlerts = await notifyPaymentDrift(prisma, paymentDrift);
 
     return {
       ok: true,
@@ -49,7 +53,9 @@ export class MaintenanceController {
       expiredReservations,
       lowStockNotifications,
       inventoryDrift: drift.length, // >0 = inconsistencias proyección↔ledger a revisar
-      driftAlerts, // notificaciones CRÍTICAS creadas por descuadre
+      driftAlerts, // notificaciones CRÍTICAS creadas por descuadre de inventario
+      paymentDrift: paymentDrift.length, // >0 = pedidos con paymentStatus que no cuadra
+      paymentDriftAlerts,
     };
   }
 

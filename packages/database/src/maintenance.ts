@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { withSystem, withTenant, type ExtendedPrismaClient } from "./client.js";
 import { computeBalanceBuckets } from "./inventory-compute.js";
 import { scanLowStockForOrg } from "./notifications.js";
@@ -127,6 +128,104 @@ export async function notifyInventoryDrift(
           title: "Descuadre de inventario detectado",
           body: `${count} inconsistencia(s) entre el inventario mostrado y el ledger (fuente de verdad). Revisa y reconstruye los balances afectados.`,
           entityType: "InventoryBalance",
+          entityId: null,
+          dedupeKey,
+        },
+      });
+      return 1;
+    });
+  }
+  return created;
+}
+
+export interface PaymentDriftEntry {
+  organizationId: string;
+  orderId: string;
+  stored: string; // paymentStatus almacenado en el pedido
+  expected: string; // recomputado desde los pagos reales
+  total: string;
+  netPaid: string;
+}
+
+// Estados de pedido donde el estado de pago SÍ debe cuadrar con los pagos. DRAFT
+// (aún sin cobrar) y CANCELLED (no cobrable) se excluyen.
+const PAYMENT_RELEVANT_STATUSES = ["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED", "COMPLETED"] as const;
+
+// Reconciliación de pagos: detecta pedidos cuyo `paymentStatus` guardado NO corresponde
+// al recomputado desde sus pagos (Σ COMPLETED). Regla idéntica a PaymentService (ADR-022):
+// PAID si neto≥total (total>0); PENDING si neto≤0; si no PARTIAL. Solo LECTURA — reporta,
+// no corrige (una corrección automática podría enmascarar un bug o un cobro real).
+export async function detectPaymentDrift(prisma: ExtendedPrismaClient): Promise<PaymentDriftEntry[]> {
+  const orders = await withSystem(prisma, (tx) =>
+    tx.order.findMany({
+      where: { status: { in: [...PAYMENT_RELEVANT_STATUSES] } },
+      select: { id: true, organizationId: true, total: true, paymentStatus: true },
+    })
+  );
+  if (orders.length === 0) return [];
+
+  // Neto pagado por pedido en UNA consulta (evita N+1).
+  const sums = await withSystem(prisma, (tx) =>
+    tx.payment.groupBy({
+      by: ["orderId"],
+      where: { orderId: { in: orders.map((o) => o.id) }, status: "COMPLETED" },
+      _sum: { amount: true },
+    })
+  );
+  const netById = new Map(
+    sums.map((s) => [s.orderId ?? "", new Prisma.Decimal(s._sum.amount ?? 0)])
+  );
+
+  const drifts: PaymentDriftEntry[] = [];
+  for (const o of orders) {
+    const net = netById.get(o.id) ?? new Prisma.Decimal(0);
+    const total = new Prisma.Decimal(o.total);
+    const expected = net.gte(total) && total.gt(0) ? "PAID" : net.lte(0) ? "PENDING" : "PARTIAL";
+    if (expected !== o.paymentStatus) {
+      drifts.push({
+        organizationId: o.organizationId,
+        orderId: o.id,
+        stored: o.paymentStatus,
+        expected,
+        total: total.toString(),
+        netPaid: net.toString(),
+      });
+    }
+  }
+  return drifts;
+}
+
+// Alerta accionable por descuadre de pagos: notificación crítica por organización
+// afectada (deduplicada 24h). Usa el tipo SYSTEM (no hay PAYMENT_DRIFT en el enum).
+export async function notifyPaymentDrift(
+  prisma: ExtendedPrismaClient,
+  drifts: PaymentDriftEntry[],
+  now: Date = new Date()
+): Promise<number> {
+  if (drifts.length === 0) return 0;
+
+  const byOrg = new Map<string, number>();
+  for (const d of drifts) byOrg.set(d.organizationId, (byOrg.get(d.organizationId) ?? 0) + 1);
+
+  const since = new Date(now.getTime() - DRIFT_DEDUPE_MS);
+  let created = 0;
+  for (const [organizationId, count] of byOrg) {
+    created += await withTenant(prisma, organizationId, async (tx) => {
+      const dedupeKey = "payment-drift";
+      const recent = await tx.notification.findFirst({
+        where: { organizationId, dedupeKey, createdAt: { gt: since } },
+        select: { id: true },
+      });
+      if (recent) return 0;
+      await tx.notification.create({
+        data: {
+          organizationId,
+          recipientUserId: null,
+          type: "SYSTEM",
+          severity: "CRITICAL",
+          title: "Descuadre de pagos detectado",
+          body: `${count} pedido(s) con estado de pago que no corresponde a sus pagos registrados. Revisa cobros y reversas.`,
+          entityType: "Order",
           entityId: null,
           dedupeKey,
         },

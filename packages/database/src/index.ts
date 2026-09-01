@@ -24,6 +24,9 @@ export {
   expireDueReservations,
   detectInventoryDrift,
   notifyInventoryDrift,
+  detectPaymentDrift,
+  notifyPaymentDrift,
   scanLowStockAllOrgs,
   type DriftEntry,
+  type PaymentDriftEntry,
 } from "./maintenance.js";
