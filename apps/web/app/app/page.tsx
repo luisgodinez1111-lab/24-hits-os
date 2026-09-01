@@ -24,6 +24,8 @@ function deltaOf(cur?: string | number | null, prev?: string | number | null): {
   return { pct: (c - p) / p, hasPrev: true };
 }
 
+interface HealthSummary { inventoryDrift: number; paymentDrift: number; cashDiscrepancy: number; total: number }
+
 interface Action { href: string; label: string; desc: string; icon: LucideIcon; perm?: PermissionKey }
 const actions: Action[] = [
   { href: "/app/sales/pos", label: "Punto de venta", desc: "Escanea y cobra", icon: ScanLine, perm: "orders.create" },
@@ -57,6 +59,8 @@ export default function AppHomePage() {
   const { data: lowStock } = useQuery({ queryKey: ["home-low"], enabled: canInv, queryFn: () => api.get<InventoryBalanceRow[]>("/inventory?lowStock=true").catch(() => [] as InventoryBalanceRow[]) });
   const { data: inactive } = useQuery({ queryKey: ["home-inactive"], enabled: canCust, queryFn: () => api.get<InactiveCustomers>("/customers/inactive?days=30").catch(() => null) });
   const { data: week } = useQuery({ queryKey: ["home-week", today], enabled: showKpis, queryFn: () => api.get<SalesTimeseries>(`/reports/timeseries?from=${weekAgo}&to=${today}&granularity=day`).catch(() => null) });
+  // Salud del negocio: descuadres sin resolver de las reconciliaciones (inventario/pagos/caja).
+  const { data: health } = useQuery({ queryKey: ["home-health"], enabled: showKpis, queryFn: () => api.get<HealthSummary>("/notifications/health-summary").catch(() => null) });
 
   // Serie de 7 días rellenando los días sin venta con 0 (el backend omite vacíos).
   const byDate = new Map((week?.points ?? []).map((p) => [p.date, Number(p.billed)]));
@@ -79,6 +83,28 @@ export default function AppHomePage() {
         <h1 className="text-2xl font-bold">Hola{firstName ? `, ${firstName}` : ""} 👋</h1>
         <p className="text-sm text-gray-500">{me?.activeOrganization?.name ?? "Tu organización"} · Resumen del día</p>
       </div>
+
+      {/* SALUD DEL NEGOCIO: descuadres sin resolver. Solo aparece si hay algo que revisar,
+          para que un faltante de caja o un drift de inventario NO pase desapercibido. */}
+      {showKpis && health && health.total > 0 && (
+        <section className="mb-6">
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+            <AlertTriangle className="h-6 w-6 shrink-0 text-red-600" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-red-800">
+                Salud del negocio · {health.total} {health.total === 1 ? "descuadre sin revisar" : "descuadres sin revisar"}
+              </p>
+              <p className="mt-0.5 text-sm text-red-700">
+                {[
+                  health.inventoryDrift > 0 ? `${health.inventoryDrift} de inventario` : null,
+                  health.paymentDrift > 0 ? `${health.paymentDrift} de pagos` : null,
+                  health.cashDiscrepancy > 0 ? `${health.cashDiscrepancy} de caja` : null,
+                ].filter(Boolean).join(" · ")}. Revísalos en las notificaciones (🔔 arriba) y márcalos como leídos al resolver.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* KPIs de hoy con comparativo vs. ayer */}
       {showKpis && (

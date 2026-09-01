@@ -27,6 +27,14 @@ export class NotificationController {
     return this.notifications.unreadCount(this.requireOrg(u), u.userId);
   }
 
+  // Resumen de salud (descuadres sin resolver) para el dashboard. Financiero →
+  // requiere reports.read, igual que los KPIs del panel.
+  @Get("health-summary")
+  @RequirePermissions("reports.read")
+  healthSummary(@CurrentUser() u: AuthContext) {
+    return this.notifications.healthSummary(this.requireOrg(u), u.userId);
+  }
+
   @Post(":id/read")
   markRead(@CurrentUser() u: AuthContext, @Param("id") id: string) {
     return this.notifications.markRead(this.requireOrg(u), u.userId, id);

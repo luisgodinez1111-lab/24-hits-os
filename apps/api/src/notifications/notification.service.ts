@@ -49,6 +49,29 @@ export class NotificationService {
     return { updated: res.count };
   }
 
+  // Resumen de SALUD del negocio para el dashboard: alertas críticas sin resolver
+  // (sin leer) de las reconciliaciones — descuadres de inventario, pagos y caja.
+  // Las genera el cron/cierre de caja; aquí solo se cuentan para destacarlas.
+  async healthSummary(
+    organizationId: string,
+    userId: string
+  ): Promise<{ inventoryDrift: number; paymentDrift: number; cashDiscrepancy: number; total: number }> {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const base = { ...this.mineOrBroadcast(userId), readAt: null };
+      const [inventoryDrift, paymentDrift, cashDiscrepancy] = await Promise.all([
+        tx.notification.count({ where: { ...base, type: "INVENTORY_DRIFT" } }),
+        tx.notification.count({ where: { ...base, type: "SYSTEM", dedupeKey: "payment-drift" } }),
+        tx.notification.count({ where: { ...base, type: "SYSTEM", dedupeKey: { startsWith: "cash-diff:" } } }),
+      ]);
+      return {
+        inventoryDrift,
+        paymentDrift,
+        cashDiscrepancy,
+        total: inventoryDrift + paymentDrift + cashDiscrepancy,
+      };
+    });
+  }
+
   // Escaneo de stock bajo bajo demanda (el worker lo corre por cron). Reutiliza la
   // lógica compartida de @24hits/database (ADR-026).
   async scanLowStock(organizationId: string): Promise<{ created: number }> {
