@@ -26,12 +26,27 @@ export function haversineMatrix(pts: Pt[]): CostMatrix {
 // (Service Token). Vacío si no se protege.
 export type OsrmHeaders = Record<string, string> | undefined;
 
-// Matriz por CARRETERAS vía OSRM (/table). Devuelve null si falla (→ fallback).
+// Tope de espera para OSRM. Si el servidor (p.ej. el demo público) no responde a
+// tiempo, se aborta y se cae a la matriz haversine (línea recta) al instante, en vez
+// de dejar colgada la carga de la ruta.
+const OSRM_TIMEOUT_MS = 2500;
+
+async function fetchWithTimeout(url: string, headers: OsrmHeaders | undefined, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Matriz por CARRETERAS vía OSRM (/table). Devuelve null si falla o tarda (→ fallback).
 export async function osrmMatrix(pts: Pt[], osrmUrl: string, headers?: OsrmHeaders): Promise<CostMatrix | null> {
   try {
     const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `${osrmUrl.replace(/\/+$/, "")}/table/v1/driving/${coords}?annotations=distance,duration`;
-    const res = await fetch(url, headers ? { headers } : undefined);
+    const res = await fetchWithTimeout(url, headers, OSRM_TIMEOUT_MS);
     if (!res.ok) return null;
     const j = (await res.json()) as { code?: string; distances?: (number | null)[][]; durations?: (number | null)[][] };
     if (j.code !== "Ok" || !j.distances || !j.durations) return null;
@@ -50,7 +65,7 @@ export async function osrmRoute(pts: Pt[], osrmUrl: string, headers?: OsrmHeader
     if (pts.length < 2) return null;
     const coords = pts.map((p) => `${p.lng},${p.lat}`).join(";");
     const url = `${osrmUrl.replace(/\/+$/, "")}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-    const res = await fetch(url, headers ? { headers } : undefined);
+    const res = await fetchWithTimeout(url, headers, OSRM_TIMEOUT_MS);
     if (!res.ok) return null;
     const j = (await res.json()) as { code?: string; routes?: Array<{ geometry?: { coordinates?: [number, number][] } }> };
     const geo = j.routes?.[0]?.geometry?.coordinates;

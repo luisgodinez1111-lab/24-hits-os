@@ -105,7 +105,9 @@ function cap(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1);
 // Pide la ruta con maniobras paso a paso entre dos puntos.
 export async function fetchNavRoute(from: LatLng, to: LatLng): Promise<NavRoute | null> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 10000);
+  // 4s: el demo público de OSRM suele responder en 1-3s; si tarda más, se aborta y el
+  // mapa cae a la línea recta en vez de dejar la navegación trabada hasta 10s.
+  const t = setTimeout(() => ctrl.abort(), 4000);
   try {
     const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
     const url = `${OSRM}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
