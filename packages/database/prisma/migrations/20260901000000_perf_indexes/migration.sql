@@ -6,14 +6,14 @@
 -- (fuera de transacción) para no bloquear escrituras. Con el volumen actual, el
 -- CREATE INDEX normal es instantáneo y suficiente.
 
--- CreateIndex
-CREATE INDEX "Order_organizationId_createdAt_idx" ON "Order"("organizationId", "createdAt");
+-- CreateIndex (idempotente: seguro de correr a mano en el SQL Editor de Neon).
+CREATE INDEX IF NOT EXISTS "Order_organizationId_createdAt_idx" ON "Order"("organizationId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Order_organizationId_deliveryStatus_idx" ON "Order"("organizationId", "deliveryStatus");
+CREATE INDEX IF NOT EXISTS "Order_organizationId_deliveryStatus_idx" ON "Order"("organizationId", "deliveryStatus");
 
 -- CreateIndex
-CREATE INDEX "Order_organizationId_paymentStatus_idx" ON "Order"("organizationId", "paymentStatus");
+CREATE INDEX IF NOT EXISTS "Order_organizationId_paymentStatus_idx" ON "Order"("organizationId", "paymentStatus");
 
 -- CreateIndex
-CREATE INDEX "Payment_organizationId_createdAt_idx" ON "Payment"("organizationId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Payment_organizationId_createdAt_idx" ON "Payment"("organizationId", "createdAt");
