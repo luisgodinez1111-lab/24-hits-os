@@ -9,8 +9,9 @@ test("POS — teclear código, agregar al carrito y cobrar", async ({ page }) =>
   await page.getByTestId("pos-barcode-input").fill("E2E-TEST-0001");
   await page.getByTestId("pos-add-btn").click();
 
-  // Aparece en el carrito (nombre de la variante sembrada).
-  await expect(page.getByText("E2E Variante")).toBeVisible();
+  // Aparece en el carrito (nombre de la variante sembrada). `.first()` porque el
+  // nombre también sale en el toast "Agregado: …" → evita el strict-mode violation.
+  await expect(page.getByText("E2E Variante").first()).toBeVisible();
 
   // Cobra por TRANSFERENCIA (no requiere turno de caja abierto, a diferencia de CASH).
   await page.locator("select").first().selectOption("TRANSFER");
