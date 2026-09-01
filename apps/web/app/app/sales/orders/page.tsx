@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
 import {
-  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
@@ -27,7 +27,7 @@ export default function SalesOrdersPage() {
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<Order | null>(null);
   const [locating, setLocating] = useState<Order | null>(null);
-  const { data, isLoading } = useQuery({ queryKey: ["sales-orders"], queryFn: () => api.get<Order[]>("/orders") });
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["sales-orders"], queryFn: () => api.get<Order[]>("/orders") });
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
   const customerName = (id: string | null) => (id ? customers?.find((c) => c.id === id)?.name ?? id.slice(0, 8) : "Mostrador");
@@ -76,6 +76,8 @@ export default function SalesOrdersPage() {
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
+      ) : isError ? (
+        <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin pedidos" />
       ) : (
