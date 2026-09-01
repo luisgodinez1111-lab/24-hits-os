@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineSync } from "@/components/OfflineSync";
 
 // Tipografía self-hosted (next/font descarga en build y sirve local → sin CDN,
 // compatible con CSP). Manrope: sans moderna con buenas cifras para tablas.
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans">
         <OfflineBanner />
         <Providers>{children}</Providers>
+        <OfflineSync />
         <ServiceWorkerRegistrar />
       </body>
     </html>

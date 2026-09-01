@@ -6,6 +6,7 @@ import { Check, ScanLine } from "lucide-react";
 import { Button, Dialog, FormField, Input, Select, Skeleton, useToast } from "@24hits/ui";
 import type { Order } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
+import { enqueueDelivery } from "@/lib/offline-queue";
 import { money } from "@/lib/format";
 import { BarcodeScanner } from "./BarcodeScanner";
 
@@ -80,13 +81,39 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
   }
 
   const finish = useMutation({
-    mutationFn: async () => {
-      // 1) Entregar (auto-confirma + fulfill → consume inventario). 2) Cobrar.
-      await api.patch(`/orders/${stopId}/delivery`, { status: "DELIVERED" });
+    mutationFn: async (): Promise<{ queued: boolean }> => {
+      if (!stopId) return { queued: false };
       const amt = Number(amount || 0);
-      if (amt > 0) await api.post("/payments", { orderId: stopId, method, amount: amt });
+      // Clave estable de idempotencia por pedido → reintentar NUNCA duplica el cobro.
+      const idempotencyKey = `pay:${stopId}`;
+
+      // Sin señal: encola (entregar + cobrar) y sincroniza sola al reconectar, en vez
+      // de fallar la entrega. La entrega no se pierde aunque el repartidor esté offline.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        enqueueDelivery({ orderId: stopId, orderNumber: order?.number, method, amount: amt, idempotencyKey });
+        return { queued: true };
+      }
+
+      try {
+        // 1) Entregar (auto-confirma + fulfill → consume inventario). 2) Cobrar.
+        await api.patch(`/orders/${stopId}/delivery`, { status: "DELIVERED" });
+        if (amt > 0) await api.post("/payments", { orderId: stopId, method, amount: amt, idempotencyKey });
+        return { queued: false };
+      } catch (err) {
+        // Error del SERVIDOR (ApiError): rechazo real → propaga y se muestra.
+        if (err instanceof ApiError) throw err;
+        // Falla de RED a mitad (se cayó la señal): encola para sincronizar luego.
+        enqueueDelivery({ orderId: stopId, orderNumber: order?.number, method, amount: amt, idempotencyKey });
+        return { queued: true };
+      }
     },
-    onSuccess: () => { toast.push("Entregado y cobrado ✓", "success"); onDone(); },
+    onSuccess: (r) => {
+      toast.push(
+        r.queued ? "Sin señal: entrega guardada, se sincroniza al reconectar" : "Entregado y cobrado ✓",
+        r.queued ? "info" : "success"
+      );
+      onDone();
+    },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error al cerrar la entrega", "error"),
   });
 
