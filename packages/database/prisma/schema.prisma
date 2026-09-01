@@ -1215,6 +1215,11 @@ model Order {
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, status])
+  // Índices multi-tenant (lideran por organizationId): lista por fecha, ruta de
+  // reparto (deliveryStatus) y cuentas por cobrar (paymentStatus).
+  @@index([organizationId, createdAt])
+  @@index([organizationId, deliveryStatus])
+  @@index([organizationId, paymentStatus])
   @@index([customerId])
 }
 
@@ -1346,6 +1351,8 @@ model Payment {
   @@index([orderId])
   @@index([organizationId, cashSessionId])
   @@index([organizationId, status])
+  // Reportes de ventas/cobros por período (rango de createdAt por tenant).
+  @@index([organizationId, createdAt])
 }
 
 // Movimiento de efectivo del cajón NO ligado a una venta: ingreso de fondo,
