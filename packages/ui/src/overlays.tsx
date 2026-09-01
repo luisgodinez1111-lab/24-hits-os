@@ -22,6 +22,7 @@ function useModalBehavior(open: boolean, onClose: () => void, panelRef: React.Re
         if (!nodes || nodes.length === 0) return;
         const first = nodes[0];
         const last = nodes[nodes.length - 1];
+        if (!first || !last) return;
         if (e.shiftKey && document.activeElement === first) {
           e.preventDefault();
           last.focus();
