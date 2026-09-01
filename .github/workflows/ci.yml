@@ -150,6 +150,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm --filter @24hits/database db:generate
+      - name: Build workspace packages
+        # El seed importa @24hits/auth y los servidores api/web importan el dist de los
+        # paquetes del workspace → hay que compilarlos antes de sembrar/arrancar.
+        run: pnpm turbo run build --filter="./packages/*"
       - name: Apply migrations
         run: pnpm --filter @24hits/database db:deploy
       - name: Seed (dev + e2e)
