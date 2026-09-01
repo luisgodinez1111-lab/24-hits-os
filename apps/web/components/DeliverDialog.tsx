@@ -125,7 +125,7 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" loading={finish.isPending} disabled={!ready} onClick={() => finish.mutate()}>
+          <Button size="sm" loading={finish.isPending} disabled={!ready} onClick={() => finish.mutate()} data-testid="deliver-confirm-btn">
             <Check className="h-4 w-4" /> Cobrar y entregar
           </Button>
         </>
@@ -170,7 +170,7 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
           {!ready && <BarcodeScanner continuous onScan={(c) => void onScan(c)} />}
 
           <label className="flex items-center gap-2 text-xs text-gray-500">
-            <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" checked={override} onChange={(e) => setOverride(e.target.checked)} />
+            <input type="checkbox" data-testid="deliver-skip-verify" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" checked={override} onChange={(e) => setOverride(e.target.checked)} />
             Saltar verificación (productos sin código)
           </label>
 

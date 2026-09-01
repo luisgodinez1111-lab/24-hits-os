@@ -433,7 +433,7 @@ function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavi
             <Phone className="h-4 w-4" /> Llamar
           </a>
         )}
-        <button onClick={onDeliver} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
+        <button data-testid="route-deliver-btn" onClick={onDeliver} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
           <Check className="h-4 w-4" /> Entregar
         </button>
       </div>

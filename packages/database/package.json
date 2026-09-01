@@ -21,6 +21,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed-e2e": "tsx prisma/e2e-seed.ts",
     "db:sync-rbac": "tsx prisma/sync-rbac.ts",
     "db:reset": "prisma migrate reset --force",
     "typecheck": "tsc --noEmit",

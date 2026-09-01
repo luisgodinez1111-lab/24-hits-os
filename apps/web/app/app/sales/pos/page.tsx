@@ -117,8 +117,8 @@ export default function PosPage() {
             <BarcodeScanner continuous onScan={addByBarcode} />
 
             <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { void addByBarcode(manual.trim()); setManual(""); } }}>
-              <Input placeholder="…o teclea el código de barras" value={manual} onChange={(e) => setManual(e.target.value)} />
-              <Button type="submit" variant="outline">Agregar</Button>
+              <Input data-testid="pos-barcode-input" placeholder="…o teclea el código de barras" value={manual} onChange={(e) => setManual(e.target.value)} />
+              <Button type="submit" variant="outline" data-testid="pos-add-btn">Agregar</Button>
             </form>
           </div>
         </div>
@@ -168,7 +168,7 @@ export default function PosPage() {
                 <option value="OTHER">Otro</option>
               </Select>
             </FormField>
-            <Button className="w-full" loading={sale.isPending} onClick={checkout}><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
+            <Button className="w-full" loading={sale.isPending} onClick={checkout} data-testid="pos-charge-btn"><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
           </div>
         </div>
       </div>
