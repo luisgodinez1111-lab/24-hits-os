@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp, ArrowUpLeft, ArrowUpRight, Check, Compass, CornerUpLeft, CornerUpRight, Crosshair,
   Flag, MapPin, Navigation2, Phone, Power, RefreshCw, RotateCcw, Route as RouteIcon,
@@ -117,9 +117,14 @@ export default function RoutePage() {
   useEffect(() => () => { if (onlineRef.current) void api.post("/delivery/offline", {}).catch(() => undefined); }, []);
 
   // El backend optimiza (vecino más cercano + 2-opt) desde el origen elegido.
-  const { data: route, isLoading } = useQuery({
+  // staleTime: no recalcular al reabrir la página en 1 min (la optimización + OSRM es
+  // cara). keepPreviousData: al llegar el GPS (cambia el origen) o al Recalcular, la
+  // ruta anterior SIGUE visible mientras recomputa → no parpadea en blanco.
+  const { data: route, isLoading, isFetching } = useQuery({
     queryKey: ["route", start?.lat ?? null, start?.lng ?? null],
     queryFn: () => api.get<OptimizedRoute>(`/orders/route${start ? `?lat=${start.lat}&lng=${start.lng}` : ""}`),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 
   // GPS EN VIVO: mueve el marcador en cada lectura; fija el origen en la primera
@@ -282,6 +287,7 @@ export default function RoutePage() {
             {total} {total === 1 ? "entrega" : "entregas"}{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
             {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
             {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
+            {isFetching && !isLoading ? <span className="ml-1 text-brand">· actualizando…</span> : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
