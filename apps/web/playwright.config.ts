@@ -28,7 +28,10 @@ export default defineConfig({
   // frescos. Requiere Postgres+Redis arriba y los datos sembrados (db:seed + db:seed-e2e).
   webServer: [
     {
-      command: "pnpm --filter @24hits/api dev",
+      // API COMPILADO (no `tsx dev`): tsx/esbuild no emite metadata de decoradores y
+      // rompe la inyección por tipo de Nest (Reflector → undefined en los guards).
+      // Requiere `pnpm --filter @24hits/api build` antes (el CI lo hace).
+      command: "pnpm --filter @24hits/api start",
       url: "http://localhost:4000/health",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

@@ -150,10 +150,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm --filter @24hits/database db:generate
-      - name: Build workspace packages
-        # El seed importa @24hits/auth y los servidores api/web importan el dist de los
-        # paquetes del workspace → hay que compilarlos antes de sembrar/arrancar.
-        run: pnpm turbo run build --filter="./packages/*"
+      - name: Build packages + API
+        # El seed importa @24hits/auth (dist) y el API se corre COMPILADO (tsc emite la
+        # metadata de decoradores que Nest necesita; tsx no). La web corre con `next dev`.
+        run: pnpm turbo run build --filter="./packages/*" --filter=@24hits/api
       - name: Apply migrations
         run: pnpm --filter @24hits/database db:deploy
       - name: Seed (dev + e2e)
