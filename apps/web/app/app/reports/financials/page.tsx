@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
 import {
-  Badge, EmptyState, FormField, Input, Skeleton,
+  Badge, EmptyState, ErrorState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR,
 } from "@24hits/ui";
 import type { ProfitByProductRow, SalesSummary } from "@/lib/catalog-types";
@@ -36,7 +36,7 @@ export default function ReportsPage() {
   const range = { from: `${from}T00:00:00.000Z`, to: `${to}T23:59:59.999Z` };
   const qs = `from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`;
 
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading, isError, refetch } = useQuery({
     queryKey: ["report-sales", from, to],
     queryFn: () => api.get<SalesSummary>(`/reports/sales?${qs}`),
   });
@@ -77,6 +77,8 @@ export default function ReportsPage() {
 
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
+      ) : isError ? (
+        <ErrorState onRetry={() => void refetch()} />
       ) : !summary ? (
         <EmptyState icon={<TrendingUp className="h-8 w-8 text-gray-400" />} title="Sin datos en el rango" />
       ) : (

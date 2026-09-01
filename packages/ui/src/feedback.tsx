@@ -81,6 +81,36 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
+// ---------------------------------------------------------------- ErrorState
+// Estado uniforme cuando una carga FALLA (no cuando está vacía). Ofrece reintentar,
+// para que un error de red no deje la pantalla en blanco sin salida.
+export function ErrorState({
+  title = "Algo salió mal",
+  description = "No se pudieron cargar los datos. Revisa tu conexión e inténtalo de nuevo.",
+  onRetry,
+}: {
+  title?: string;
+  description?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-red-200 bg-red-50 p-10 text-center" role="alert">
+      <p className="text-2xl" aria-hidden>⚠️</p>
+      <p className="mt-2 font-medium text-red-800">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-red-700">{description}</p>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 outline-none transition-colors hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+        >
+          Reintentar
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- EmptyState
 export function EmptyState({
   icon,
