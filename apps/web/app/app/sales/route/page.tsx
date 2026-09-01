@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, Compass, CornerUpLeft, CornerUpRight, Crosshair,
+  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, CornerUpLeft, CornerUpRight, Crosshair,
   Flag, MapPin, Navigation2, Phone, Power, RefreshCw, RotateCcw, Route as RouteIcon,
   Volume2, VolumeX, X, type LucideIcon,
 } from "lucide-react";
@@ -70,6 +70,32 @@ function bearing(a: LatLng, b: LatLng): number | null {
   // Movimiento mínimo ~5 m para considerar el rumbo válido.
   if (Math.abs(b.lat - a.lat) < 0.00004 && Math.abs(b.lng - a.lng) < 0.00004) return null;
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+// Brújula visual (estilo Google/Waze): la aguja ROJA apunta siempre al Norte real.
+// Gira en sentido contrario al rumbo del mapa, así ves hacia dónde queda el Norte
+// aunque el mapa esté rotado. Al tocarla cambia la orientación (rumbo-arriba ⇄
+// Norte-arriba). En "Norte arriba" la aguja queda vertical y se resalta.
+function CompassRose({ bearing, headingUp, onClick }: { bearing: number; headingUp: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={headingUp ? "Brújula: rumbo arriba. Toca para Norte arriba." : "Brújula: Norte arriba. Toca para seguir tu rumbo."}
+      title="Brújula · toca para cambiar orientación"
+      className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white shadow active:scale-95"
+    >
+      <svg
+        width="22" height="22" viewBox="0 0 24 24"
+        style={{ transform: `rotate(${-bearing}deg)`, transition: "transform 200ms linear" }}
+        aria-hidden
+      >
+        {/* Aguja norte (roja) y sur (gris), apex al centro. */}
+        <polygon points="12,3 8.5,12.5 15.5,12.5" fill="#ef4444" />
+        <polygon points="12,21 8.5,11.5 15.5,11.5" fill="#9ca3af" />
+        <circle cx="12" cy="12" r="1.4" fill="#374151" />
+      </svg>
+    </button>
+  );
 }
 
 // Convierte una parada sin coordenadas en OptimizedStop (prioridad calculada en el front).
@@ -255,9 +281,11 @@ export default function RoutePage() {
               <button onClick={() => setMap3dFailed((v) => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow active:scale-95">
                 {map3dFailed ? "3D" : "2D"}
               </button>
-              <button onClick={() => setHeadingUp((v) => !v)} aria-label="Rotación" className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white shadow active:scale-95">
-                <Compass className={`h-5 w-5 ${headingUp ? "text-brand" : "text-gray-500"}`} />
-              </button>
+              <CompassRose
+                bearing={headingUp && heading != null ? heading : 0}
+                headingUp={headingUp}
+                onClick={() => setHeadingUp((v) => !v)}
+              />
             </div>
           </div>
         </div>
