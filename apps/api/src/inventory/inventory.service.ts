@@ -398,6 +398,71 @@ export class InventoryService {
     });
   }
 
+  // Capital atrapado: variantes con existencias (onHand>0) SIN venta (SALE) en los
+  // últimos `days` días. Es dinero parado en stock que no rota. Se valora con el costo
+  // promedio y se ordena por valor atrapado (lo más caro parado primero).
+  async slowMovers(organizationId: string, days = 60, limit = 20) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const since = new Date(Date.now() - days * 86_400_000);
+      const empty = { days, items: [] as unknown[], trappedTotal: "0", currency: "MXN" };
+
+      const balances = await tx.inventoryBalance.findMany({
+        where: { onHand: { gt: 0 } },
+        select: { variantId: true, onHand: true },
+      });
+      if (balances.length === 0) return empty;
+
+      const variantIds = [...new Set(balances.map((b) => b.variantId))];
+      // Variantes CON venta reciente → no son capital atrapado.
+      const recentSales = await tx.inventoryMovement.findMany({
+        where: { variantId: { in: variantIds }, movementType: "SALE", createdAt: { gte: since } },
+        select: { variantId: true },
+        distinct: ["variantId"],
+      });
+      const sold = new Set(recentSales.map((m) => m.variantId));
+
+      // Suma onHand por variante lenta (a través de almacenes).
+      const byVariant = new Map<string, Prisma.Decimal>();
+      for (const b of balances) {
+        if (sold.has(b.variantId)) continue;
+        byVariant.set(b.variantId, (byVariant.get(b.variantId) ?? new Prisma.Decimal(0)).plus(b.onHand));
+      }
+      if (byVariant.size === 0) return empty;
+
+      const [costs, variants] = await Promise.all([
+        tx.variantCost.findMany({
+          where: { variantId: { in: [...byVariant.keys()] } },
+          select: { variantId: true, averageCost: true },
+        }),
+        tx.productVariant.findMany({
+          where: { id: { in: [...byVariant.keys()] } },
+          select: { id: true, sku: true, name: true, product: { select: { name: true } } },
+        }),
+      ]);
+      const costMap = new Map(costs.map((c) => [c.variantId, new Prisma.Decimal(c.averageCost)]));
+      const vMap = new Map(variants.map((v) => [v.id, v]));
+
+      let trappedTotal = new Prisma.Decimal(0);
+      const items = [...byVariant.entries()]
+        .map(([variantId, onHand]) => {
+          const value = onHand.times(costMap.get(variantId) ?? 0);
+          trappedTotal = trappedTotal.plus(value);
+          const v = vMap.get(variantId);
+          return {
+            variantId,
+            name: v ? `${v.product.name} · ${v.name}` : variantId.slice(0, 8),
+            sku: v?.sku ?? null,
+            onHand: onHand.toString(),
+            value: value.toFixed(4),
+          };
+        })
+        .sort((a, b) => Number(b.value) - Number(a.value))
+        .slice(0, limit);
+
+      return { days, items, trappedTotal: trappedTotal.toFixed(4), currency: "MXN" };
+    });
+  }
+
   async dashboard(organizationId: string, canReadCosts: boolean) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const [totalVariants, balances] = await Promise.all([

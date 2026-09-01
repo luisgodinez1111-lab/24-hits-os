@@ -62,6 +62,14 @@ export class InventoryController {
     return this.inventory.inventoryValue(user.organizationId!, warehouseId);
   }
 
+  // Capital atrapado: existencias sin venta en `days` días (default 60), valoradas.
+  @Get("slow-movers")
+  @RequirePermissions("costs.read")
+  slowMovers(@CurrentUser() user: AuthContext, @Query("days") days?: string) {
+    const n = days ? Number(days) : undefined;
+    return this.inventory.slowMovers(user.organizationId!, Number.isFinite(n) ? n : undefined);
+  }
+
   @Post("opening-balance")
   @RequirePermissions("inventory.adjust")
   openingBalance(

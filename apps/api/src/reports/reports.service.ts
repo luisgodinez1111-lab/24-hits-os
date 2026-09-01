@@ -439,11 +439,17 @@ export class ReportsService {
           ...(includeCost ? { cogs: a.cogs.toString(), grossProfit: profit.toString(), margin: a.revenue.gt(0) ? profit.dividedBy(a.revenue).toString() : "0" } : {}),
           _u: Number(a.units),
           _r: Number(a.returned),
+          _p: Number(profit),
         };
       });
 
-      rows.sort((x, y) => (sort === "returns" ? y._r - x._r : y._u - x._u));
-      return { dimension, rows: rows.slice(0, limit).map(({ _u, _r, ...row }) => row) };
+      // "profit" (qué deja más) solo ordena si el usuario ve utilidad; si no, cae a unidades.
+      rows.sort((x, y) => {
+        if (sort === "returns") return y._r - x._r;
+        if (sort === "profit" && includeCost) return y._p - x._p;
+        return y._u - x._u;
+      });
+      return { dimension, rows: rows.slice(0, limit).map(({ _u, _r, _p, ...row }) => row) };
     });
   }
 

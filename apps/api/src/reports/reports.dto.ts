@@ -20,7 +20,7 @@ export type SalesRegisterQuery = z.infer<typeof salesRegisterQuerySchema>;
 export const topSellersQuerySchema = reportRangeSchema.extend({
   dimension: z.enum(["product", "brand", "flavor"]).default("product"),
   productId: z.string().uuid().optional(), // p.ej. sabores de UN modelo
-  sort: z.enum(["units", "returns"]).default("units"), // más vendidos vs más devueltos
+  sort: z.enum(["units", "returns", "profit"]).default("units"), // más vendidos · más devueltos · más rentables
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type TopSellersQuery = z.infer<typeof topSellersQuerySchema>;

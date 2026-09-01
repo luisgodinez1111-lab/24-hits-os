@@ -22,6 +22,13 @@ interface Receivables {
   topDebtors: { customerId: string; name: string; amount: string }[];
 }
 
+interface InventoryValue { value: string; currency: string }
+interface SlowMovers {
+  days: number;
+  trappedTotal: string;
+  items: { variantId: string; name: string; sku: string | null; onHand: string; value: string }[];
+}
+
 export default function ReportsPage() {
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoDaysAgo(0));
@@ -42,6 +49,15 @@ export default function ReportsPage() {
   const { data: receivables } = useQuery({
     queryKey: ["report-receivables"],
     queryFn: () => api.get<Receivables>("/reports/receivables").catch(() => null),
+  });
+  // Inventario (requiere costs.read; si no, 403 → null y no se muestra).
+  const { data: invValue } = useQuery({
+    queryKey: ["report-inv-value"],
+    queryFn: () => api.get<InventoryValue>("/inventory/value").catch(() => null),
+  });
+  const { data: slowMovers } = useQuery({
+    queryKey: ["report-slow-movers"],
+    queryFn: () => api.get<SlowMovers>("/inventory/slow-movers").catch(() => null),
   });
 
   const showProfit = summary?.grossProfit != null;
@@ -141,6 +157,40 @@ export default function ReportsPage() {
             </Table>
           ) : (
             <EmptyState icon={<TrendingUp className="h-8 w-8 text-gray-400" />} title="Nadie te debe — todo cobrado" />
+          )}
+        </div>
+      )}
+
+      {/* INVENTARIO — valor y capital atrapado (requiere costs.read). */}
+      {(invValue || slowMovers) && (
+        <div className="mt-8">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-400">
+            Inventario <span className="text-gray-400 normal-case">· al momento</span>
+          </h2>
+          <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+            {invValue && <Kpi label="Valor de inventario" value={money(invValue.value)} accent />}
+            {slowMovers && (
+              <Kpi
+                label={`Capital atrapado (>${slowMovers.days}d sin venta)`}
+                value={money(slowMovers.trappedTotal)}
+                sub={`${slowMovers.items.length} producto(s) sin rotar`}
+              />
+            )}
+          </div>
+          {slowMovers && slowMovers.items.length > 0 && (
+            <Table>
+              <THead><TR><TH>Producto</TH><TH>SKU</TH><TH className="text-right">Existencias</TH><TH className="text-right">Capital atrapado</TH></TR></THead>
+              <TBody>
+                {slowMovers.items.map((it) => (
+                  <TR key={it.variantId}>
+                    <TD className="font-medium">{it.name}</TD>
+                    <TD className="font-mono text-xs text-gray-500">{it.sku ?? "—"}</TD>
+                    <TD className="text-right tabular-nums">{Number(it.onHand).toLocaleString("es-MX")}</TD>
+                    <TD className="text-right font-semibold tabular-nums">{money(it.value)}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
           )}
         </div>
       )}

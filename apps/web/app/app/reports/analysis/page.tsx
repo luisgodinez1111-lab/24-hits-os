@@ -22,6 +22,7 @@ const dimensions = [
 ] as const;
 const sorts = [
   { key: "units", label: "Más vendidos" },
+  { key: "profit", label: "Más rentables" },
   { key: "returns", label: "Más devueltos" },
 ] as const;
 
