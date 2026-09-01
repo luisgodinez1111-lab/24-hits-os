@@ -38,8 +38,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       ref={ref}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
+        // focus-visible: el anillo de foco solo aparece con teclado (no al hacer clic
+        // con mouse) → accesible para navegación por teclado y pulido con puntero.
+        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
         buttonVariants[variant],
         buttonSizes[size],
         className
@@ -107,7 +110,7 @@ export const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInp
       ref={ref}
       type="checkbox"
       className={cn(
-        "h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand",
+        "h-4 w-4 rounded border-gray-300 text-brand outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1",
         className
       )}
       {...props}
