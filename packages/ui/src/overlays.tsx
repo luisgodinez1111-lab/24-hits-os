@@ -1,7 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "./cn";
+
+// Selector de elementos enfocables (para la trampa de foco de los modales).
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+// Comportamiento común de un modal: Escape cierra, Tab queda atrapado dentro,
+// el fondo no hace scroll y el foco entra al panel al abrir.
+function useModalBehavior(open: boolean, onClose: () => void, panelRef: React.RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+        if (!nodes || nodes.length === 0) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden"; // el fondo no hace scroll detrás del modal
+    panelRef.current?.focus(); // el foco entra al modal al abrir
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose, panelRef]);
+}
 
 // ---------------------------------------------------------------- Dialog
 export function Dialog({
@@ -17,23 +56,26 @@ export function Dialog({
   children: ReactNode;
   footer?: ReactNode;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalBehavior(open, onClose, panelRef);
 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
-      <div className="relative z-10 w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : "Diálogo"}
+        className="relative z-10 w-full max-w-md rounded-xl bg-white shadow-xl outline-none"
+      >
         {title ? (
           <div className="border-b border-gray-100 p-5">
-            <h3 className="font-semibold text-gray-900">{title}</h3>
+            <h3 id={titleId} className="font-semibold text-gray-900">{title}</h3>
           </div>
         ) : null}
         <div className="p-5">{children}</div>
@@ -57,14 +99,26 @@ export function Drawer({
   title?: string;
   children: ReactNode;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalBehavior(open, onClose, panelRef);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
-      <div className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white shadow-xl">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : "Panel"}
+        className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white shadow-xl outline-none"
+      >
         {title ? (
           <div className="border-b border-gray-100 p-5">
-            <h3 className="font-semibold text-gray-900">{title}</h3>
+            <h3 id={titleId} className="font-semibold text-gray-900">{title}</h3>
           </div>
         ) : null}
         <div className="p-5">{children}</div>
@@ -91,17 +145,30 @@ export function Dropdown({
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
     <div className="relative" ref={ref}>
-      <button type="button" onClick={() => setOpen((v) => !v)}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
         {trigger}
       </button>
       {open ? (
         <div
+          role="menu"
           className={cn(
             "absolute z-20 mt-2 min-w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg",
             align === "right" ? "right-0" : "left-0"
@@ -125,8 +192,9 @@ export function DropdownItem({
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
-      className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+      className="block w-full px-4 py-2 text-left text-sm text-gray-700 outline-none hover:bg-gray-100 focus-visible:bg-gray-100"
     >
       {children}
     </button>
