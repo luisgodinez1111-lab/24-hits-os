@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "./cn";
 
 // Selector de elementos enfocables (para la trampa de foco de los modales).
@@ -64,7 +64,7 @@ export function Dialog({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/40 motion-safe:animate-fade-in" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
         tabIndex={-1}
@@ -72,7 +72,7 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : "Diálogo"}
-        className="relative z-10 w-full max-w-md rounded-xl bg-white shadow-xl outline-none"
+        className="relative z-10 w-full max-w-md rounded-sheet bg-white shadow-overlay outline-none motion-safe:animate-scale-in"
       >
         {title ? (
           <div className="border-b border-gray-100 p-5">
@@ -107,7 +107,7 @@ export function Drawer({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/40 motion-safe:animate-fade-in" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
         tabIndex={-1}
@@ -115,7 +115,7 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : "Panel"}
-        className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white shadow-xl outline-none"
+        className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col overflow-y-auto bg-white pb-safe shadow-overlay outline-none motion-safe:animate-slide-in-right"
       >
         {title ? (
           <div className="border-b border-gray-100 p-5">
@@ -129,6 +129,8 @@ export function Drawer({
 }
 
 // ---------------------------------------------------------------- Dropdown
+// Menú accesible: se abre con clic, se cierra con clic-fuera/Escape, y se navega
+// por teclado (flechas, Home/End). Al abrir, el foco entra al primer ítem.
 export function Dropdown({
   trigger,
   children,
@@ -140,6 +142,7 @@ export function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -151,28 +154,48 @@ export function Dropdown({
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
+    // Enfoca el primer ítem del menú al abrir (navegación por teclado).
+    const first = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+    first?.focus();
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
+  // Flechas / Home / End mueven el foco entre los ítems del menú.
+  const onMenuKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    if (items.length === 0) return;
+    const idx = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      items[(idx + 1) % items.length]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(idx - 1 + items.length) % items.length]?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1]?.focus();
+    }
+  }, []);
+
   return (
     <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}>
         {trigger}
       </button>
       {open ? (
         <div
+          ref={menuRef}
           role="menu"
+          onKeyDown={onMenuKeyDown}
           className={cn(
-            "absolute z-20 mt-2 min-w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg",
-            align === "right" ? "right-0" : "left-0"
+            "absolute z-20 mt-2 min-w-44 origin-top overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-pop outline-none motion-safe:animate-scale-in",
+            align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
           )}
           onClick={() => setOpen(false)}
         >
@@ -186,16 +209,22 @@ export function Dropdown({
 export function DropdownItem({
   children,
   onClick,
+  tone = "default",
 }: {
   children: ReactNode;
   onClick?: () => void;
+  tone?: "default" | "danger";
 }) {
   return (
     <button
       type="button"
       role="menuitem"
+      tabIndex={-1}
       onClick={onClick}
-      className="block w-full px-4 py-2 text-left text-sm text-gray-700 outline-none hover:bg-gray-100 focus-visible:bg-gray-100"
+      className={cn(
+        "block w-full rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors duration-fast hover:bg-gray-100 focus-visible:bg-gray-100",
+        tone === "danger" ? "text-red-600" : "text-gray-700"
+      )}
     >
       {children}
     </button>
