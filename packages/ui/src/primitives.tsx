@@ -42,7 +42,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       className={cn(
         // focus-visible: el anillo de foco solo aparece con teclado (no al hacer clic
         // con mouse) → accesible para navegación por teclado y pulido con puntero.
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
+        // active:scale = "press state" (feel iOS); se anula si está deshabilitado o
+        // si el usuario pide reducir movimiento.
+        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
         buttonVariants[variant],
         buttonSizes[size],
         className
@@ -54,6 +56,36 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   )
 );
 Button.displayName = "Button";
+
+// ---------------------------------------------------------------- IconButton
+// Botón de solo ícono con área táctil adecuada y nombre accesible OBLIGATORIO.
+type IconButtonSize = "sm" | "md";
+const iconButtonSizes: Record<IconButtonSize, string> = { sm: "h-8 w-8", md: "h-10 w-10" };
+
+export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  label: string; // nombre accesible (aria-label + title)
+  size?: IconButtonSize;
+}
+
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
+  ({ label, size = "md", type = "button", className, children, ...props }, ref) => (
+    <button
+      ref={ref}
+      type={type}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-lg text-gray-500 outline-none transition duration-fast ease-standard hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
+        iconButtonSizes[size],
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+);
+IconButton.displayName = "IconButton";
 
 // ---------------------------------------------------------------- Input
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
