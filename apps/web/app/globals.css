@@ -28,6 +28,25 @@
   --c-amber-50: 255 251 235;  --c-amber-100: 254 243 199;  --c-amber-200: 253 230 138;  --c-amber-700: 180 83 9;    --c-amber-800: 146 64 14;
   --c-red-50: 254 242 242;    --c-red-100: 254 226 226;    --c-red-200: 254 202 202;    --c-red-700: 185 28 28;     --c-red-800: 153 27 27;
   --c-blue-50: 239 246 255;   --c-blue-100: 219 234 254;   --c-blue-200: 191 219 254;   --c-blue-700: 29 78 216;    --c-blue-800: 30 64 175;
+
+  /* Marca (violeta) como RAMPA tokenizada → adapta a dark y sirve para bg/text/ring/border. */
+  --c-brand-50: 245 243 255;  --c-brand-100: 237 233 254; --c-brand-200: 221 214 254;
+  --c-brand-300: 196 181 253; --c-brand-400: 167 139 250; --c-brand-500: 139 92 246;
+  --c-brand-600: 124 58 237;  --c-brand-700: 109 40 217;  --c-brand-800: 91 33 182;   --c-brand-900: 76 29 149;
+
+  /* Elevación: sombras sutiles y en capas (estilo iOS/macOS), tokenizadas por tema. */
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 6px 16px -8px rgb(16 24 40 / 0.10);
+  --shadow-pop: 0 4px 16px -6px rgb(16 24 40 / 0.16), 0 2px 6px -3px rgb(16 24 40 / 0.10);
+  --shadow-overlay: 0 16px 48px -12px rgb(16 24 40 / 0.24), 0 6px 16px -8px rgb(16 24 40 / 0.14);
+
+  /* Movimiento: curvas y duraciones estándar — una sola fuente de verdad. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
 }
 
 .dark {
@@ -49,16 +68,28 @@
   --c-amber-50: 43 34 12;   --c-amber-100: 56 42 12;   --c-amber-200: 82 60 20;   --c-amber-700: 252 211 77;  --c-amber-800: 253 230 138;
   --c-red-50: 43 20 20;     --c-red-100: 56 24 24;     --c-red-200: 82 34 34;     --c-red-700: 252 165 165;   --c-red-800: 254 202 202;
   --c-blue-50: 18 30 54;    --c-blue-100: 20 33 61;    --c-blue-200: 30 48 88;    --c-blue-700: 147 197 253;  --c-blue-800: 191 219 254;
+
+  /* Marca: en oscuro se aclara para legibilidad (el fill con texto blanco sigue pasando AA-UI). */
+  --c-brand-600: 141 106 248; --c-brand-700: 124 58 237;  --c-brand-800: 167 139 250;
+
+  /* Sombras más marcadas sobre superficies oscuras. */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 20px -10px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 8px 24px -8px rgb(0 0 0 / 0.7), 0 2px 8px -3px rgb(0 0 0 / 0.5);
+  --shadow-overlay: 0 20px 56px -16px rgb(0 0 0 / 0.85), 0 8px 20px -10px rgb(0 0 0 / 0.6);
 }
 
 body {
   @apply bg-gray-50 text-gray-900 antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent; /* sin flash gris al tocar en móvil */
 }
 
 /* Foco accesible por teclado (no aparece al hacer clic con el ratón). Cubre
-   todos los controles, incluidos los <button> custom sin estilo de foco. */
+   todos los controles, incluidos los <button> custom sin estilo de foco.
+   Usa el token de marca → se adapta al tema. */
 :focus-visible {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid rgb(var(--c-brand-600));
   outline-offset: 2px;
 }
 
@@ -86,4 +117,33 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .driver-dot::before { animation: none; }
+}
+
+/* ============================================================================
+   Fundación del sistema (Fase 1). Utilidades transversales.
+   ============================================================================ */
+
+/* Áreas seguras para el POS de mano (iPhone con notch / home indicator). Requiere
+   viewport-fit=cover (definido en layout.tsx). */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+.inset-safe { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* Scrollbars discretas y con tema (no la barra gris default del navegador). */
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--c-gray-300)) transparent; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--c-gray-300)); border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-gray-400)); background-clip: content-box; border: 3px solid transparent; }
+
+/* Respeta "reducir movimiento" en TODA la app (no solo el mapa): anula animaciones
+   y transiciones para quien lo pide en el sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

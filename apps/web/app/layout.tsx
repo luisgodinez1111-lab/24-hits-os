@@ -20,10 +20,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#7c3aed",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#7c3aed" },
+    { media: "(prefers-color-scheme: dark)", color: "#141018" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // Necesario para que env(safe-area-inset-*) sea distinto de 0 en iPhone con notch.
+  viewportFit: "cover",
 };
 
 // Aplica el tema antes del primer paint (sin parpadeo): preferencia guardada o
