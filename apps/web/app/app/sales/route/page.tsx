@@ -278,7 +278,7 @@ export default function RoutePage() {
               </span>
             )}
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={() => setMap3dFailed((v) => !v)} className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow active:scale-95">
+              <button onClick={() => setMap3dFailed((v) => !v)} aria-label="Cambiar vista 2D/3D" title="Cambiar vista 2D/3D" className="grid h-9 w-9 place-items-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-700 shadow active:scale-95">
                 {map3dFailed ? "3D" : "2D"}
               </button>
               <CompassRose
@@ -310,7 +310,7 @@ export default function RoutePage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
+          <h1 className="flex items-center gap-2 text-title text-gray-900"><RouteIcon className="h-6 w-6" /> Ruta de hoy</h1>
           <p className="text-sm text-gray-500">
             {total} {total === 1 ? "entrega" : "entregas"}{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
             {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
