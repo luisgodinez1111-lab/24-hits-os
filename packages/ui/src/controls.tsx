@@ -55,6 +55,7 @@ export function Segmented<T extends string>({
   onChange,
   options,
   size = "md",
+  full = false,
   ariaLabel,
   className,
 }: {
@@ -62,6 +63,7 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   options: SegmentedOption<T>[];
   size?: "sm" | "md";
+  full?: boolean; // ocupa todo el ancho con segmentos de igual tamaño
   ariaLabel: string;
   className?: string;
 }) {
@@ -85,7 +87,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
-      className={cn("inline-flex shrink-0 rounded-lg bg-gray-100 p-0.5", className)}
+      className={cn("rounded-lg bg-gray-100 p-0.5", full ? "flex w-full" : "inline-flex shrink-0", className)}
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -100,6 +102,7 @@ export function Segmented<T extends string>({
             className={cn(
               "rounded-md font-medium outline-none transition-colors duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand",
               size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-sm",
+              full && "flex-1 text-center",
               active ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-700"
             )}
           >

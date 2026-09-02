@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
 import {
-  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, Select, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, Segmented, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
@@ -20,6 +20,12 @@ const payTone: Record<string, "gray" | "amber" | "green"> = {
 };
 const deliveryTone: Record<string, "gray" | "amber" | "green"> = { PENDING: "gray", DISPATCHED: "amber", DELIVERED: "green" };
 const deliveryLabel: Record<string, string> = { PENDING: "Por enviar", DISPATCHED: "Enviado", DELIVERED: "Entregado" };
+// Etiquetas legibles (antes se mostraba el enum crudo: DRAFT, PENDING…).
+const statusLabel: Record<string, string> = {
+  DRAFT: "Borrador", CONFIRMED: "Confirmado", PARTIALLY_FULFILLED: "Parcial",
+  FULFILLED: "Entregado", COMPLETED: "Completado", CANCELLED: "Cancelado",
+};
+const payLabel: Record<string, string> = { PENDING: "Pendiente", PARTIAL: "Parcial", PAID: "Pagado" };
 
 export default function SalesOrdersPage() {
   const toast = useToast();
@@ -68,7 +74,7 @@ export default function SalesOrdersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Pedidos</h1>
+          <h1 className="text-title text-gray-900">Pedidos</h1>
           <p className="text-sm text-gray-500">Confirmar reserva stock · entregar consume inventario y captura COGS</p>
         </div>
         <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
@@ -89,8 +95,8 @@ export default function SalesOrdersPage() {
                 <TD className="font-mono text-xs">{o.number}</TD>
                 <TD className="font-medium">{customerName(o.customerId)}</TD>
                 <TD className="text-right">${Number(o.total).toFixed(2)}</TD>
-                <TD><Badge tone={tone[o.status] ?? "gray"}>{o.status}</Badge></TD>
-                <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{o.paymentStatus}</Badge></TD>
+                <TD><Badge tone={tone[o.status] ?? "gray"}>{statusLabel[o.status] ?? o.status}</Badge></TD>
+                <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{payLabel[o.paymentStatus] ?? o.paymentStatus}</Badge></TD>
                 <TD>
                   {o.deliveryStatus ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +165,7 @@ function LocationDialog({ order, onClose, onSave, pending }: { order: Order | nu
 
 function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
-  const [form, setForm] = useState({ method: "CASH", amount: "", reference: "" });
+  const [form, setForm] = useState<{ method: "CASH" | "CARD" | "TRANSFER" | "OTHER"; amount: string; reference: string }>({ method: "CASH", amount: "", reference: "" });
 
   const pay = useMutation({
     mutationFn: () => api.post(`/payments`, {
@@ -182,12 +188,18 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
       <div className="space-y-3">
         <p className="text-sm text-gray-500">Total del pedido: <span className="font-semibold text-gray-900">${Number(order?.total ?? 0).toFixed(2)}</span></p>
         <FormField label="Método">
-          <Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
-            <option value="CASH">Efectivo</option>
-            <option value="CARD">Tarjeta</option>
-            <option value="TRANSFER">Transferencia</option>
-            <option value="OTHER">Otro</option>
-          </Select>
+          <Segmented
+            full
+            ariaLabel="Método de pago"
+            value={form.method}
+            onChange={(m) => setForm({ ...form, method: m })}
+            options={[
+              { value: "CASH", label: "Efectivo" },
+              { value: "CARD", label: "Tarjeta" },
+              { value: "TRANSFER", label: "Transf." },
+              { value: "OTHER", label: "Otro" },
+            ]}
+          />
         </FormField>
         <FormField label="Monto"><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></FormField>
         <FormField label="Referencia (opcional)"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></FormField>
