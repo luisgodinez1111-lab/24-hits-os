@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
-import { Button, Combobox, FormField, Input, Select, useToast } from "@24hits/ui";
+import { Button, Combobox, FormField, IconButton, Input, Segmented, useToast } from "@24hits/ui";
 import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
@@ -22,7 +22,7 @@ export default function PosPage() {
   const warehouseId = me?.defaultWarehouse?.id ?? "";
   const [customerId, setCustomerId] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [method, setMethod] = useState("CASH");
+  const [method, setMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "OTHER">("CASH");
   const [manual, setManual] = useState("");
   const [quick, setQuick] = useState<{ open: boolean; barcode: string; type: ScanFormat }>({ open: false, barcode: "", type: "OTHER" });
 
@@ -82,7 +82,7 @@ export default function PosPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-2xl font-bold">Punto de venta</h1>
+        <h1 className="text-title text-gray-900">Punto de venta</h1>
         <p className="text-sm text-gray-500">Escanea el código de barras con la cámara y cobra en una operación</p>
       </div>
 
@@ -105,7 +105,7 @@ export default function PosPage() {
             </FormField>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
             <div className="mb-3 flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-semibold"><ScanLine className="h-4 w-4" /> Escáner</span>
               <button type="button" onClick={() => setQuick({ open: true, barcode: "", type: "OTHER" })} className="text-xs font-medium text-brand hover:underline">
@@ -125,7 +125,7 @@ export default function PosPage() {
 
         {/* Columna derecha: carrito + cobro */}
         <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="rounded-xl border border-gray-200 bg-white shadow-card">
             <div className="border-b border-gray-100 px-4 py-3 text-sm font-semibold">Carrito ({cart.length})</div>
             {cart.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-gray-400">Escanea o agrega productos.</p>
@@ -138,14 +138,14 @@ export default function PosPage() {
                         <p className="truncate text-sm font-medium">{l.name}</p>
                         <p className="font-mono text-xs text-gray-400">{l.sku}{l.available != null && Number(l.available) < l.quantity ? <span className="ml-2 text-red-500">stock {Number(l.available)}</span> : null}</p>
                       </div>
-                      <button onClick={() => setCart(cart.filter((x) => x.variantId !== l.variantId))} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                      <IconButton tone="danger" size="sm" label={`Quitar ${l.name} del carrito`} onClick={() => setCart(cart.filter((x) => x.variantId !== l.variantId))}><Trash2 className="h-4 w-4" /></IconButton>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))} className="grid h-7 w-7 place-items-center rounded border border-gray-200 hover:bg-gray-50"><Minus className="h-3.5 w-3.5" /></button>
-                        <span className="w-8 text-center text-sm tabular-nums">{l.quantity}</span>
-                        <button onClick={() => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, quantity: x.quantity + 1 } : x))} className="grid h-7 w-7 place-items-center rounded border border-gray-200 hover:bg-gray-50"><Plus className="h-3.5 w-3.5" /></button>
-                        <Input type="number" className="ml-2 w-24" value={l.unitPrice} onChange={(e) => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, unitPrice: Number(e.target.value) } : x))} />
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" aria-label="Restar uno" onClick={() => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 outline-none transition duration-fast hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand active:scale-95 motion-reduce:active:scale-100"><Minus className="h-4 w-4" /></button>
+                        <span className="w-8 text-center text-sm font-medium tabular-nums">{l.quantity}</span>
+                        <button type="button" aria-label="Sumar uno" onClick={() => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, quantity: x.quantity + 1 } : x))} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 outline-none transition duration-fast hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand active:scale-95 motion-reduce:active:scale-100"><Plus className="h-4 w-4" /></button>
+                        <Input type="number" className="ml-2 h-9 w-24" value={l.unitPrice} onChange={(e) => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, unitPrice: Number(e.target.value) } : x))} aria-label="Precio unitario" />
                       </div>
                       <span className="text-sm font-semibold tabular-nums">{money(l.unitPrice * l.quantity)}</span>
                     </div>
@@ -159,16 +159,22 @@ export default function PosPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 shadow-card">
             <FormField label="Método de pago">
-              <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-                <option value="CASH">Efectivo</option>
-                <option value="CARD">Tarjeta</option>
-                <option value="TRANSFER">Transferencia</option>
-                <option value="OTHER">Otro</option>
-              </Select>
+              <Segmented
+                full
+                ariaLabel="Método de pago"
+                value={method}
+                onChange={setMethod}
+                options={[
+                  { value: "CASH", label: "Efectivo" },
+                  { value: "CARD", label: "Tarjeta" },
+                  { value: "TRANSFER", label: "Transf." },
+                  { value: "OTHER", label: "Otro" },
+                ]}
+              />
             </FormField>
-            <Button className="w-full" loading={sale.isPending} onClick={checkout} data-testid="pos-charge-btn"><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
+            <Button size="lg" className="w-full" loading={sale.isPending} onClick={checkout} data-testid="pos-charge-btn"><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
           </div>
         </div>
       </div>

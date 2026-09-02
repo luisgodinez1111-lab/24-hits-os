@@ -60,23 +60,30 @@ Button.displayName = "Button";
 // ---------------------------------------------------------------- IconButton
 // Botón de solo ícono con área táctil adecuada y nombre accesible OBLIGATORIO.
 type IconButtonSize = "sm" | "md";
+type IconButtonTone = "default" | "danger";
 const iconButtonSizes: Record<IconButtonSize, string> = { sm: "h-8 w-8", md: "h-10 w-10" };
+const iconButtonTones: Record<IconButtonTone, string> = {
+  default: "text-gray-500 hover:bg-gray-100 hover:text-gray-700",
+  danger: "text-gray-400 hover:bg-red-50 hover:text-red-600",
+};
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string; // nombre accesible (aria-label + title)
   size?: IconButtonSize;
+  tone?: IconButtonTone;
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ label, size = "md", type = "button", className, children, ...props }, ref) => (
+  ({ label, size = "md", tone = "default", type = "button", className, children, ...props }, ref) => (
     <button
       ref={ref}
       type={type}
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-lg text-gray-500 outline-none transition duration-fast ease-standard hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
+        "inline-flex shrink-0 items-center justify-center rounded-lg outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
         iconButtonSizes[size],
+        iconButtonTones[tone],
         className
       )}
       {...props}
