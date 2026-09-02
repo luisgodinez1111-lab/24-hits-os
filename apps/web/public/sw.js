@@ -7,10 +7,22 @@
  *  - Estáticos (_next/static, fuentes, íconos): cache-first (rápido y offline).
  *  - Externos (R2, CDN, OSRM): no se tocan.
  * Los estáticos de Next llevan hash en el nombre → un deploy nuevo invalida solo.
+ *
+ * Auto-update: el registrador registra este SW como `/sw.js?v=<build>` (build = commit
+ * o timestamp del deploy). Cada deploy ⇒ URL distinta ⇒ el navegador instala un SW
+ * nuevo. Leemos ese `?v=` para nombrar la caché del shell POR BUILD, así `activate`
+ * purga la del build anterior. La caché de la API se mantiene estable entre deploys
+ * (no perder los últimos datos offline del reparto).
  */
-const VERSION = "v1";
-const SHELL_CACHE = `hits-shell-${VERSION}`;
-const API_CACHE = `hits-api-${VERSION}`;
+const BUILD = (() => {
+  try {
+    return new URL(self.location.href).searchParams.get("v") || "v1";
+  } catch {
+    return "v1";
+  }
+})();
+const SHELL_CACHE = `hits-shell-${BUILD}`;
+const API_CACHE = "hits-api-v1"; // estable entre deploys (datos offline)
 
 self.addEventListener("install", () => {
   self.skipWaiting();

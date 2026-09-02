@@ -21,6 +21,12 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Versión del build expuesta al cliente para auto-actualizar el service worker en
+  // cada deploy (ver components/ServiceWorkerRegistrar.tsx). En Vercel es el commit;
+  // en su defecto, el timestamp del build (cambia en cada rebuild real).
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now()),
+  },
   // Los paquetes internos se consumen como fuente y los transpila Next.
   // (maplibre-gl se carga por CDN en runtime; aquí solo se usa para tipos.)
   transpilePackages: ["@24hits/ui", "@24hits/contracts"],
