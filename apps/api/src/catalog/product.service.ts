@@ -135,6 +135,61 @@ export class ProductService {
     return after;
   }
 
+  // Elimina un modelo (producto) completo. Misma regla que los sabores: si CUALQUIER
+  // sabor del modelo tiene historial (ventas o movimientos) NO se borra —se desactiva
+  // (DISCONTINUED)— para conservar reportes. Si nunca se usó, se borra de verdad junto
+  // con sus sabores (los sabores cascadean; se limpian sus saldos/reservas/precios).
+  async deleteProduct(organizationId: string, productId: string) {
+    const product = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.product.findFirst({ where: { id: productId }, select: { id: true, name: true, status: true, variants: { select: { id: true } } } })
+    );
+    if (!product) throw new AppException(404, ErrorCode.PRODUCT_NOT_FOUND, "Modelo no encontrado");
+    const variantIds = product.variants.map((v) => v.id);
+
+    const hasHistory =
+      variantIds.length > 0 &&
+      (await this.prisma.withTenant(organizationId, async (tx) => {
+        const orders = await tx.orderItem.count({ where: { variantId: { in: variantIds } } });
+        if (orders > 0) return true;
+        const movements = await tx.inventoryMovement.count({ where: { variantId: { in: variantIds } } });
+        return movements > 0;
+      }));
+
+    if (hasHistory) {
+      if (product.status !== "DISCONTINUED") {
+        await this.prisma.withTenant(organizationId, (tx) => tx.product.update({ where: { id: productId }, data: { status: "DISCONTINUED" } }));
+        await this.audit.record({
+          action: "product.deactivated", organizationId, entityType: "Product", entityId: productId,
+          before: { status: product.status }, after: { status: "DISCONTINUED" },
+        });
+      }
+      return { deleted: false, deactivated: true, reason: "El modelo tiene ventas o movimientos; se desactivó en lugar de borrarse." };
+    }
+
+    try {
+      await this.prisma.withTenant(organizationId, async (tx) => {
+        if (variantIds.length) {
+          await tx.inventoryReservation.deleteMany({ where: { variantId: { in: variantIds } } });
+          await tx.inventoryBalance.deleteMany({ where: { variantId: { in: variantIds } } });
+          await tx.priceListItem.deleteMany({ where: { variantId: { in: variantIds } } });
+        }
+        await tx.product.delete({ where: { id: productId } }); // variantes e imágenes cascadean
+      });
+      await this.audit.record({ action: "product.deleted", organizationId, entityType: "Product", entityId: productId, before: { name: product.name } });
+      return { deleted: true, deactivated: false };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
+        await this.prisma.withTenant(organizationId, (tx) => tx.product.update({ where: { id: productId }, data: { status: "DISCONTINUED" } }));
+        await this.audit.record({
+          action: "product.deactivated", organizationId, entityType: "Product", entityId: productId,
+          before: { status: product.status }, after: { status: "DISCONTINUED" },
+        });
+        return { deleted: false, deactivated: true, reason: "El modelo está referenciado por otros registros; se desactivó." };
+      }
+      throw e;
+    }
+  }
+
   // SKU legible autogenerado: abreviatura del modelo + sabor + sufijo aleatorio
   // corto (para que sea único sin pedírselo al usuario).
   private generateSku(productName: string, label: string): string {
@@ -218,6 +273,82 @@ export class ProductService {
     } catch (e) {
       throw this.mapUniqueError(e);
     }
+  }
+
+  // Elimina un sabor (variante). Regla de seguridad: si el sabor YA tiene historial
+  // (ventas o movimientos de inventario) NO se borra —se desactiva (DISCONTINUED)—
+  // para no corromper reportes ni cuadres. Si nunca se usó, se borra de verdad
+  // (limpiando de paso los hijos que no cascadean: reservas, saldos y precios;
+  // los códigos de barras y el costo sí cascadean por el schema).
+  async deleteVariant(organizationId: string, variantId: string) {
+    const variant = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.productVariant.findFirst({ where: { id: variantId }, select: { id: true, sku: true, name: true, status: true } })
+    );
+    if (!variant) throw new AppException(404, ErrorCode.VARIANT_NOT_FOUND, "Sabor no encontrado");
+
+    const { orders, movements } = await this.prisma.withTenant(organizationId, async (tx) => ({
+      orders: await tx.orderItem.count({ where: { variantId } }),
+      movements: await tx.inventoryMovement.count({ where: { variantId } }),
+    }));
+
+    // Con historial → desactivar (borrado lógico).
+    if (orders > 0 || movements > 0) {
+      if (variant.status !== "DISCONTINUED") {
+        await this.prisma.withTenant(organizationId, (tx) =>
+          tx.productVariant.update({ where: { id: variantId }, data: { status: "DISCONTINUED" } })
+        );
+        await this.audit.record({
+          action: "variant.deactivated", organizationId, entityType: "ProductVariant", entityId: variantId,
+          before: { status: variant.status }, after: { status: "DISCONTINUED" },
+        });
+      }
+      return { deleted: false, deactivated: true, reason: "El sabor tiene ventas o movimientos; se desactivó en lugar de borrarse." };
+    }
+
+    // Sin historial → borrado real. Si algo más lo referencia (P2003), caemos a desactivar.
+    try {
+      await this.prisma.withTenant(organizationId, async (tx) => {
+        await tx.inventoryReservation.deleteMany({ where: { variantId } });
+        await tx.inventoryBalance.deleteMany({ where: { variantId } });
+        await tx.priceListItem.deleteMany({ where: { variantId } });
+        await tx.productVariant.delete({ where: { id: variantId } });
+      });
+      await this.audit.record({
+        action: "variant.deleted", organizationId, entityType: "ProductVariant", entityId: variantId,
+        before: { sku: variant.sku, name: variant.name },
+      });
+      return { deleted: true, deactivated: false };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
+        await this.prisma.withTenant(organizationId, (tx) =>
+          tx.productVariant.update({ where: { id: variantId }, data: { status: "DISCONTINUED" } })
+        );
+        await this.audit.record({
+          action: "variant.deactivated", organizationId, entityType: "ProductVariant", entityId: variantId,
+          before: { status: variant.status }, after: { status: "DISCONTINUED" },
+        });
+        return { deleted: false, deactivated: true, reason: "El sabor está referenciado por otros registros; se desactivó." };
+      }
+      throw e;
+    }
+  }
+
+  // Dar de baja / reactivar un sabor (borrado lógico reversible). No borra nada;
+  // solo cambia el status. Conserva ventas, inventario e historial.
+  async setVariantStatus(organizationId: string, variantId: string, status: "DRAFT" | "ACTIVE" | "INACTIVE" | "DISCONTINUED") {
+    const before = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.productVariant.findFirst({ where: { id: variantId }, select: { id: true, status: true } })
+    );
+    if (!before) throw new AppException(404, ErrorCode.VARIANT_NOT_FOUND, "Sabor no encontrado");
+    const variant = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.productVariant.update({ where: { id: variantId }, data: { status } })
+    );
+    await this.audit.record({
+      action: status === "ACTIVE" ? "variant.reactivated" : "variant.deactivated",
+      organizationId, entityType: "ProductVariant", entityId: variantId,
+      before: { status: before.status }, after: { status },
+    });
+    return variant;
   }
 
   async addBarcode(organizationId: string, variantId: string, input: AddBarcode) {

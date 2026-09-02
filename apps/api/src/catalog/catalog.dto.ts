@@ -4,6 +4,15 @@ export const createBrandSchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().max(140).optional(),
 });
+
+// Editar marca: renombrar y/o dar de baja/reactivar (status).
+export const updateBrandSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  })
+  .refine((b) => b.name !== undefined || b.status !== undefined, { message: "Nada que actualizar" });
+export type UpdateBrandInput = z.infer<typeof updateBrandSchema>;
 export const createCategorySchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().max(140).optional(),
@@ -51,6 +60,13 @@ export const addBarcodeSchema = z.object({
   type: z.enum(["EAN", "UPC", "CODE128", "QR_INTERNAL", "OTHER"]).default("OTHER"),
   isPrimary: z.boolean().default(false),
 });
+
+// Dar de baja / reactivar un sabor (variante): cambia su status. Borrado lógico
+// reversible; conserva historial (a diferencia del DELETE que borra los sin uso).
+export const setVariantStatusSchema = z.object({
+  status: z.enum(["DRAFT", "ACTIVE", "INACTIVE", "DISCONTINUED"]),
+});
+export type SetVariantStatusInput = z.infer<typeof setVariantStatusSchema>;
 
 // Alta rápida por escaneo: da de alta modelo (producto) + sabor (variante) +
 // código de barras en una sola operación. Marca y sabor se resuelven por nombre
