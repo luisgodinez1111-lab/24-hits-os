@@ -392,6 +392,29 @@ export class OrderService {
     for (const item of input.items) {
       const quantity = new Prisma.Decimal(item.quantity);
 
+      // No se puede vender lo dado de baja: sabor, su modelo o su marca. Se valida
+      // solo al CREAR el pedido (los pedidos ya en curso se pueden seguir entregando).
+      const variant = await tx.productVariant.findFirst({
+        where: { id: item.variantId },
+        select: {
+          status: true,
+          name: true,
+          product: { select: { name: true, status: true, brand: { select: { name: true, status: true } } } },
+        },
+      });
+      if (!variant) {
+        throw new AppException(404, ErrorCode.VARIANT_NOT_FOUND, `Variante no encontrada: ${item.variantId}`);
+      }
+      const isDown = (s: string) => s === "INACTIVE" || s === "DISCONTINUED";
+      const blocked =
+        isDown(variant.status) ? `El sabor "${variant.name}" está dado de baja`
+        : isDown(variant.product.status) ? `El modelo "${variant.product.name}" está dado de baja`
+        : variant.product.brand && variant.product.brand.status === "INACTIVE" ? `La marca "${variant.product.brand.name}" está dada de baja`
+        : null;
+      if (blocked) {
+        throw new AppException(409, ErrorCode.ORDER_INVALID_STATE, `${blocked}; no se puede vender.`);
+      }
+
       let unitPrice: Prisma.Decimal;
       if (item.unitPrice != null) {
         unitPrice = new Prisma.Decimal(item.unitPrice);

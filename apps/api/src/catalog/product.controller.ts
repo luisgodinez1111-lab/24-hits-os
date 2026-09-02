@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
@@ -11,12 +11,14 @@ import {
   createVariantSchema,
   productSearchSchema,
   quickRegisterSchema,
+  setVariantStatusSchema,
   updateProductSchema,
   type AddBarcodeInput,
   type CreateProductInput,
   type CreateVariantInput,
   type ProductSearch,
   type QuickRegisterInput,
+  type SetVariantStatusInput,
   type UpdateProductInput,
 } from "./catalog.dto.js";
 
@@ -61,6 +63,14 @@ export class ProductController {
   createVariant(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(createVariantSchema)) b: CreateVariantInput) {
     return this.products.createVariant(u.organizationId!, id, b);
   }
+
+  // Elimina un modelo (con sus sabores). Borra de verdad si nunca se usó; si tiene
+  // historial lo desactiva (la respuesta indica cuál ocurrió).
+  @Delete(":id")
+  @RequirePermissions("products.update")
+  remove(@CurrentUser() u: AuthContext, @Param("id") id: string) {
+    return this.products.deleteProduct(u.organizationId!, id);
+  }
 }
 
 @ApiTags("variants")
@@ -78,5 +88,20 @@ export class VariantController {
   @RequirePermissions("products.update")
   addBarcode(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(addBarcodeSchema)) b: AddBarcodeInput) {
     return this.products.addBarcode(u.organizationId!, id, b);
+  }
+
+  // Dar de baja / reactivar un sabor (cambia status; reversible, conserva historial).
+  @Patch(":id")
+  @RequirePermissions("products.update")
+  setStatus(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(setVariantStatusSchema)) b: SetVariantStatusInput) {
+    return this.products.setVariantStatus(u.organizationId!, id, b.status);
+  }
+
+  // Elimina un sabor. Borra de verdad si nunca se usó; si tiene historial lo desactiva
+  // (la respuesta indica cuál de las dos ocurrió). Es una edición de catálogo → products.update.
+  @Delete(":id")
+  @RequirePermissions("products.update")
+  remove(@CurrentUser() u: AuthContext, @Param("id") id: string) {
+    return this.products.deleteVariant(u.organizationId!, id);
   }
 }

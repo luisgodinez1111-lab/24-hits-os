@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
@@ -10,6 +10,8 @@ import {
   createCategorySchema,
   createFlavorSchema,
   createUnitSchema,
+  updateBrandSchema,
+  type UpdateBrandInput,
 } from "./catalog.dto.js";
 
 @ApiTags("brands")
@@ -27,6 +29,20 @@ export class BrandController {
   @RequirePermissions("brands.manage")
   create(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(createBrandSchema)) b: { name: string; slug?: string }) {
     return this.catalog.createBrand(u.organizationId!, b);
+  }
+
+  // Renombrar o dar de baja/reactivar una marca (status ACTIVE/INACTIVE).
+  @Patch(":id")
+  @RequirePermissions("brands.manage")
+  update(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateBrandSchema)) b: UpdateBrandInput) {
+    return this.catalog.updateBrand(u.organizationId!, id, b);
+  }
+
+  // Elimina la marca. Sus modelos NO se borran: quedan "sin marca".
+  @Delete(":id")
+  @RequirePermissions("brands.manage")
+  remove(@CurrentUser() u: AuthContext, @Param("id") id: string) {
+    return this.catalog.deleteBrand(u.organizationId!, id);
   }
 }
 

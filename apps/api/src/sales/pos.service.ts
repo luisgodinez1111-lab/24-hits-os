@@ -29,7 +29,10 @@ export class PosService {
         where: { barcode: input.barcode },
         select: {
           variant: {
-            select: { id: true, sku: true, name: true, status: true, product: { select: { name: true } } },
+            select: {
+              id: true, sku: true, name: true, status: true,
+              product: { select: { name: true, status: true, brand: { select: { name: true, status: true } } } },
+            },
           },
         },
       });
@@ -37,6 +40,17 @@ export class PosService {
         throw new AppException(404, ErrorCode.VARIANT_NOT_FOUND, `Código no reconocido: ${input.barcode}`);
       }
       const v = bc.variant;
+
+      // No se puede vender lo dado de baja (sabor, modelo o marca): se bloquea al escanear.
+      const isDown = (s: string) => s === "INACTIVE" || s === "DISCONTINUED";
+      const blocked =
+        isDown(v.status) ? `El sabor "${v.name}" está dado de baja`
+        : isDown(v.product.status) ? `El modelo "${v.product.name}" está dado de baja`
+        : v.product.brand && v.product.brand.status === "INACTIVE" ? `La marca "${v.product.brand.name}" está dada de baja`
+        : null;
+      if (blocked) {
+        throw new AppException(409, ErrorCode.ORDER_INVALID_STATE, `${blocked}; no se puede vender.`);
+      }
 
       // Precio: lista RETAIL activa, ítem vigente.
       const list = await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true, currency: true } });
