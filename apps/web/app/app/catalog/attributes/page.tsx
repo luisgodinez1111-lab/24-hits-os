@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, ChevronRight, Droplet, FolderTree, MoreHorizontal, Package, Plus, Search, Tag } from "lucide-react";
+import { Barcode, ChevronRight, Droplet, FolderTree, MoreHorizontal, Package, Search, Tag } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Dialog, Dropdown, DropdownItem, EmptyState, Input, Skeleton, cn, useToast,
 } from "@24hits/ui";
@@ -152,7 +152,8 @@ function CatalogTree() {
   const toggle = (id: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   const openNode = (id: string) => setOpen((prev) => new Set(prev).add(id));
