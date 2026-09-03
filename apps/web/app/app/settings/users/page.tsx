@@ -26,6 +26,7 @@ import {
   THead,
   TR,
   useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { Member, RoleSummary, Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
@@ -110,8 +111,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Usuarios</h1>
-      <p className="mb-6 text-sm text-gray-500">Miembros de la organización y sus roles</p>
+      <PageHeader title="Usuarios" subtitle="Miembros de la organización y sus roles" />
 
       <Card className="mb-6">
         <CardHeader title="Invitar usuario" subtitle="Recibirá un correo para establecer su contraseña" />
@@ -163,7 +163,7 @@ export default function UsersPage() {
           title="Sin miembros"
         />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Usuario</TH>

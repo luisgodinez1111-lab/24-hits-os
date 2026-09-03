@@ -12,6 +12,7 @@ import {
   THead,
   TR,
   useToast,
+  PageHeader,
 } from "@24hits/ui";
 import { Monitor } from "lucide-react";
 import type { SessionInfo } from "@24hits/contracts";
@@ -36,8 +37,7 @@ export default function SessionsPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Sesiones activas</h1>
-      <p className="mb-6 text-sm text-gray-500">Dispositivos con acceso a tu cuenta</p>
+      <PageHeader title="Sesiones activas" subtitle="Dispositivos con acceso a tu cuenta" />
 
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -47,7 +47,7 @@ export default function SessionsPage() {
           title="Sin sesiones activas"
         />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Dispositivo / Navegador</TH>

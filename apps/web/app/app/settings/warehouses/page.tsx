@@ -24,6 +24,7 @@ import {
   THead,
   TR,
   useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { Branch, Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
@@ -76,10 +77,7 @@ export default function WarehousesPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Almacenes</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Una sucursal puede tener varios almacenes (principal, mostrador, reparto)
-      </p>
+      <PageHeader title="Almacenes" subtitle="Una sucursal puede tener varios almacenes (principal, mostrador, reparto)" />
 
       <Card className="mb-6">
         <CardHeader title="Nuevo almacén" />
@@ -131,7 +129,7 @@ export default function WarehousesPage() {
           description="Crea el primero arriba."
         />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Nombre</TH>
