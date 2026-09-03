@@ -7,6 +7,7 @@ import { useMe } from "@/lib/me";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <VerifyEmailBanner />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, LogOut, Menu, Monitor } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Monitor, Search } from "lucide-react";
 import { Badge, Dropdown, DropdownItem } from "@24hits/ui";
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/me";
 import { NotificationBell } from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
+import { OPEN_COMMAND_PALETTE } from "./CommandPalette";
 
 export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void }) {
   const router = useRouter();
@@ -43,6 +44,17 @@ export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Abre el Command palette (⌘K). Descubrible + táctil (también funciona con clic). */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE))}
+          aria-label="Buscar y navegar (Command+K)"
+          className="hidden items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 sm:flex"
+        >
+          <Search className="h-4 w-4" />
+          <span>Buscar…</span>
+          <kbd className="rounded border border-gray-200 px-1 text-[10px] font-medium">⌘K</kbd>
+        </button>
         <ThemeToggle />
         <NotificationBell />
         <Dropdown
