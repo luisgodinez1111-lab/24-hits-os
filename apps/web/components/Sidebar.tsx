@@ -2,84 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Boxes,
-  ClipboardCheck,
-  Home,
-  Layers,
-  Package,
-  Radar,
-  Route,
-  ScanLine,
-  Settings,
-  ShoppingCart,
-  TrendingUp,
-  UserSquare,
-  type LucideIcon,
-} from "lucide-react";
-import type { PermissionKey } from "@24hits/contracts";
+import { Layers } from "lucide-react";
 import { cn } from "@24hits/ui";
 import { hasPermission, useMe } from "@/lib/me";
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  exact?: boolean;
-  perm?: PermissionKey; // si falta el permiso, el ítem se oculta
-}
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-// Orden por flujo de trabajo: operación (ventas/caja) → abastecimiento (inventario/
-// compras/catálogo) → análisis (reportes) → administración.
-const sections: NavSection[] = [
-  {
-    title: "General",
-    items: [{ href: "/app", label: "Inicio", icon: Home, exact: true }],
-  },
-  {
-    title: "Ventas",
-    // Accesos directos a lo de uso diario; Notas de venta/crédito viven en las
-    // pestañas de la ventana de Ventas.
-    items: [
-      { href: "/app/sales/pos", label: "Punto de venta", icon: ScanLine, perm: "orders.create" },
-      { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
-      { href: "/app/sales/route", label: "Ruta de hoy", icon: Route, perm: "orders.read" },
-      { href: "/app/sales/tracking", label: "Seguimiento", icon: Radar, perm: "orders.read" },
-      { href: "/app/sales/customers", label: "Clientes", icon: UserSquare, perm: "customers.read" },
-    ],
-  },
-  {
-    title: "Inventario",
-    // Acceso directo a Existencias (uso diario); movimientos, transferencias y
-    // conteos viven en las pestañas de la ventana de Inventario.
-    items: [{ href: "/app/inventory", label: "Existencias", icon: Boxes, exact: true, perm: "inventory.read" }],
-  },
-  {
-    title: "Compras",
-    // Proveedores y órdenes de compra en una sola ventana con pestañas.
-    items: [{ href: "/app/purchasing", label: "Compras", icon: ShoppingCart, perm: "suppliers.read" }],
-  },
-  {
-    title: "Catálogo",
-    // Productos, marcas, categorías, sabores y precios en una sola ventana con pestañas.
-    items: [{ href: "/app/catalog", label: "Catálogo", icon: Package, perm: "products.read" }],
-  },
-  {
-    title: "Reportes",
-    // Financieros, más vendidos y registro de ventas en una sola ventana con pestañas.
-    items: [{ href: "/app/reports", label: "Reportes", icon: TrendingUp, perm: "reports.read" }],
-  },
-  {
-    title: "Administración",
-    // Todo (organización, sucursales, almacenes, usuarios, roles, auditoría,
-    // dispositivos) vive dentro de una sola ventana con pestañas.
-    items: [{ href: "/app/settings", label: "Configuración", icon: Settings }],
-  },
-];
+import { navSections, type NavItem } from "@/lib/nav";
 
 export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
@@ -87,7 +13,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
 
   // Un ítem se muestra si no exige permiso, si aún carga /me, o si el usuario lo tiene.
   const canSee = (item: NavItem): boolean => !item.perm || isLoading || hasPermission(me, item.perm);
-  const visibleSections = sections
+  const visibleSections = navSections
     .map((s) => ({ ...s, items: s.items.filter(canSee) }))
     .filter((s) => s.items.length > 0);
 

@@ -413,7 +413,7 @@ function BrandNode({ node, ctx, forceOpen }: { node: BrandNodeData; ctx: TreeCtx
         }
       />
       {isOpen && (
-        <ul role="group" className="ml-3.5 border-l border-gray-100 pl-2">
+        <ul role="group" className="ml-3.5 border-l border-gray-100 pl-2 motion-safe:animate-slide-down">
           {node.models.length ? (
             node.models.map((m) => <ModelNode key={m.id} model={m} ctx={ctx} />)
           ) : (
@@ -503,7 +503,7 @@ function ModelNode({ model, ctx }: { model: ProductListItem; ctx: TreeCtx }) {
         }
       />
       {isOpen && (
-        <ul role="group" className="ml-3.5 border-l border-gray-100 pl-2">
+        <ul role="group" className="ml-3.5 border-l border-gray-100 pl-2 motion-safe:animate-slide-down">
           {isLoading ? (
             <li className="px-2 py-1"><Skeleton className="h-4 w-40" /></li>
           ) : (
