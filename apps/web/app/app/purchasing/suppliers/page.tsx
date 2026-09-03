@@ -6,6 +6,7 @@ import { Contact, Plus } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { Supplier } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -18,20 +19,18 @@ export default function SuppliersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Proveedores</h1>
-          <p className="text-sm text-gray-500">Catálogo de proveedores</p>
-        </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
-      </div>
+      <PageHeader
+        title="Proveedores"
+        subtitle="Catálogo de proveedores"
+        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>}
+      />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<Contact className="h-8 w-8 text-gray-400" />} title="Sin proveedores" />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead><TR><TH>Nombre</TH><TH>RFC</TH><TH>Correo</TH><TH>Moneda</TH><TH>Estado</TH></TR></THead>
           <TBody>
             {data.map((s) => (

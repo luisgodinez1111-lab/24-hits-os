@@ -6,6 +6,7 @@ import { DollarSign, Plus } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { PriceList, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -30,13 +31,11 @@ export default function PricingPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Precios</h1>
-          <p className="text-sm text-gray-500">Listas de precios (retail, mayoreo, especial) con historial</p>
-        </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva lista</Button>
-      </div>
+      <PageHeader
+        title="Precios"
+        subtitle="Listas de precios (retail, mayoreo, especial) con historial"
+        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva lista</Button>}
+      />
 
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -111,7 +110,7 @@ function PriceListDialog({ listId, onClose }: { listId: string | null; onClose: 
         </div>
 
         {detail?.items?.length ? (
-          <Table>
+          <Table stickyHeader>
             <THead><TR><TH>Variante</TH><TH className="text-right">Precio</TH><TH className="text-right">Mínimo</TH></TR></THead>
             <TBody>
               {detail.items.map((it) => (

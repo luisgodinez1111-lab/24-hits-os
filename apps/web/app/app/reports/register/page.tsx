@@ -44,7 +44,7 @@ export default function SalesRegisterPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Registro de ventas</h1>
+          <h1 className="text-title text-gray-900">Registro de ventas</h1>
           <p className="text-sm text-gray-500">Diario transaccional — cada venta con su pago, nota y costo</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -77,7 +77,7 @@ export default function SalesRegisterPage() {
             {showProfit && <Kpi label="Utilidad bruta" value={money(data.totals.grossProfit)} accent />}
           </div>
 
-          <Table>
+          <Table stickyHeader>
               <THead>
                 <TR>
                   <TH>Folio</TH><TH>Fecha</TH><TH>Cliente</TH><TH>Estado</TH><TH>Pago</TH>

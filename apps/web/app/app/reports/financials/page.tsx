@@ -66,7 +66,7 @@ export default function ReportsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Reportes financieros</h1>
+          <h1 className="text-title text-gray-900">Reportes financieros</h1>
           <p className="text-sm text-gray-500">Ventas, cobros y utilidad — derivado de los ledgers</p>
         </div>
         <div className="flex items-end gap-2">

@@ -50,7 +50,7 @@ export default function AnalysisPage() {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Más vendidos</h1>
+          <h1 className="text-title text-gray-900">Más vendidos</h1>
           <p className="text-sm text-gray-500">Qué se vende y qué se devuelve — por modelo, marca o sabor</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -70,7 +70,7 @@ export default function AnalysisPage() {
       ) : !data || data.rows.length === 0 ? (
         <EmptyState icon={<BarChart3 className="h-8 w-8 text-gray-400" />} title="Sin ventas en el rango" description="Ajusta las fechas o registra ventas." />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH className="w-8">#</TH>

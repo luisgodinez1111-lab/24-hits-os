@@ -6,6 +6,7 @@ import { Plus, ShoppingCart } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { PurchaseOrder, Supplier, Variant } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
@@ -54,20 +55,18 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Órdenes de compra</h1>
-          <p className="text-sm text-gray-500">La recepción alimenta inventario y costo promedio</p>
-        </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva</Button>
-      </div>
+      <PageHeader
+        title="Órdenes de compra"
+        subtitle="La recepción alimenta inventario y costo promedio"
+        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva</Button>}
+      />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<ShoppingCart className="h-8 w-8 text-gray-400" />} title="Sin órdenes de compra" />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead><TR><TH>Folio</TH><TH>Proveedor</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH className="text-right">Acciones</TH></TR></THead>
           <TBody>
             {data.map((po) => (

@@ -6,6 +6,7 @@ import { BarChart3, Pencil, Plus, UserSquare, Wallet } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -34,20 +35,18 @@ export default function CustomersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Clientes</h1>
-          <p className="text-sm text-gray-500">Registro de clientes, zona de entrega y análisis de compra</p>
-        </div>
-        <Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo</Button>
-      </div>
+      <PageHeader
+        title="Clientes"
+        subtitle="Registro de clientes, zona de entrega y análisis de compra"
+        actions={<Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo</Button>}
+      />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<UserSquare className="h-8 w-8 text-gray-400" />} title="Sin clientes" />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead><TR>
             <TH>Nº</TH><TH>Nombre</TH><TH>Celular</TH><TH>Zona</TH>
             <TH className="text-right">Pedidos</TH><TH>Última compra</TH><TH>Estado</TH><TH className="text-right">Acciones</TH>
