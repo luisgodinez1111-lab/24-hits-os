@@ -85,7 +85,7 @@ export default function SalesOrdersPage() {
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin pedidos" />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH>Entrega</TH><TH className="text-right">Acciones</TH></TR></THead>
           <TBody>
             {data.map((o) => (
