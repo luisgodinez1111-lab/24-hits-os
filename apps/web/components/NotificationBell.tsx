@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bell, Check, Info } from "lucide-react";
-import { Badge, Button, Dialog, EmptyState } from "@24hits/ui";
+import { Badge, Button, Dialog, EmptyState, Tooltip } from "@24hits/ui";
 import type { AppNotification } from "@/lib/catalog-types";
 import { api } from "@/lib/api";
 
@@ -41,18 +41,20 @@ export function NotificationBell() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100"
-        aria-label="Notificaciones"
-      >
-        <Bell className="h-5 w-5" />
-        {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {count > 99 ? "99+" : count}
-          </span>
-        )}
-      </button>
+      <Tooltip label="Notificaciones">
+        <button
+          onClick={() => setOpen(true)}
+          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 outline-none transition-colors hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand"
+          aria-label="Notificaciones"
+        >
+          <Bell className="h-5 w-5" />
+          {count > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </button>
+      </Tooltip>
 
       <Dialog open={open} onClose={() => setOpen(false)} title="Notificaciones"
         footer={<>
