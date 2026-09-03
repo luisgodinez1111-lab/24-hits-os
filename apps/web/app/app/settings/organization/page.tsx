@@ -66,7 +66,7 @@ function CreateOrganization() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="mb-1 text-2xl font-bold">Crear organización</h1>
+      <h1 className="mb-1 text-title text-gray-900">Crear organización</h1>
       <p className="mb-6 text-sm text-gray-500">Serás el Organization Owner</p>
       <Card>
         <CardBody>
@@ -134,7 +134,7 @@ function ManageOrganization() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold">Organización</h1>
+        <h1 className="mb-1 text-title text-gray-900">Organización</h1>
         <p className="text-sm text-gray-500">Datos y configuración de negocio</p>
       </div>
 

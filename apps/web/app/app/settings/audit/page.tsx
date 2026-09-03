@@ -14,6 +14,7 @@ import {
   THead,
   TR,
   Button,
+  PageHeader,
 } from "@24hits/ui";
 import type { AuditPage } from "@24hits/contracts";
 import { api } from "@/lib/api";
@@ -29,10 +30,7 @@ export default function AuditPageView() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Auditoría</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Registro inmutable de acciones (append-only)
-      </p>
+      <PageHeader title="Auditoría" subtitle="Registro inmutable de acciones (append-only)" />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
@@ -43,7 +41,7 @@ export default function AuditPageView() {
         />
       ) : (
         <>
-          <Table>
+          <Table stickyHeader>
             <THead>
               <TR>
                 <TH>Fecha</TH>

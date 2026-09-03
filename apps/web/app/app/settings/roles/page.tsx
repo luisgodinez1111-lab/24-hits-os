@@ -19,6 +19,7 @@ import {
   THead,
   TR,
   useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { PermissionCatalogGroup, RoleSummary } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
@@ -60,15 +61,12 @@ export default function RolesPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Roles</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Roles del sistema y roles propios de la organización
-      </p>
+      <PageHeader title="Roles" subtitle="Roles del sistema y roles propios de la organización" />
 
       {isLoading ? (
         <Skeleton className="mb-6 h-40 w-full" />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Rol</TH>

@@ -21,6 +21,7 @@ import {
   THead,
   TR,
   useToast,
+  PageHeader,
 } from "@24hits/ui";
 import { MapPin } from "lucide-react";
 import type { Branch } from "@24hits/contracts";
@@ -61,8 +62,7 @@ export default function BranchesPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Sucursales</h1>
-      <p className="mb-6 text-sm text-gray-500">Gestiona las sucursales de tu organización</p>
+      <PageHeader title="Sucursales" subtitle="Gestiona las sucursales de tu organización" />
 
       <Card className="mb-6">
         <CardHeader title="Nueva sucursal" />
@@ -99,7 +99,7 @@ export default function BranchesPage() {
           description="Crea la primera arriba."
         />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Nombre</TH>

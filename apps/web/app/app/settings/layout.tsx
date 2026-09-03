@@ -18,7 +18,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-2xl font-bold">Configuración</h1>
+        <h1 className="text-title text-gray-900">Configuración</h1>
         <p className="text-sm text-gray-500">Organización, sucursales, almacenes, usuarios, roles, auditoría y dispositivos</p>
       </div>
 
