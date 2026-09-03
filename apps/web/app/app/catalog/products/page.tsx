@@ -6,6 +6,7 @@ import { Barcode, ChevronDown, Package, Plus, ScanLine } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
+  PageHeader,
 } from "@24hits/ui";
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -46,20 +47,16 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Modelos</h1>
-          <p className="text-sm text-gray-500">Marca → modelo → sabores</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setQuickOpen(true)}>
-            <ScanLine className="h-4 w-4" /> Alta por escaneo
-          </Button>
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Nuevo modelo
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Modelos"
+        subtitle="Marca → modelo → sabores"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQuickOpen(true)}><ScanLine className="h-4 w-4" /> Alta por escaneo</Button>
+            <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo modelo</Button>
+          </>
+        }
+      />
 
       <Card className="mb-6">
         <CardBody className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -91,7 +88,7 @@ export default function ProductsPage() {
       ) : !data || data.items.length === 0 ? (
         <EmptyState icon={<Package className="h-8 w-8 text-gray-400" />} title="Sin modelos" description="Crea el primero con “Nuevo modelo”." />
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR><TH>Modelo</TH><TH>Marca</TH><TH>Categoría</TH><TH className="text-right">Sabores</TH><TH>Estado</TH><TH>{" "}</TH></TR>
           </THead>

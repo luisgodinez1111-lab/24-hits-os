@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Boxes, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
+  PageHeader,
 } from "@24hits/ui";
 import type { InventoryBalanceRow } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
@@ -92,17 +93,11 @@ export default function InventoryPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="mb-1 text-2xl font-bold">Existencias</h1>
-          <p className="text-sm text-gray-500">Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)</p>
-        </div>
-        {canAdjust && (
-          <Button onClick={() => setStockDialog({})}>
-            <PackagePlus className="h-4 w-4" /> Cargar / ajustar stock
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Existencias"
+        subtitle="Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)"
+        actions={canAdjust ? <Button onClick={() => setStockDialog({})}><PackagePlus className="h-4 w-4" /> Cargar / ajustar stock</Button> : undefined}
+      />
 
       <Card className="mb-6">
         <CardBody className="flex flex-wrap items-end gap-4">
@@ -157,7 +152,7 @@ export default function InventoryPage() {
           <EmptyState icon={<Boxes className="h-8 w-8 text-gray-400" />} title="Sin resultados"
             description="Ningún modelo/sabor coincide con tu búsqueda." />
         ) : (
-          <Table>
+          <Table stickyHeader>
             <THead>
               <TR>
                 <TH>Modelo</TH><TH>Sabor</TH>
@@ -190,7 +185,7 @@ export default function InventoryPage() {
           </Table>
         )
       ) : (
-        <Table>
+        <Table stickyHeader>
           <THead>
             <TR>
               <TH>Almacén</TH><TH>SKU</TH><TH>Producto</TH><TH>Sabor</TH>
