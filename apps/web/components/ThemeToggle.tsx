@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { Tooltip } from "@24hits/ui";
 
 // Alterna claro/oscuro y lo persiste. El estado inicial lo aplica el script
 // inline del layout (sin parpadeo); aquí solo leemos y alternamos.
@@ -23,14 +24,17 @@ export function ThemeToggle() {
     }
   }
 
+  const label = dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      className="grid h-9 w-9 place-items-center rounded-lg text-gray-600 hover:bg-gray-100"
-    >
-      {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </button>
+    <Tooltip label={label}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={label}
+        className="grid h-9 w-9 place-items-center rounded-lg text-gray-600 outline-none transition-colors hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand"
+      >
+        {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
+    </Tooltip>
   );
 }

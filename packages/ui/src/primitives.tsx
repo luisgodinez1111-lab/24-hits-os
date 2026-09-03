@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "./cn";
+import { Tooltip } from "./tooltip";
 
 // ---------------------------------------------------------------- Button
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -75,21 +76,24 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ label, size = "md", tone = "default", type = "button", className, children, ...props }, ref) => (
-    <button
-      ref={ref}
-      type={type}
-      aria-label={label}
-      title={label}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-lg outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
-        iconButtonSizes[size],
-        iconButtonTones[tone],
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </button>
+    // El Tooltip (label) aparece en hover y en foco de teclado; aria-label da el
+    // nombre accesible. shrink-0 en el wrapper para que no se encoja en filas flex.
+    <Tooltip label={label} className="shrink-0">
+      <button
+        ref={ref}
+        type={type}
+        aria-label={label}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center rounded-lg outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
+          iconButtonSizes[size],
+          iconButtonTones[tone],
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </button>
+    </Tooltip>
   )
 );
 IconButton.displayName = "IconButton";
