@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, ChevronDown, Package, Plus, ScanLine } from "lucide-react";
 import {
-  Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
-  Table, TBody, TD, TH, THead, TR, useToast,
+  Badge, Button, Card, CardBody, Combobox, Dialog, EmptyState, FormField, Input, Select,   Table, TBody, TD, TH, THead, TR, useToast,
   PageHeader,
+  TableSkeleton,
 } from "@24hits/ui";
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -84,7 +84,7 @@ export default function ProductsPage() {
       </Card>
 
       {isLoading ? (
-        <Skeleton className="h-64 w-full" />
+        <TableSkeleton cols={6} />
       ) : !data || data.items.length === 0 ? (
         <EmptyState icon={<Package className="h-8 w-8 text-gray-400" />} title="Sin modelos" description="Crea el primero con “Nuevo modelo”." />
       ) : (

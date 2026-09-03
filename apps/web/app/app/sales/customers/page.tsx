@@ -7,6 +7,7 @@ import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
   PageHeader,
+  TableSkeleton,
 } from "@24hits/ui";
 import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -42,7 +43,7 @@ export default function CustomersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-64 w-full" />
+        <TableSkeleton cols={8} />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<UserSquare className="h-8 w-8 text-gray-400" />} title="Sin clientes" />
       ) : (

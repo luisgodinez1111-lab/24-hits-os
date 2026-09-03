@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Contact, Plus } from "lucide-react";
 import {
-  Badge, Button, Dialog, EmptyState, FormField, Input, Skeleton,
-  Table, TBody, TD, TH, THead, TR, useToast,
+  Badge, Button, Dialog, EmptyState, FormField, Input,   Table, TBody, TD, TH, THead, TR, useToast,
   PageHeader,
+  TableSkeleton,
 } from "@24hits/ui";
 import type { Supplier } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -26,7 +26,7 @@ export default function SuppliersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-64 w-full" />
+        <TableSkeleton cols={5} />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<Contact className="h-8 w-8 text-gray-400" />} title="Sin proveedores" />
       ) : (

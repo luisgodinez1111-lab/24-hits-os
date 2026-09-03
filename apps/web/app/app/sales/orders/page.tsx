@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
 import {
-  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented, Skeleton,
-  Table, TBody, TD, TH, THead, TR, useToast,
+  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented,   Table, TBody, TD, TH, THead, TR, useToast,
+  TableSkeleton,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -79,7 +79,7 @@ export default function SalesOrdersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-64 w-full" />
+        <TableSkeleton cols={7} />
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (

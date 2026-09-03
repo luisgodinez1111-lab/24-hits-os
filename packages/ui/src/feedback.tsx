@@ -67,6 +67,43 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-md bg-gray-200", className)} />;
 }
 
+// ---------------------------------------------------------------- TableSkeleton
+// Carga con FORMA de tabla (encabezado + filas), en vez de un bloque gris. Da la
+// sensación de que el contenido "ya casi llega" — sello de un SaaS pulido. Imita el
+// contenedor del primitivo Table (borde + sombra + encabezado gris).
+export function TableSkeleton({
+  rows = 6,
+  cols = 5,
+  className,
+}: {
+  rows?: number;
+  cols?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      aria-label="Cargando…"
+      className={cn("overflow-hidden rounded-xl border border-gray-200 bg-white shadow-card", className)}
+    >
+      <div className="flex gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3">
+        {Array.from({ length: cols }).map((_, i) => (
+          <Skeleton key={i} className={cn("h-3 flex-1", i === 0 && "max-w-[30%]")} />
+        ))}
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex gap-4 px-4 py-3.5">
+            {Array.from({ length: cols }).map((_, c) => (
+              <Skeleton key={c} className={cn("h-3.5 flex-1", c === 0 && "max-w-[30%]")} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- Spinner
 export function Spinner({ className }: { className?: string }) {
   return (
