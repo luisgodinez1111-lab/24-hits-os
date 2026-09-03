@@ -40,7 +40,12 @@ export default function PricingPage() {
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : !lists || lists.length === 0 ? (
-        <EmptyState icon={<DollarSign className="h-8 w-8 text-gray-400" />} title="Sin listas de precios" />
+        <EmptyState
+          icon={<DollarSign className="h-8 w-8 text-gray-400" />}
+          title="Sin listas de precios"
+          description="Crea tu primera lista (retail, mayoreo o especial) para fijar precios."
+          action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva lista</Button>}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {lists.map((l) => (

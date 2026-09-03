@@ -64,7 +64,12 @@ export default function PurchaseOrdersPage() {
       {isLoading ? (
         <TableSkeleton cols={5} />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={<ShoppingCart className="h-8 w-8 text-gray-400" />} title="Sin órdenes de compra" />
+        <EmptyState
+          icon={<ShoppingCart className="h-8 w-8 text-gray-400" />}
+          title="Sin órdenes de compra"
+          description="Crea tu primera orden; al recibirla, alimenta el inventario y el costo promedio."
+          action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nueva orden</Button>}
+        />
       ) : (
         <Table stickyHeader>
           <THead><TR><TH>Folio</TH><TH>Proveedor</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH className="text-right">Acciones</TH></TR></THead>

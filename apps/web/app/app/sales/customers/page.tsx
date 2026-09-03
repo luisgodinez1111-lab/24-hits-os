@@ -45,7 +45,12 @@ export default function CustomersPage() {
       {isLoading ? (
         <TableSkeleton cols={8} />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={<UserSquare className="h-8 w-8 text-gray-400" />} title="Sin clientes" />
+        <EmptyState
+          icon={<UserSquare className="h-8 w-8 text-gray-400" />}
+          title="Sin clientes"
+          description="Registra tu primer cliente para asignarle zona de entrega y ver su análisis de compra."
+          action={<Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo cliente</Button>}
+        />
       ) : (
         <Table stickyHeader>
           <THead><TR>
