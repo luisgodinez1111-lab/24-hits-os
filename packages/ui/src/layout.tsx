@@ -33,16 +33,37 @@ export function CardBody({ className, children }: { className?: string; children
 // El contenedor scrollea en horizontal (móvil): en pantallas chicas la tabla se
 // desliza dentro de su caja en vez de empujar la página. `-webkit-overflow-scrolling`
 // da scroll con inercia en iOS.
-export function Table({ children }: { children: ReactNode }) {
+//
+// `stickyHeader`: fija el encabezado y da scroll vertical interno (hasta `maxHeight`,
+// 70vh por defecto) → en listas largas el encabezado se queda visible. Opt-in: sin
+// él, el comportamiento es idéntico al anterior.
+export function Table({
+  children,
+  className,
+  stickyHeader,
+  maxHeight,
+}: {
+  children: ReactNode;
+  className?: string;
+  stickyHeader?: boolean;
+  maxHeight?: string;
+}) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white [-webkit-overflow-scrolling:touch]">
+    <div
+      className={cn(
+        "rounded-xl border border-gray-200 bg-white shadow-card [-webkit-overflow-scrolling:touch]",
+        stickyHeader ? "overflow-auto [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10" : "overflow-x-auto",
+        className
+      )}
+      style={stickyHeader ? { maxHeight: maxHeight ?? "70vh" } : undefined}
+    >
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
 }
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+    <thead className="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
       {children}
     </thead>
   );
@@ -51,10 +72,10 @@ export function TBody({ children }: { children: ReactNode }) {
   return <tbody className="divide-y divide-gray-100">{children}</tbody>;
 }
 export function TR({ children, className }: { children: ReactNode; className?: string }) {
-  return <tr className={cn("hover:bg-gray-50", className)}>{children}</tr>;
+  return <tr className={cn("transition-colors hover:bg-gray-50", className)}>{children}</tr>;
 }
 export function TH({ children, className }: { children: ReactNode; className?: string }) {
-  return <th className={cn("whitespace-nowrap px-4 py-3 font-medium", className)}>{children}</th>;
+  return <th className={cn("whitespace-nowrap px-4 py-2.5", className)}>{children}</th>;
 }
 export function TD({ children, className }: { children: ReactNode; className?: string }) {
   return <td className={cn("whitespace-nowrap px-4 py-3 align-middle", className)}>{children}</td>;
