@@ -13,6 +13,7 @@ import {
   CardHeader,
   FormField,
   Input,
+  Switch,
   useToast,
 } from "@24hits/ui";
 import type { FeatureFlag, OrganizationSettings } from "@24hits/contracts";
@@ -36,6 +37,14 @@ const KNOWN_FLAGS = [
   "advancedAnalytics.enabled",
   "routeOptimization.enabled",
 ];
+
+// Nombre legible por flag (la clave técnica se muestra debajo como referencia).
+const FLAG_LABELS: Record<string, string> = {
+  "wholesale.enabled": "Mayoreo",
+  "crm.enabled": "CRM / WhatsApp",
+  "advancedAnalytics.enabled": "Analítica avanzada",
+  "routeOptimization.enabled": "Optimización de ruta",
+};
 
 export default function OrganizationSettingsPage() {
   const { data: me } = useMe();
@@ -201,17 +210,20 @@ function ManageOrganization() {
 
           <Card>
             <CardHeader title="Feature flags" />
-            <CardBody className="space-y-3">
+            <CardBody className="divide-y divide-gray-100">
               {KNOWN_FLAGS.map((key) => (
-                <label key={key} className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-xs">{key}</span>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
+                <div key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{FLAG_LABELS[key] ?? key}</p>
+                    <p className="truncate font-mono text-[11px] text-gray-400">{key}</p>
+                  </div>
+                  <Switch
+                    label={FLAG_LABELS[key] ?? key}
                     checked={flagEnabled(key)}
-                    onChange={(e) => setFlag.mutate({ key, enabled: e.target.checked })}
+                    disabled={setFlag.isPending}
+                    onChange={(enabled) => setFlag.mutate({ key, enabled })}
                   />
-                </label>
+                </div>
               ))}
             </CardBody>
           </Card>
