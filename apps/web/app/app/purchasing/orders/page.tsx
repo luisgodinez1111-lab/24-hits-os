@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ShoppingCart } from "lucide-react";
 import {
-  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Skeleton,
-  Table, TBody, TD, TH, THead, TR, useToast,
+  Badge, Button, Combobox, Dialog, EmptyState, FormField, Input,   Table, TBody, TD, TH, THead, TR, useToast,
   PageHeader,
+  TableSkeleton,
 } from "@24hits/ui";
 import type { PurchaseOrder, Supplier, Variant } from "@/lib/catalog-types";
 import type { Warehouse } from "@24hits/contracts";
@@ -62,7 +62,7 @@ export default function PurchaseOrdersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-64 w-full" />
+        <TableSkeleton cols={5} />
       ) : !data || data.length === 0 ? (
         <EmptyState icon={<ShoppingCart className="h-8 w-8 text-gray-400" />} title="Sin órdenes de compra" />
       ) : (
