@@ -83,7 +83,12 @@ export default function SalesOrdersPage() {
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin pedidos" />
+        <EmptyState
+          icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />}
+          title="Sin pedidos"
+          description="Crea tu primer pedido para confirmarlo, entregarlo y cobrarlo."
+          action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo pedido</Button>}
+        />
       ) : (
         <Table stickyHeader>
           <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH>Entrega</TH><TH className="text-right">Acciones</TH></TR></THead>

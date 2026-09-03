@@ -28,7 +28,12 @@ export default function SuppliersPage() {
       {isLoading ? (
         <TableSkeleton cols={5} />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={<Contact className="h-8 w-8 text-gray-400" />} title="Sin proveedores" />
+        <EmptyState
+          icon={<Contact className="h-8 w-8 text-gray-400" />}
+          title="Sin proveedores"
+          description="Agrega tu primer proveedor para registrar órdenes de compra."
+          action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo proveedor</Button>}
+        />
       ) : (
         <Table stickyHeader>
           <THead><TR><TH>Nombre</TH><TH>RFC</TH><TH>Correo</TH><TH>Moneda</TH><TH>Estado</TH></TR></THead>

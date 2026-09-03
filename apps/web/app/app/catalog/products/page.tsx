@@ -86,7 +86,12 @@ export default function ProductsPage() {
       {isLoading ? (
         <TableSkeleton cols={6} />
       ) : !data || data.items.length === 0 ? (
-        <EmptyState icon={<Package className="h-8 w-8 text-gray-400" />} title="Sin modelos" description="Crea el primero con “Nuevo modelo”." />
+        <EmptyState
+          icon={<Package className="h-8 w-8 text-gray-400" />}
+          title="Sin modelos"
+          description="Crea tu primer modelo y agrégale marca y sabores."
+          action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo modelo</Button>}
+        />
       ) : (
         <Table stickyHeader>
           <THead>
