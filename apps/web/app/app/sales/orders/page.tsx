@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
 import {
-  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, Segmented, Skeleton,
+  Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
@@ -72,13 +72,11 @@ export default function SalesOrdersPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-title text-gray-900">Pedidos</h1>
-          <p className="text-sm text-gray-500">Confirmar reserva stock · entregar consume inventario y captura COGS</p>
-        </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
-      </div>
+      <PageHeader
+        title="Pedidos"
+        subtitle="Confirmar reserva stock · entregar consume inventario y captura COGS"
+        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>}
+      />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />

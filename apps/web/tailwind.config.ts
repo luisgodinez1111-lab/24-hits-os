@@ -82,6 +82,8 @@ const config: Config = {
         "slide-up-in": { from: { opacity: "0", transform: "translateY(8px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         "slide-down-in": { from: { opacity: "0", transform: "translateY(-6px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         "slide-in-right": { from: { transform: "translateX(100%)" }, to: { transform: "translateX(0)" } },
+        "toast-in": { from: { opacity: "0", transform: "translateX(16px)" }, to: { opacity: "1", transform: "translateX(0)" } },
+        "toast-out": { from: { opacity: "1", transform: "translateX(0)" }, to: { opacity: "0", transform: "translateX(16px)" } },
       },
       animation: {
         "fade-in": "fade-in var(--dur-base) var(--ease-standard)",
@@ -89,6 +91,8 @@ const config: Config = {
         "slide-up": "slide-up-in var(--dur-base) var(--ease-emphasized)",
         "slide-down": "slide-down-in var(--dur-fast) var(--ease-standard)",
         "slide-in-right": "slide-in-right var(--dur-slow) var(--ease-emphasized)",
+        "toast-in": "toast-in var(--dur-base) var(--ease-emphasized)",
+        "toast-out": "toast-out var(--dur-fast) var(--ease-standard) forwards",
       },
     },
   },
