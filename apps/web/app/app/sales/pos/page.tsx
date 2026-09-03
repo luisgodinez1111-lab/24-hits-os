@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
-import { Button, Combobox, FormField, IconButton, Input, Segmented, useToast } from "@24hits/ui";
+import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, useToast } from "@24hits/ui";
 import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
@@ -81,10 +81,8 @@ export default function PosPage() {
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-title text-gray-900">Punto de venta</h1>
-        <p className="text-sm text-gray-500">Escanea el código de barras con la cámara y cobra en una operación</p>
-      </div>
+      <PageHeader title="Punto de venta" subtitle="Escanea el código de barras con la cámara y cobra en una operación" />
+
 
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
         {/* Columna izquierda: origen + escáner */}
