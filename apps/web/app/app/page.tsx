@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
 import type { InactiveCustomers, InventoryBalanceRow, Order, SalesSummary, SalesTimeseries, TopSellers } from "@/lib/catalog-types";
+import { cn } from "@24hits/ui";
 import { hasPermission, useMe } from "@/lib/me";
 import { api } from "@/lib/api";
 import { money, pct } from "@/lib/format";
@@ -80,7 +81,7 @@ export default function AppHomePage() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Hola{firstName ? `, ${firstName}` : ""} 👋</h1>
+        <h1 className="text-title text-gray-900">Hola{firstName ? `, ${firstName}` : ""} 👋</h1>
         <p className="text-sm text-gray-500">{me?.activeOrganization?.name ?? "Tu organización"} · Resumen del día</p>
       </div>
 
@@ -125,7 +126,7 @@ export default function AppHomePage() {
       {/* Mini-gráfico: ventas de los últimos 7 días */}
       {showKpis && (
         <section className="mb-8">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Ventas · últimos 7 días</p>
               <Link href="/app/reports" className="text-xs font-medium text-brand hover:underline">Ver Tablero →</Link>
@@ -163,7 +164,7 @@ export default function AppHomePage() {
           const Icon = a.icon;
           return (
             <Link key={a.href} href={a.href}
-              className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand/40 hover:bg-brand/5">
+              className="group flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-card transition-colors hover:border-brand/40 hover:bg-brand/5">
               <span className="grid h-11 w-11 place-items-center rounded-lg bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white">
                 <Icon className="h-5 w-5" />
               </span>
@@ -181,18 +182,33 @@ export default function AppHomePage() {
 
 function Kpi({ label, value, sub, accent, delta }: { label: string; value: string; sub?: string; accent?: boolean; delta?: { pct: number; hasPrev: boolean } | null }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white"}`}>
-      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <div className="mt-1 flex items-baseline gap-2">
-        <p className="text-xl font-bold tabular-nums text-gray-900">{value}</p>
-        {delta && (
-          delta.hasPrev
-            ? <span className={`text-[11px] font-semibold ${delta.pct >= 0 ? "text-green-600" : "text-red-600"}`}>{delta.pct >= 0 ? "▲" : "▼"} {Math.abs(delta.pct * 100).toFixed(0)}%</span>
-            : <span className="text-[11px] font-semibold text-green-600">nuevo</span>
-        )}
+    <div className={cn("rounded-xl border p-4 shadow-card", accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white")}>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <p className="text-2xl font-bold tabular-nums text-gray-900">{value}</p>
+        {delta && <DeltaPill delta={delta} />}
       </div>
-      {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}</p>}
     </div>
+  );
+}
+
+// Variación vs. ayer como "chip" (verde ▲ / rojo ▼), o "Nuevo" si no había con qué comparar.
+function DeltaPill({ delta }: { delta: { pct: number; hasPrev: boolean } }) {
+  if (!delta.hasPrev) {
+    return <span className="rounded-full bg-green-50 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">Nuevo</span>;
+  }
+  const up = delta.pct >= 0;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+        up ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+      )}
+    >
+      <span aria-hidden>{up ? "▲" : "▼"}</span>
+      {Math.abs(delta.pct * 100).toFixed(0)}%
+    </span>
   );
 }
 
@@ -200,7 +216,7 @@ function Kpi({ label, value, sub, accent, delta }: { label: string; value: strin
 function Attn({ href, icon: Icon, label, count }: { href: string; icon: LucideIcon; label: string; count: number }) {
   const alert = count > 0;
   return (
-    <Link href={href} className={`flex items-center gap-3 rounded-xl border p-4 transition-colors ${alert ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+    <Link href={href} className={`flex items-center gap-3 rounded-xl border p-4 shadow-card transition-colors ${alert ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-gray-200 bg-white hover:border-gray-300"}`}>
       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${alert ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>
         {alert ? <AlertTriangle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
       </span>
@@ -215,7 +231,7 @@ function Attn({ href, icon: Icon, label, count }: { href: string; icon: LucideIc
 function TopMini({ title, icon: Icon, rows }: { title: string; icon: LucideIcon; rows?: TopSellers["rows"] }) {
   const top = rows ?? [];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
       <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"><Icon className="h-4 w-4" /> {title}</p>
       {top.length === 0 ? (
         <p className="py-3 text-center text-sm text-gray-400">Sin ventas hoy.</p>
