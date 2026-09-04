@@ -1,94 +1,105 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { LayerGroup, Map as LMap } from "leaflet";
-import "leaflet/dist/leaflet.css";
+import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { DeliveryStop, LiveDriver } from "@/lib/catalog-types";
+import { loadMaplibre, MAP_STYLE_URL } from "@/lib/maplibre";
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 }
 
-// Mapa de seguimiento del dueño: repartidores EN VIVO (punto azul con nombre) y
-// las entregas pendientes (pines violeta). Leaflet + OpenStreetMap.
+// Pin de entrega: gota índigo con la punta hacia abajo (ancla en la coordenada).
+function stopEl(): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText =
+    "width:16px;height:16px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#4f46e5;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)";
+  return el;
+}
+// Repartidor en vivo: punto azul con halo + etiqueta con su nombre.
+function driverEl(name: string): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText = "display:flex;flex-direction:column;align-items:center";
+  el.innerHTML = `<div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb"></div><div style="margin-top:2px;background:#2563eb;color:#fff;font:600 10px system-ui;padding:1px 5px;border-radius:6px;white-space:nowrap">${esc(name)}</div>`;
+  return el;
+}
+
+// Mapa de seguimiento del dueño: repartidores EN VIVO + entregas pendientes.
+// MapLibre GL vectorial con TU estilo self-hosted (R2) — respaldo oscuro si no hay.
 export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: LiveDriver[]; stops: DeliveryStop[]; height?: string }) {
   const elRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LMap | null>(null);
-  const layerRef = useRef<LayerGroup | null>(null);
-  const LRef = useRef<typeof import("leaflet") | null>(null);
+  const mapRef = useRef<MlMap | null>(null);
+  const mlRef = useRef<Awaited<ReturnType<typeof loadMaplibre>> | null>(null);
+  const markersRef = useRef<MlMarker[]>([]);
   const [ready, setReady] = useState(false);
   const fitted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    const timers: ReturnType<typeof setTimeout>[] = [];
     void (async () => {
-      const L = (await import("leaflet")).default;
+      const maplibregl = await loadMaplibre();
       if (cancelled || !elRef.current || mapRef.current) return;
-      LRef.current = L;
-      const map = L.map(elRef.current, { zoomControl: true }).setView([28.632, -106.069], 12);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        subdomains: "abcd",
-        maxZoom: 20,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      }).addTo(map);
-      layerRef.current = L.layerGroup().addTo(map);
+      mlRef.current = maplibregl;
+      const map = new maplibregl.Map({
+        container: elRef.current,
+        style: MAP_STYLE_URL,
+        center: [-106.069, 28.632], // Chihuahua [lng, lat]
+        zoom: 11,
+        attributionControl: { compact: true },
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+      map.on("load", () => {
+        if (cancelled) return;
+        map.resize(); // evita el mapa "cortado" si el contenedor cambió de tamaño
+        setReady(true);
+      });
       mapRef.current = map;
-      setReady(true);
-      // Evita el mapa en blanco (contenedor sin tamaño al inicializar).
-      const fix = () => map.invalidateSize();
-      [50, 200, 500].forEach((ms) => timers.push(setTimeout(fix, ms)));
     })();
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
-      layerRef.current = null;
       setReady(false);
       fitted.current = false;
     };
   }, []);
 
   useEffect(() => {
-    const L = LRef.current;
+    const maplibregl = mlRef.current;
     const map = mapRef.current;
-    const layer = layerRef.current;
-    if (!ready || !L || !map || !layer) return;
-    layer.clearLayers();
-    const bounds: [number, number][] = [];
+    if (!ready || !maplibregl || !map) return;
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+    const bounds = new maplibregl.LngLatBounds();
+    let n = 0;
 
     for (const s of stops) {
       if (s.deliveryLat == null || s.deliveryLng == null) continue;
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#4f46e5;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 14],
-      });
-      L.marker([s.deliveryLat, s.deliveryLng], { icon })
-        .addTo(layer)
-        .bindPopup(`<b>${esc(s.customer?.name ?? "Mostrador")}</b><br>${esc(s.deliveryAddress ?? "")}<br>${esc(s.number)}`);
-      bounds.push([s.deliveryLat, s.deliveryLng]);
+      const marker = new maplibregl.Marker({ element: stopEl(), anchor: "bottom" })
+        .setLngLat([s.deliveryLng, s.deliveryLat])
+        .setPopup(new maplibregl.Popup({ offset: 18 }).setHTML(`<b>${esc(s.customer?.name ?? "Mostrador")}</b><br>${esc(s.deliveryAddress ?? "")}<br>${esc(s.number)}`))
+        .addTo(map);
+      markersRef.current.push(marker);
+      bounds.extend([s.deliveryLng, s.deliveryLat]);
+      n++;
     }
-
     for (const d of drivers) {
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="display:flex;flex-direction:column;align-items:center"><div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb"></div><div style="margin-top:2px;background:#2563eb;color:#fff;font:600 10px system-ui;padding:1px 5px;border-radius:6px;white-space:nowrap">${esc(d.name)}</div></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-      L.marker([d.lat, d.lng], { icon, zIndexOffset: 1000 })
-        .addTo(layer)
-        .bindPopup(`<b>${esc(d.name)}</b><br>hace ${d.minutesAgo} min`);
-      bounds.push([d.lat, d.lng]);
+      const marker = new maplibregl.Marker({ element: driverEl(d.name), anchor: "center" })
+        .setLngLat([d.lng, d.lat])
+        .setPopup(new maplibregl.Popup({ offset: 14 }).setHTML(`<b>${esc(d.name)}</b><br>hace ${d.minutesAgo} min`))
+        .addTo(map);
+      markersRef.current.push(marker);
+      bounds.extend([d.lng, d.lat]);
+      n++;
     }
 
     // Encuadra una sola vez (no reencuadra en cada poll para no marear al dueño).
-    if (!fitted.current && bounds.length > 0) {
-      if (bounds.length === 1) map.setView(bounds[0]!, 14);
-      else map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+    if (!fitted.current && n > 0) {
+      if (n === 1) map.easeTo({ center: bounds.getCenter(), zoom: 14, duration: 500 });
+      else map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 600 });
       fitted.current = true;
     }
   }, [ready, drivers, stops]);
