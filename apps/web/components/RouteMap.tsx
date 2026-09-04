@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Crosshair } from "lucide-react";
 import type { LatLng, Leg } from "@/lib/route";
 import { navUrl } from "@/lib/route";
-import { loadMaplibre, MAP_STYLE_URL } from "@/lib/maplibre";
+import { loadMaplibre, onThemeChange, styleForTheme } from "@/lib/maplibre";
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
@@ -23,6 +23,17 @@ function routeFeature(coords: [number, number][], kind: "street" | "straight") {
   };
 }
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
+
+// Capas de la ruta: casing + línea índigo (por calles) y recta punteada de respaldo.
+// Colores que resaltan en claro Y oscuro. Idempotente y reutilizable tras setStyle
+// (cambio de tema), porque setStyle borra fuentes/capas propias.
+function addRouteLayers(map: MlMap): void {
+  if (map.getSource("route")) return;
+  map.addSource("route", { type: "geojson", data: EMPTY_FC });
+  map.addLayer({ id: "route-casing", type: "line", source: "route", filter: ["==", ["get", "kind"], "street"], layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#312e81", "line-width": 9, "line-opacity": 0.9 } });
+  map.addLayer({ id: "route-line", type: "line", source: "route", filter: ["==", ["get", "kind"], "street"], layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#6366f1", "line-width": 5 } });
+  map.addLayer({ id: "route-straight", type: "line", source: "route", filter: ["==", ["get", "kind"], "straight"], layout: { "line-cap": "round" }, paint: { "line-color": "#94a3b8", "line-width": 3, "line-opacity": 0.7, "line-dasharray": [2, 2] } });
+}
 
 // Motor de rutas público (OSRM demo): traza el recorrido por CALLES desde el
 // navegador cuando el backend no manda geometría (OSRM propio aún no montado).
@@ -66,7 +77,7 @@ function nextStopEl(n: number): HTMLDivElement {
 // Parada siguiente en el orden: chip claro con número (resalta en oscuro).
 function stopEl(n: number): HTMLDivElement {
   const el = document.createElement("div");
-  el.style.cssText = "width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px system-ui;color:#1e293b;background:#e2e8f0;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)";
+  el.style.cssText = "width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px system-ui;color:#1e293b;background:#ffffff;border:2px solid #6366f1;box-shadow:0 1px 4px rgba(0,0,0,.35)";
   el.textContent = String(n);
   return el;
 }
@@ -84,6 +95,8 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
   const driverPos = useRef<LatLng | null>(null);
   const didFitOnce = useRef(false);
   const followZoomed = useRef(false);
+  const offThemeRef = useRef<(() => void) | null>(null);
+  const routeDataRef = useRef<ReturnType<typeof routeFeature>>(routeFeature([], "street"));
   const [ready, setReady] = useState(false);
   const [fallbackGeom, setFallbackGeom] = useState<[number, number][] | null>(null);
   const [streetStatus, setStreetStatus] = useState<"idle" | "loading" | "ok" | "failed">("idle");
@@ -97,27 +110,33 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
       mlRef.current = maplibregl;
       const map = new maplibregl.Map({
         container: elRef.current,
-        style: MAP_STYLE_URL,
+        style: styleForTheme(),
         center: [-106.069, 28.632],
         zoom: 12,
         attributionControl: { compact: true },
       });
       map.on("load", () => {
         if (cancelled) return;
-        map.addSource("route", { type: "geojson", data: EMPTY_FC });
-        // Casing oscuro debajo + línea índigo brillante encima (por calles).
-        map.addLayer({ id: "route-casing", type: "line", source: "route", filter: ["==", ["get", "kind"], "street"], layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#1e1b4b", "line-width": 9, "line-opacity": 0.9 } });
-        map.addLayer({ id: "route-line", type: "line", source: "route", filter: ["==", ["get", "kind"], "street"], layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#818cf8", "line-width": 5 } });
-        // Recta aproximada (cuando el motor de calles no responde): punteada tenue.
-        map.addLayer({ id: "route-straight", type: "line", source: "route", filter: ["==", ["get", "kind"], "straight"], layout: { "line-cap": "round" }, paint: { "line-color": "#94a3b8", "line-width": 3, "line-opacity": 0.7, "line-dasharray": [2, 2] } });
+        addRouteLayers(map);
         map.resize();
         setReady(true);
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+      // Al alternar el tema: cambia el estilo y re-añade las capas de la ruta
+      // (setStyle las borra; los marcadores DOM sobreviven).
+      offThemeRef.current = onThemeChange((dark) => {
+        map.setStyle(styleForTheme(dark));
+        map.once("styledata", () => {
+          addRouteLayers(map);
+          (map.getSource("route") as GeoJSONSource | undefined)?.setData(routeDataRef.current);
+        });
+      });
       mapRef.current = map;
     })();
     return () => {
       cancelled = true;
+      offThemeRef.current?.();
+      offThemeRef.current = null;
       stopMarkersRef.current.forEach((m) => m.remove());
       stopMarkersRef.current = [];
       driverMarkerRef.current?.remove();
@@ -185,16 +204,19 @@ export function RouteMap({ legs, driver, heading = null, geometry, follow = fals
     // El recorrido: por calles si hay geometría (backend o cliente); si no, recta.
     const streets = (geometry && geometry.length >= 2 ? geometry : null) ?? fallbackGeom;
     const src = map.getSource("route") as GeoJSONSource | undefined;
+    let fc: ReturnType<typeof routeFeature>;
     if (streets && streets.length >= 2) {
       const lngLat = toLngLat(streets);
-      src?.setData(routeFeature(lngLat, "street"));
+      fc = routeFeature(lngLat, "street");
       lngLat.forEach((c) => bounds.extend(c as [number, number]));
       hasBounds = true;
     } else if (straightPts.length >= 2) {
-      src?.setData(routeFeature(toLngLat(straightPts), "straight"));
+      fc = routeFeature(toLngLat(straightPts), "straight");
     } else {
-      src?.setData(EMPTY_FC);
+      fc = routeFeature([], "street");
     }
+    routeDataRef.current = fc; // se re-aplica tras un cambio de tema (setStyle borra la fuente)
+    src?.setData(fc);
 
     // En follow NO reencuadramos: el mapa sigue al repartidor.
     if (follow) return;
