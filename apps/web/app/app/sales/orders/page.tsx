@@ -96,7 +96,21 @@ export default function SalesOrdersPage() {
             {data.map((o) => (
               <TR key={o.id}>
                 <TD className="font-mono text-xs">{o.number}</TD>
-                <TD className="font-medium">{customerName(o.customerId)}</TD>
+                <TD className="font-medium">
+                  {customerName(o.customerId)}
+                  {/* Qué se entrega: vape (modelo) · sabor · cantidad, por renglón. */}
+                  {o.items?.length ? (
+                    <ul className="mt-1 space-y-0.5 font-normal">
+                      {o.items.map((it) => (
+                        <li key={it.id} className="text-xs text-gray-500">
+                          {it.productName ?? it.variantName ?? it.sku ?? "Producto"}
+                          {it.flavorName ? <span className="text-gray-400"> · {it.flavorName}</span> : null}
+                          <span className="ml-1 font-mono tabular-nums text-gray-400">×{Number(it.quantity)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </TD>
                 <TD className="text-right font-mono tabular-nums">${Number(o.total).toFixed(2)}</TD>
                 <TD><Badge tone={tone[o.status] ?? "gray"}>{statusLabel[o.status] ?? o.status}</Badge></TD>
                 <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{payLabel[o.paymentStatus] ?? o.paymentStatus}</Badge></TD>
