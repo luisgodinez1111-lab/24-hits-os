@@ -39,10 +39,41 @@ export class OrderService {
     private readonly audit: AuditService
   ) {}
 
-  list(organizationId: string) {
-    return this.prisma.withTenant(organizationId, (tx) =>
-      tx.order.findMany({ include: { items: true }, orderBy: { createdAt: "desc" }, take: 100 })
-    );
+  async list(organizationId: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const orders = await tx.order.findMany({ include: { items: true }, orderBy: { createdAt: "desc" }, take: 100 });
+      // Enriquece los renglones con modelo/sabor para que en Pedidos se vea QUÉ se
+      // entrega (vape + sabor + cantidad), no solo los totales. OrderItem.variantId es
+      // escalar (sin FK), así que se resuelve con UNA consulta para todas las variantes
+      // de todos los pedidos y se mapea — sin N+1.
+      const variantIds = [...new Set(orders.flatMap((o) => o.items.map((it) => it.variantId)))];
+      const variants = variantIds.length
+        ? await tx.productVariant.findMany({
+            where: { id: { in: variantIds } },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              product: { select: { name: true } },
+              flavor: { select: { name: true } },
+            },
+          })
+        : [];
+      const byId = new Map(variants.map((v) => [v.id, v]));
+      return orders.map((o) => ({
+        ...o,
+        items: o.items.map((it) => {
+          const v = byId.get(it.variantId);
+          return {
+            ...it,
+            productName: v?.product?.name ?? null, // modelo
+            flavorName: v?.flavor?.name ?? null, // sabor
+            variantName: v?.name ?? null,
+            sku: v?.sku ?? null,
+          };
+        }),
+      }));
+    });
   }
 
   async get(organizationId: string, id: string) {
