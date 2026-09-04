@@ -33,11 +33,21 @@ export class MeController {
     let defaultWarehouse: { id: string; name: string } | null = null;
     if (user.membershipId) {
       permissions = [...(await this.permissions.getPermissionKeys(user.membershipId))];
-      const membership = await this.prisma.client.organizationMembership.findUnique({
-        where: { id: user.membershipId },
-        select: { defaultWarehouse: { select: { id: true, name: true } } },
-      });
-      defaultWarehouse = membership?.defaultWarehouse ?? null;
+      // El almacén por defecto vive en Warehouse, tabla con RLS por tenant
+      // (organizationId = current_setting('app.current_org_id')). Hay que leerlo DENTRO
+      // del contexto de organización: si se lee con el cliente crudo (sin withTenant),
+      // app.current_org_id queda vacío, RLS filtra el join y devuelve null aunque la
+      // membresía tenga defaultWarehouseId. Ver ADR-004.
+      const membershipId = user.membershipId;
+      if (user.organizationId) {
+        defaultWarehouse = await this.prisma.withTenant(user.organizationId, async (tx) => {
+          const membership = await tx.organizationMembership.findUnique({
+            where: { id: membershipId },
+            select: { defaultWarehouse: { select: { id: true, name: true } } },
+          });
+          return membership?.defaultWarehouse ?? null;
+        });
+      }
     }
     const activeOrganization =
       memberships.find((m) => m.organization.id === user.organizationId)?.organization ??
