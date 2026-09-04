@@ -62,7 +62,7 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
       if (s.deliveryLat == null || s.deliveryLng == null) continue;
       const icon = L.divIcon({
         className: "",
-        html: `<div style="width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#7c3aed;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
+        html: `<div style="width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#4f46e5;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 14],
       });

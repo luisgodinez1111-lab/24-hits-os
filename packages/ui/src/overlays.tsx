@@ -12,6 +12,8 @@ const FOCUSABLE =
 function useModalBehavior(open: boolean, onClose: () => void, panelRef: React.RefObject<HTMLDivElement | null>): void {
   useEffect(() => {
     if (!open) return;
+    // Recuerda el elemento enfocado para devolverle el foco al cerrar (accesibilidad).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
@@ -39,6 +41,8 @@ function useModalBehavior(open: boolean, onClose: () => void, panelRef: React.Re
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
+      // Devuelve el foco al disparador al cerrar (no se pierde en el <body>).
+      previouslyFocused?.focus?.();
     };
   }, [open, onClose, panelRef]);
 }
@@ -72,16 +76,17 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : "Diálogo"}
-        className="relative z-10 w-full max-w-md rounded-sheet bg-white shadow-overlay outline-none motion-safe:animate-scale-in"
+        className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-sheet bg-white shadow-overlay outline-none motion-safe:animate-scale-in"
       >
         {title ? (
-          <div className="border-b border-gray-100 p-5">
+          <div className="shrink-0 border-b border-gray-100 p-5">
             <h3 id={titleId} className="font-semibold text-gray-900">{title}</h3>
           </div>
         ) : null}
-        <div className="p-5">{children}</div>
+        {/* min-h-0 permite que el cuerpo scrollee dentro del tope de altura; header/footer fijos. */}
+        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-gray-100 p-4">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-gray-100 p-4">{footer}</div>
         ) : null}
       </div>
     </div>

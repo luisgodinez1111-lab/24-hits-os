@@ -11,7 +11,9 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
 
   return (
     <html lang="es">
-      <body style={{ margin: 0, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", background: "#f9fafb", color: "#111827" }}>
+      <body style={{ margin: 0, colorScheme: "light dark", fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", background: "#f9fafb", color: "#111827" }}>
+        {/* Respeta el tema oscuro del sistema aunque sea el último recurso (sin CSS de la app). */}
+        <style>{`@media(prefers-color-scheme:dark){body{background:#0b0d12!important;color:#f1f5f9!important}}`}</style>
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24, textAlign: "center" }}>
           <div style={{ fontSize: 40 }}>⚠️</div>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Algo salió mal</h1>
@@ -19,7 +21,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           {error.digest && <p style={{ fontFamily: "monospace", fontSize: 11, color: "#9ca3af" }}>Ref: {error.digest}</p>}
           <button
             onClick={reset}
-            style={{ marginTop: 4, background: "#7c3aed", color: "#fff", border: 0, borderRadius: 8, padding: "8px 16px", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+            style={{ marginTop: 4, background: "#4f46e5", color: "#fff", border: 0, borderRadius: 8, padding: "8px 16px", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
           >
             Reintentar
           </button>

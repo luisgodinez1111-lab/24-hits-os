@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
-// Ícono de la app (favicon + manifest). Marca 24 HITS en violeta.
+// Ícono de la app (favicon + manifest). Marca 24 HITS en índigo (identidad "Herramienta pro").
 export default function Icon() {
   return new ImageResponse(
     (
@@ -14,7 +14,7 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#7c3aed",
+          background: "#4f46e5",
           color: "#ffffff",
           fontSize: 300,
           fontWeight: 800,
