@@ -167,9 +167,9 @@ export default function InventoryPage() {
                   <TD className="text-gray-500">{it.flavor ?? "—"}</TD>
                   {pivot.cols.map((c) => {
                     const n = it.cells.get(c.id) ?? 0;
-                    return <TD key={c.id} className={`text-right tabular-nums ${n === 0 ? "text-gray-300" : ""}`}>{qty(n)}</TD>;
+                    return <TD key={c.id} className={`text-right font-mono tabular-nums ${n === 0 ? "text-gray-300" : ""}`}>{qty(n)}</TD>;
                   })}
-                  <TD className="text-right font-semibold tabular-nums">{qty(it.total)}</TD>
+                  <TD className="text-right font-mono font-semibold tabular-nums">{qty(it.total)}</TD>
                 </TR>
               ))}
               {/* Totales por bodega. */}
@@ -177,9 +177,9 @@ export default function InventoryPage() {
                 <TD className="font-semibold text-gray-500">Total en existencia</TD>
                 <TD>{""}</TD>
                 {pivot.cols.map((c) => (
-                  <TD key={c.id} className="text-right font-semibold tabular-nums">{qty(pivot.colTotals.get(c.id) ?? 0)}</TD>
+                  <TD key={c.id} className="text-right font-mono font-semibold tabular-nums">{qty(pivot.colTotals.get(c.id) ?? 0)}</TD>
                 ))}
-                <TD className="text-right font-bold tabular-nums">{qty(pivot.grand)}</TD>
+                <TD className="text-right font-mono font-bold tabular-nums">{qty(pivot.grand)}</TD>
               </TR>
             </TBody>
           </Table>

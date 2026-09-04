@@ -97,7 +97,7 @@ export default function SalesOrdersPage() {
               <TR key={o.id}>
                 <TD className="font-mono text-xs">{o.number}</TD>
                 <TD className="font-medium">{customerName(o.customerId)}</TD>
-                <TD className="text-right">${Number(o.total).toFixed(2)}</TD>
+                <TD className="text-right font-mono tabular-nums">${Number(o.total).toFixed(2)}</TD>
                 <TD><Badge tone={tone[o.status] ?? "gray"}>{statusLabel[o.status] ?? o.status}</Badge></TD>
                 <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{payLabel[o.paymentStatus] ?? o.paymentStatus}</Badge></TD>
                 <TD>
@@ -189,7 +189,7 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
           pay.mutate();
         }}>Cobrar</Button></>}>
       <div className="space-y-3">
-        <p className="text-sm text-gray-500">Total del pedido: <span className="font-semibold text-gray-900">${Number(order?.total ?? 0).toFixed(2)}</span></p>
+        <p className="text-sm text-gray-500">Total del pedido: <span className="font-mono font-semibold text-gray-900 tabular-nums">${Number(order?.total ?? 0).toFixed(2)}</span></p>
         <FormField label="Método">
           <Segmented
             full

@@ -21,7 +21,7 @@ export function Header({ me, onMenu }: { me: Me | undefined; onMenu?: () => void
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/72 px-4 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/60 sm:px-6">
       <div className="flex items-center gap-3">
         <button
           type="button"

@@ -63,7 +63,7 @@ export function Table({
 }
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+    <thead className="border-b border-gray-200 bg-gray-50/85 text-[11px] font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-md supports-[backdrop-filter]:bg-gray-50/70">
       {children}
     </thead>
   );

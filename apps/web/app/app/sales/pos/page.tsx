@@ -145,7 +145,7 @@ export default function PosPage() {
                         <button type="button" aria-label="Sumar uno" onClick={() => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, quantity: x.quantity + 1 } : x))} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 outline-none transition duration-fast hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand active:scale-95 motion-reduce:active:scale-100"><Plus className="h-4 w-4" /></button>
                         <Input type="number" className="ml-2 h-9 w-24" value={l.unitPrice} onChange={(e) => setCart(cart.map((x) => x.variantId === l.variantId ? { ...x, unitPrice: Number(e.target.value) } : x))} aria-label="Precio unitario" />
                       </div>
-                      <span className="text-sm font-semibold tabular-nums">{money(l.unitPrice * l.quantity)}</span>
+                      <span className="font-mono text-sm font-semibold tabular-nums">{money(l.unitPrice * l.quantity)}</span>
                     </div>
                   </li>
                 ))}
@@ -153,7 +153,7 @@ export default function PosPage() {
             )}
             <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
               <span className="text-sm text-gray-500">Total</span>
-              <span className="text-xl font-bold tabular-nums">{money(total)}</span>
+              <span className="font-mono text-xl font-bold tabular-nums">{money(total)}</span>
             </div>
           </div>
 

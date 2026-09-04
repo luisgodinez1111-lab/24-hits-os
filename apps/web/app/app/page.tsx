@@ -185,7 +185,7 @@ function Kpi({ label, value, sub, accent, delta }: { label: string; value: strin
     <div className={cn("rounded-xl border p-4 shadow-card", accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white")}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
       <div className="mt-1.5 flex items-baseline gap-2">
-        <p className="text-2xl font-bold tabular-nums text-gray-900">{value}</p>
+        <p className="font-mono text-2xl font-bold tabular-nums text-gray-900">{value}</p>
         {delta && <DeltaPill delta={delta} />}
       </div>
       {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}</p>}
@@ -221,7 +221,7 @@ function Attn({ href, icon: Icon, label, count }: { href: string; icon: LucideIc
         {alert ? <AlertTriangle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
       </span>
       <span className="min-w-0">
-        <span className="block text-xl font-bold tabular-nums text-gray-900">{count}</span>
+        <span className="block font-mono text-xl font-bold tabular-nums text-gray-900">{count}</span>
         <span className="block truncate text-xs text-gray-500">{label}</span>
       </span>
     </Link>
