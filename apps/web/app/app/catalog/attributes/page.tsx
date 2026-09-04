@@ -37,11 +37,6 @@ export default function AttributesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Catálogo</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Organiza lo que vendes por marca, modelo y sabor.</p>
-      </div>
-
       {can("brands.read") && <CatalogTree />}
 
       {/* Listas maestras: reutilizables entre modelos. Secundario → detrás de un disclosure. */}
