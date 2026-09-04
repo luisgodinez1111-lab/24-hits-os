@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { CommandPalette } from "@/components/CommandPalette";
+import { PageTransition } from "@/components/PageTransition";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -46,7 +47,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main className="flex flex-1 flex-col overflow-y-auto">
         <Header me={me} onMenu={() => setNavOpen(true)} />
         <VerifyEmailBanner />
-        <div className="flex-1 p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+          <PageTransition>{children}</PageTransition>
+        </div>
       </main>
       <CommandPalette />
     </div>
