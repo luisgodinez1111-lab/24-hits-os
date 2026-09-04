@@ -45,7 +45,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         // con mouse) → accesible para navegación por teclado y pulido con puntero.
         // active:scale = "press state" (feel iOS); se anula si está deshabilitado o
         // si el usuario pide reducir movimiento.
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold outline-none transition duration-fast ease-spring focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
         buttonVariants[variant],
         buttonSizes[size],
         className
@@ -84,7 +84,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         type={type}
         aria-label={label}
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-lg outline-none transition duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
+          "inline-flex shrink-0 items-center justify-center rounded-lg outline-none transition duration-fast ease-spring focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100",
           iconButtonSizes[size],
           iconButtonTones[tone],
           className
