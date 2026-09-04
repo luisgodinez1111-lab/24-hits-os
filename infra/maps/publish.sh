@@ -32,21 +32,26 @@ if [ ! -f "dist/fonts/Noto Sans Regular/0-255.pbf" ]; then
   done
 fi
 
-echo "==> Generando dist/style.json con base ${BASE}…"
+echo "==> Generando dist/style.json (oscuro) y dist/style.light.json (claro) con base ${BASE}…"
 python3 - "$BASE" <<'PY'
-import json, sys
+import json, sys, os
 base=sys.argv[1]
-d=json.load(open("style.dark.json"))
-d["glyphs"]=base+"/fonts/{fontstack}/{range}.pbf"
-d["sources"]={"openmaptiles":{"type":"vector","url":"pmtiles://"+base+"/chihuahua-city.pmtiles"}}
-json.dump(d, open("dist/style.json","w"), indent=2)
-print("   style.json → source:", d["sources"]["openmaptiles"]["url"])
+# (archivo_fuente, archivo_salida). El claro solo si existe style.light.json.
+pairs=[("style.dark.json","style.json")]
+if os.path.exists("style.light.json"): pairs.append(("style.light.json","style.light.json"))
+for src,out in pairs:
+    d=json.load(open(src))
+    d["glyphs"]=base+"/fonts/{fontstack}/{range}.pbf"
+    d["sources"]={"openmaptiles":{"type":"vector","url":"pmtiles://"+base+"/chihuahua-city.pmtiles"}}
+    json.dump(d, open("dist/"+out,"w"), indent=2)
+    print("   "+out+" → source:", d["sources"]["openmaptiles"]["url"])
 PY
 
 echo ""
 echo "✅ Paquete listo en dist/  (súbelo TAL CUAL a tu bucket):"
 echo "   dist/chihuahua-city.pmtiles"
-echo "   dist/style.json"
+echo "   dist/style.json         (oscuro)"
+echo "   dist/style.light.json   (claro — para el modo claro de la app)"
 echo "   dist/fonts/…"
 echo ""
 echo "Luego:"

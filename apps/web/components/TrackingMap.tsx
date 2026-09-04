@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { DeliveryStop, LiveDriver } from "@/lib/catalog-types";
-import { loadMaplibre, MAP_STYLE_URL } from "@/lib/maplibre";
+import { loadMaplibre, onThemeChange, styleForTheme } from "@/lib/maplibre";
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
@@ -32,6 +32,7 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
   const mapRef = useRef<MlMap | null>(null);
   const mlRef = useRef<Awaited<ReturnType<typeof loadMaplibre>> | null>(null);
   const markersRef = useRef<MlMarker[]>([]);
+  const offThemeRef = useRef<(() => void) | null>(null);
   const [ready, setReady] = useState(false);
   const fitted = useRef(false);
 
@@ -43,7 +44,7 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
       mlRef.current = maplibregl;
       const map = new maplibregl.Map({
         container: elRef.current,
-        style: MAP_STYLE_URL,
+        style: styleForTheme(),
         center: [-106.069, 28.632], // Chihuahua [lng, lat]
         zoom: 11,
         attributionControl: { compact: true },
@@ -54,10 +55,14 @@ export function TrackingMap({ drivers, stops, height = "60vh" }: { drivers: Live
         map.resize(); // evita el mapa "cortado" si el contenedor cambió de tamaño
         setReady(true);
       });
+      // Cambia el estilo del mapa al alternar el tema (los marcadores DOM sobreviven).
+      offThemeRef.current = onThemeChange((dark) => map.setStyle(styleForTheme(dark)));
       mapRef.current = map;
     })();
     return () => {
       cancelled = true;
+      offThemeRef.current?.();
+      offThemeRef.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       mapRef.current?.remove();
