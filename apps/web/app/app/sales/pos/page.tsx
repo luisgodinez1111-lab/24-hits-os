@@ -7,6 +7,7 @@ import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, 
 import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
+import { haptics } from "@/lib/haptics";
 import { useMe } from "@/lib/me";
 import { BarcodeScanner, type ScanFormat } from "@/components/BarcodeScanner";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
@@ -40,16 +41,19 @@ export default function PosPage() {
   // --- Agregar por código de barras ---
   const addByBarcode = useCallback(
     async (code: string, fmt: ScanFormat = "OTHER") => {
-      if (!warehouseId) { toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
+      if (!warehouseId) { haptics.error(); toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); return; }
       try {
         const v = await api.get<PosLookup>(`/pos/lookup?barcode=${encodeURIComponent(code)}&warehouseId=${warehouseId}`);
         addLine({ variantId: v.variantId, sku: v.sku, name: v.name, unitPrice: Number(v.price ?? 0), available: v.available });
+        haptics.tap(); // tick al confirmar el escaneo
         toast.push(`Agregado: ${v.name}`, "success");
       } catch (e) {
         // Código no registrado → abre el alta rápida prellenada para darlo de alta.
         if (e instanceof ApiError && e.status === 404) {
+          haptics.warn();
           setQuick({ open: true, barcode: code, type: fmt });
         } else {
+          haptics.error();
           toast.push(e instanceof ApiError ? e.message : "Código no reconocido", "error");
         }
       }
@@ -67,15 +71,16 @@ export default function PosPage() {
       issueSaleNote: true,
     }),
     onSuccess: (res) => {
+      haptics.success(); // doble pulso al cerrar la venta
       toast.push(`Venta registrada · ${res.order.number}${res.saleNote ? ` · Nota ${res.saleNote.number}` : ""}`, "success");
       setCart([]); setCustomerId("");
     },
-    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error al cobrar", "error"),
+    onError: (e) => { haptics.error(); toast.push(e instanceof ApiError ? e.message : "Error al cobrar", "error"); },
   });
 
   function checkout() {
-    if (!warehouseId) return toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error");
-    if (cart.length === 0) return toast.push("El carrito está vacío", "error");
+    if (!warehouseId) { haptics.error(); return toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); }
+    if (cart.length === 0) { haptics.error(); return toast.push("El carrito está vacío", "error"); }
     sale.mutate();
   }
 

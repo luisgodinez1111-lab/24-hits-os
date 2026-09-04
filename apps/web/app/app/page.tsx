@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Award, Boxes, ClipboardCheck, Droplet, Package, PackageX, ScanLine, Truck, UserSquare, UserX, Wallet,
@@ -12,6 +13,7 @@ import { cn } from "@24hits/ui";
 import { hasPermission, useMe } from "@/lib/me";
 import { api } from "@/lib/api";
 import { money, pct } from "@/lib/format";
+import { useCountUp } from "@/lib/useCountUp";
 import { BarChart } from "@/components/BarChart";
 
 // Fecha local YYYY-MM-DD (el backend la interpreta en la zona del negocio).
@@ -111,13 +113,13 @@ export default function AppHomePage() {
       {showKpis && (
         <section className="mb-8">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Kpi label="Ventas hoy" value={money(todaySales?.billed ?? "0")} delta={deltaOf(todaySales?.billed, ydaySales?.billed)} />
-            <Kpi label="Cobrado hoy" value={money(todaySales?.collected ?? "0")} delta={deltaOf(todaySales?.collected, ydaySales?.collected)} />
-            <Kpi label="Pedidos hoy" value={String(todaySales?.orderCount ?? 0)} delta={deltaOf(todaySales?.orderCount, ydaySales?.orderCount)} />
+            <Kpi label="Ventas hoy" value={<StatMoney amount={todaySales?.billed} />} delta={deltaOf(todaySales?.billed, ydaySales?.billed)} />
+            <Kpi label="Cobrado hoy" value={<StatMoney amount={todaySales?.collected} />} delta={deltaOf(todaySales?.collected, ydaySales?.collected)} />
+            <Kpi label="Pedidos hoy" value={<StatCount amount={todaySales?.orderCount} />} delta={deltaOf(todaySales?.orderCount, ydaySales?.orderCount)} />
             {hasProfit
-              ? <Kpi label="Utilidad hoy" value={money(todaySales?.grossProfit)} sub={`margen ${pct(todaySales?.margin)}`} delta={deltaOf(todaySales?.grossProfit, ydaySales?.grossProfit)} accent />
-              : <Kpi label="Ticket prom." value={money(todaySales?.avgTicket ?? "0")} />}
-            <Kpi label="Por cobrar hoy" value={money(todaySales?.outstanding ?? "0")} />
+              ? <Kpi label="Utilidad hoy" value={<StatMoney amount={todaySales?.grossProfit} />} sub={`margen ${pct(todaySales?.margin)}`} delta={deltaOf(todaySales?.grossProfit, ydaySales?.grossProfit)} accent />
+              : <Kpi label="Ticket prom." value={<StatMoney amount={todaySales?.avgTicket} />} />}
+            <Kpi label="Por cobrar hoy" value={<StatMoney amount={todaySales?.outstanding} />} />
           </div>
           <p className="mt-1.5 text-[11px] text-gray-400">▲▼ comparado con ayer</p>
         </section>
@@ -180,7 +182,18 @@ export default function AppHomePage() {
   );
 }
 
-function Kpi({ label, value, sub, accent, delta }: { label: string; value: string; sub?: string; accent?: boolean; delta?: { pct: number; hasPrev: boolean } | null }) {
+// Cifra de dinero que "sube" con count-up al cargar/actualizar (data-as-hero).
+function StatMoney({ amount }: { amount?: string | number | null }) {
+  const v = useCountUp(Number(amount ?? 0));
+  return <>{money(v)}</>;
+}
+// Contador entero con el mismo efecto.
+function StatCount({ amount }: { amount?: number | null }) {
+  const v = useCountUp(Number(amount ?? 0));
+  return <>{Math.round(v)}</>;
+}
+
+function Kpi({ label, value, sub, accent, delta }: { label: string; value: ReactNode; sub?: string; accent?: boolean; delta?: { pct: number; hasPrev: boolean } | null }) {
   return (
     <div className={cn("rounded-xl border p-4 shadow-card", accent ? "border-brand/30 bg-brand/5" : "border-gray-200 bg-white")}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</p>
@@ -221,7 +234,7 @@ function Attn({ href, icon: Icon, label, count }: { href: string; icon: LucideIc
         {alert ? <AlertTriangle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
       </span>
       <span className="min-w-0">
-        <span className="block font-mono text-xl font-bold tabular-nums text-gray-900">{count}</span>
+        <span className="block font-mono text-xl font-bold tabular-nums text-gray-900"><StatCount amount={count} /></span>
         <span className="block truncate text-xs text-gray-500">{label}</span>
       </span>
     </Link>
