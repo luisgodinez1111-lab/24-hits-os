@@ -67,6 +67,12 @@ export function Combobox({
 
   useEffect(() => setActive(0), [query, open]);
 
+  // Mantiene la opción activa a la vista al navegar con flechas en listas largas.
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(`${baseId}-opt-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, open, baseId]);
+
   function choose(v: string) {
     onChange(v);
     setOpen(false);
