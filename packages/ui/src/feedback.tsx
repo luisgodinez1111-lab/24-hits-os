@@ -169,7 +169,7 @@ export function EmptyState({
         <div className="relative mb-4 grid h-20 w-20 place-items-center">
           <span aria-hidden className="absolute inset-0 rounded-full bg-brand/[0.06]" />
           <span aria-hidden className="absolute inset-3 rounded-full bg-gray-100" />
-          <span className="relative grid h-12 w-12 place-items-center rounded-full bg-white shadow-xs ring-1 ring-gray-200/70">
+          <span className="relative grid h-12 w-12 place-items-center rounded-full bg-raised shadow-xs ring-1 ring-gray-200/70">
             {icon}
           </span>
         </div>

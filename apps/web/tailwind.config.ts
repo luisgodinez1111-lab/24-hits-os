@@ -35,6 +35,7 @@ const config: Config = {
       },
       colors: {
         white: "rgb(var(--c-white) / <alpha-value>)",
+        raised: "rgb(var(--c-raised) / <alpha-value>)", // superficie elevada (bg-raised): = white en claro, más clara en oscuro
         gray,
         green: semantic("green"),
         amber: semantic("amber"),
