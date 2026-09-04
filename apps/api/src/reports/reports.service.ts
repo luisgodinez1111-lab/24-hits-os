@@ -77,7 +77,12 @@ export class ReportsService {
       to: to.toISOString(),
       billed: result.billed.toString(),
       collected: result.collected.toString(),
-      outstanding: result.billed.minus(result.collected).toString(),
+      // "Por cobrar" del periodo = lo facturado que aún no se cobra. `collected` suma
+      // TODOS los pagos de la ventana (incluidos los de pedidos de días previos), así que
+      // billed - collected puede salir negativo (p. ej. cobrar hoy un pedido de ayer).
+      // Se acota a 0: "por cobrar" nunca es negativo. El detalle por pedido de cuentas
+      // por cobrar vive en el reporte de receivables/aging.
+      outstanding: Prisma.Decimal.max(ZERO, result.billed.minus(result.collected)).toString(),
       orderCount: result.orderCount,
       avgTicket: result.avgTicket.toString(),
       byPaymentMethod: Object.fromEntries(METHODS.map((m) => [m, result.byMethod[m].toString()])),
