@@ -161,8 +161,19 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-      {icon ? <div className="mb-3 text-4xl">{icon}</div> : null}
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center">
+      {icon ? (
+        // "Spot" ilustrado: halos concéntricos (guiño de marca) + chip con ring,
+        // el recurso de estado vacío estilo iOS. Da presencia al ícono en vez de
+        // dejarlo suelto. Neutro para no pelear con el color del ícono recibido.
+        <div className="relative mb-4 grid h-20 w-20 place-items-center">
+          <span aria-hidden className="absolute inset-0 rounded-full bg-brand/[0.06]" />
+          <span aria-hidden className="absolute inset-3 rounded-full bg-gray-100" />
+          <span className="relative grid h-12 w-12 place-items-center rounded-full bg-white shadow-xs ring-1 ring-gray-200/70">
+            {icon}
+          </span>
+        </div>
+      ) : null}
       <p className="font-medium text-gray-700">{title}</p>
       {description ? (
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">{description}</p>

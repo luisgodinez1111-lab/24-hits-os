@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { money, pct } from "@/lib/format";
 import { useCountUp } from "@/lib/useCountUp";
 import { BarChart } from "@/components/BarChart";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 
 // Fecha local YYYY-MM-DD (el backend la interpreta en la zona del negocio).
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -86,6 +87,9 @@ export default function AppHomePage() {
         <h1 className="text-title text-gray-900">Hola{firstName ? `, ${firstName}` : ""} 👋</h1>
         <p className="text-sm text-gray-500">{me?.activeOrganization?.name ?? "Tu organización"} · Resumen del día</p>
       </div>
+
+      {/* ONBOARDING: guía a un negocio nuevo. Se retira solo al completarse. */}
+      <OnboardingChecklist enabled={showKpis} />
 
       {/* SALUD DEL NEGOCIO: descuadres sin resolver. Solo aparece si hay algo que revisar,
           para que un faltante de caja o un drift de inventario NO pase desapercibido. */}
