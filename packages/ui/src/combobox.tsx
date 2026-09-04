@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "./cn";
 
 export interface ComboOption {
@@ -35,6 +35,9 @@ export function Combobox({
   const [creating, setCreating] = useState(false);
   const [active, setActive] = useState(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const baseId = useId();
+  const listId = `${baseId}-list`;
+  const optionId = (i: number): string => `${baseId}-opt-${i}`;
 
   const selected = options.find((o) => o.value === value) ?? null;
 
@@ -114,6 +117,9 @@ export function Combobox({
       <input
         role="combobox"
         aria-expanded={open}
+        aria-autocomplete="list"
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && total > 0 ? optionId(active) : undefined}
         className={inputClasses}
         placeholder={placeholder}
         disabled={disabled}
@@ -141,11 +147,14 @@ export function Combobox({
       </svg>
 
       {open && (
-        <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg">
+        <ul role="listbox" id={listId} className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-pop">
           {filtered.map((o, i) => (
-            <li key={o.value === "" ? "__empty" : o.value}>
+            <li key={o.value === "" ? "__empty" : o.value} role="presentation">
               <button
                 type="button"
+                role="option"
+                id={optionId(i)}
+                aria-selected={o.value === value}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(o.value)}
                 className={cn(
@@ -164,9 +173,12 @@ export function Combobox({
           )}
 
           {showCreate && (
-            <li>
+            <li role="presentation">
               <button
                 type="button"
+                role="option"
+                id={optionId(filtered.length)}
+                aria-selected={false}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => void create()}
                 className={cn(
