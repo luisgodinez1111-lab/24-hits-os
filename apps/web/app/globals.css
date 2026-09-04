@@ -12,6 +12,7 @@
   color-scheme: light;
   /* Neutrales FRÍOS (slate) — rumbo "Herramienta pro". */
   --c-white: 255 255 255; /* superficie / tarjetas */
+  --c-raised: 255 255 255; /* superficie ELEVADA (menús, diálogos, pastillas). En claro = blanco; en oscuro se aclara para "levantar" (luz desde arriba). */
   --c-gray-50: 248 250 252; /* fondo de página (slate-50) */
   --c-gray-100: 241 245 249;
   --c-gray-200: 226 232 240;
@@ -54,6 +55,7 @@
   color-scheme: dark;
   /* Oscuro FRÍO (slate) — rumbo "Herramienta pro". */
   --c-white: 21 25 34; /* superficie / tarjetas (#151922) */
+  --c-raised: 38 46 60; /* superficie elevada (#262E3C): MÁS clara que el surface → los menús/diálogos/pastillas "flotan" en oscuro. */
   --c-gray-50: 11 13 18; /* fondo de página (el más oscuro, #0B0D12) */
   --c-gray-100: 30 37 51; /* rellenos sutiles / chips / bordes tenues */
   --c-gray-200: 35 42 54; /* bordes */

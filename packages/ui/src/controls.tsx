@@ -103,7 +103,7 @@ export function Segmented<T extends string>({
               "rounded-md font-medium outline-none transition-colors duration-fast ease-standard focus-visible:ring-2 focus-visible:ring-brand",
               size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-sm",
               full && "flex-1 text-center",
-              active ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-700"
+              active ? "bg-raised text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-700"
             )}
           >
             {o.label}

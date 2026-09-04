@@ -76,7 +76,7 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : "Diálogo"}
-        className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-sheet bg-white shadow-overlay outline-none motion-safe:animate-scale-in"
+        className="relative z-10 flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-sheet bg-raised shadow-overlay outline-none motion-safe:animate-scale-in"
       >
         {title ? (
           <div className="shrink-0 border-b border-gray-100 p-5">
@@ -120,7 +120,7 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : "Panel"}
-        className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col overflow-y-auto bg-white pb-safe shadow-overlay outline-none motion-safe:animate-slide-in-right"
+        className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col overflow-y-auto bg-raised pb-safe shadow-overlay outline-none motion-safe:animate-slide-in-right"
       >
         {title ? (
           <div className="border-b border-gray-100 p-5">
@@ -199,7 +199,7 @@ export function Dropdown({
           role="menu"
           onKeyDown={onMenuKeyDown}
           className={cn(
-            "absolute z-20 mt-2 min-w-44 origin-top overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-pop outline-none motion-safe:animate-scale-in",
+            "absolute z-20 mt-2 min-w-44 origin-top overflow-hidden rounded-xl border border-gray-200 bg-raised p-1 shadow-pop outline-none motion-safe:animate-scale-in",
             align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
           )}
           onClick={() => setOpen(false)}

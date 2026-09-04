@@ -147,7 +147,7 @@ export function Combobox({
       </svg>
 
       {open && (
-        <ul role="listbox" id={listId} className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-pop">
+        <ul role="listbox" id={listId} className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-raised py-1 text-sm shadow-pop">
           {filtered.map((o, i) => (
             <li key={o.value === "" ? "__empty" : o.value} role="presentation">
               <button

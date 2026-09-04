@@ -100,7 +100,7 @@ export function CommandPalette() {
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[14vh]" role="dialog" aria-modal="true" aria-label="Buscar y navegar">
       <div className="absolute inset-0 bg-black/40 motion-safe:animate-fade-in" onClick={() => setOpen(false)} aria-hidden />
       <div
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-sheet border border-gray-200 bg-white shadow-overlay motion-safe:animate-scale-in"
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-sheet border border-gray-200 bg-raised shadow-overlay motion-safe:animate-scale-in"
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-2.5 border-b border-gray-100 px-4">

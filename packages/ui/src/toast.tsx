@@ -109,7 +109,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               role={t.tone === "error" ? "alert" : "status"}
               aria-live={t.tone === "error" ? "assertive" : "polite"}
               className={cn(
-                "pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-xl border bg-white p-3 pr-2 shadow-overlay",
+                "pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-xl border bg-raised p-3 pr-2 shadow-overlay",
                 meta.ring,
                 t.leaving ? "motion-safe:animate-toast-out" : "motion-safe:animate-toast-in"
               )}
