@@ -203,11 +203,21 @@ export function FormField({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div
+      className={cn(
+        "flex flex-col gap-1.5",
+        // Estado de error: además del mensaje, pinta de rojo el control (input/textarea/
+        // select, incluido el <input> interno del Combobox). El selector descendente gana
+        // por especificidad al borde/anillo propio del control, sin tocar los call sites.
+        error &&
+          "[&_input]:border-red-300 [&_textarea]:border-red-300 [&_select]:border-red-300 [&_input:focus]:border-red-500 [&_textarea:focus]:border-red-500 [&_select:focus]:border-red-500 [&_input:focus]:ring-red-500 [&_textarea:focus]:ring-red-500 [&_select:focus]:ring-red-500",
+        className
+      )}
+    >
       {label ? <Label htmlFor={htmlFor}>{label}</Label> : null}
       {children}
       {error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <p role="alert" className="text-xs text-red-600">{error}</p>
       ) : hint ? (
         <p className="text-xs text-gray-400">{hint}</p>
       ) : null}
