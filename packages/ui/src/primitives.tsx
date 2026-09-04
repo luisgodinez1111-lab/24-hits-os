@@ -45,14 +45,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         // con mouse) → accesible para navegación por teclado y pulido con puntero.
         // active:scale = "press state" (feel iOS); se anula si está deshabilitado o
         // si el usuario pide reducir movimiento.
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold outline-none transition duration-fast ease-spring focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
+        "relative inline-flex items-center justify-center gap-2 rounded-lg font-semibold outline-none transition duration-fast ease-spring focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100",
         buttonVariants[variant],
         buttonSizes[size],
         className
       )}
       {...props}
     >
-      {loading ? "…" : children}
+      {/* Estado de carga: spinner centrado + contenido invisible (conserva el ancho,
+          sin salto de layout). El botón queda deshabilitado y atenuado. */}
+      {loading ? (
+        <span className="absolute inset-0 grid place-items-center" aria-hidden>
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        </span>
+      ) : null}
+      <span className={cn("inline-flex items-center gap-2", loading && "invisible")}>{children}</span>
     </button>
   )
 );
@@ -104,7 +111,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       className={cn(
-        "h-10 w-full rounded-lg border border-gray-300 px-3 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:bg-gray-50",
+        "h-10 w-full rounded-lg border border-gray-300 px-3 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:bg-gray-50",
         className
       )}
       {...props}
@@ -121,7 +128,7 @@ export const Textarea = forwardRef<
   <textarea
     ref={ref}
     className={cn(
-      "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand",
+      "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:bg-gray-50",
       className
     )}
     {...props}
@@ -135,7 +142,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     <select
       ref={ref}
       className={cn(
-        "h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand",
+        "h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:bg-gray-50",
         className
       )}
       {...props}
