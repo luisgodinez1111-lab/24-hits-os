@@ -41,11 +41,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* El main es el contenedor de scroll: el contenido se desliza bajo el
+          Header esmerilado (sticky) para el efecto "vidrio" de barra superior. */}
+      <main className="flex flex-1 flex-col overflow-y-auto">
         <Header me={me} onMenu={() => setNavOpen(true)} />
         <VerifyEmailBanner />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
-      </div>
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">{children}</div>
+      </main>
       <CommandPalette />
     </div>
   );
