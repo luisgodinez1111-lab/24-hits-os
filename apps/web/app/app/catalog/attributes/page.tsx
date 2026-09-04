@@ -576,7 +576,7 @@ function SaborRow({ variant, canEdit, onChanged }: { variant: Variant; canEdit: 
                 {bc}
               </span>
             )}
-            <span className="text-sm font-semibold text-gray-900 tabular-nums">{money(variant.price)}</span>
+            <span className="font-mono text-sm font-semibold text-gray-900 tabular-nums">{money(variant.price)}</span>
           </>
         }
         menu={
