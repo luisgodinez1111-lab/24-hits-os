@@ -116,7 +116,7 @@ export function Combobox({
   }
 
   const inputClasses =
-    "h-10 w-full rounded-lg border border-gray-300 bg-white px-3 pr-9 text-sm outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:bg-gray-50";
+    "h-10 w-full rounded-lg border border-gray-300 bg-white px-3 pr-9 text-sm outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand disabled:bg-gray-50";
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
