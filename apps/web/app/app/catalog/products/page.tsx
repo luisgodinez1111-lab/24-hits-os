@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, ChevronDown, Package, Plus, ScanLine } from "lucide-react";
 import {
@@ -188,9 +188,10 @@ function CreateModelDialog({ open, onClose, brands, onCreated }: {
   );
 }
 
-// Editor de sabores de un modelo. Alta fácil: escribe el sabor (y su precio
-// opcional) — el SKU y la unidad se generan solos. El código de barras se agrega
-// por sabor (escaneándolo) más abajo.
+// Editor de sabores de un modelo. Alta de un tiro: escanea el código, escribe el
+// sabor y su precio — el SKU y la unidad "Pieza" se generan solos y el código queda
+// como primario (backend atómico). El acordeón de cada sabor es para EDITAR después
+// (agregar más códigos o cambiar el precio).
 function FlavorsDialog({ model, onClose, onChanged }: {
   model: ModelRef | null; onClose: () => void; onChanged: () => void;
 }) {
@@ -207,23 +208,35 @@ function FlavorsDialog({ model, onClose, onChanged }: {
   const { data: flavors } = useQuery({ queryKey: ["flavors"], queryFn: () => api.get<Flavor[]>("/flavors"), enabled });
   const [flavorName, setFlavorName] = useState("");
   const [price, setPrice] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [barcodeType, setBarcodeType] = useState("EAN");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Alta de un sabor COMPLETA en una sola acción: sabor + precio + código de barras.
+  // El backend crea el sabor (si no existe), genera el SKU, pone unidad "Pieza",
+  // guarda el código como primario y el precio — todo atómico. Tras agregar, limpia
+  // y queda listo para el siguiente (ritmo "rack": escanea → sabor → precio → Enter).
   const create = useMutation({
     mutationFn: () => api.post(`/products/${model!.id}/variants`, {
       flavorName: flavorName.trim(),
       name: flavorName.trim(),
       ...(price.trim() ? { price: Number(price) } : {}),
+      ...(barcode.trim() ? { barcode: barcode.trim(), barcodeType } : {}),
     }),
     onSuccess: async () => {
-      setFlavorName(""); setPrice("");
+      setFlavorName(""); setPrice(""); setBarcode(""); setBarcodeType("EAN");
       await refetch();
       void qc.invalidateQueries({ queryKey: ["flavors"] });
       onChanged();
-      toast.push("Sabor agregado", "success");
+      toast.push("Sabor agregado ✓", "success");
     },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
+
+  // Enter en precio o código dispara el alta (si ya hay sabor) — ritmo sin mouse.
+  const submitOnEnter = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && flavorName.trim() && !create.isPending) { e.preventDefault(); create.mutate(); }
+  };
 
   return (
     <Dialog open={enabled} onClose={onClose} title={`Sabores — ${model?.name ?? ""}`}>
@@ -257,9 +270,13 @@ function FlavorsDialog({ model, onClose, onChanged }: {
           </div>
         ) : <p className="text-sm text-gray-400">Aún no hay sabores. Agrega el primero abajo.</p>}
 
-        <div className="rounded-lg border border-gray-200 p-3">
-          <p className="mb-2 text-xs font-semibold text-gray-600">Agregar sabor</p>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border-2 border-brand/30 bg-brand/5 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand">Agregar sabor</p>
+
+          {/* Escaneo primero: al leer, llena el código y su tipo de una. */}
+          <BarcodeScanner onScan={(c, fmt) => { setBarcode(c); setBarcodeType(fmt); }} />
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
             <Combobox
               value={flavorName}
               onChange={setFlavorName}
@@ -268,13 +285,30 @@ function FlavorsDialog({ model, onClose, onChanged }: {
               allowCreate
               onCreate={async (name) => name.trim()}
             />
-            <Input type="number" inputMode="decimal" min="0" placeholder="Precio (opcional)" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+              <Input type="number" inputMode="decimal" min="0" className="pl-6" placeholder="Precio" value={price}
+                onChange={(e) => setPrice(e.target.value)} onKeyDown={submitOnEnter} />
+            </div>
           </div>
-          <Button size="sm" className="mt-2" loading={create.isPending}
+
+          <div className="mt-2 flex gap-2">
+            <Input className="flex-1 font-mono" placeholder="Código de barras (escanea o teclea)" value={barcode}
+              onChange={(e) => setBarcode(e.target.value)} onKeyDown={submitOnEnter} />
+            <Select value={barcodeType} onChange={(e) => setBarcodeType(e.target.value)}>
+              <option value="EAN">EAN</option>
+              <option value="UPC">UPC</option>
+              <option value="CODE128">CODE128</option>
+              <option value="QR_INTERNAL">QR</option>
+              <option value="OTHER">Otro</option>
+            </Select>
+          </div>
+
+          <Button className="mt-2.5 w-full" loading={create.isPending}
             onClick={() => flavorName.trim() ? create.mutate() : toast.push("Escribe el sabor", "error")}>
             <Plus className="h-4 w-4" /> Agregar sabor
           </Button>
-          <p className="mt-1.5 text-[11px] text-gray-400">SKU y unidad “Pieza” automáticos. El código de barras se agrega después escaneándolo.</p>
+          <p className="mt-1.5 text-[11px] text-gray-500">Escanea el código, escribe el sabor y su precio, y pulsa Enter. Se agrega con todo — el SKU y la unidad “Pieza” salen solos. Listo para el siguiente.</p>
         </div>
       </div>
     </Dialog>
