@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { Env } from "@24hits/config";
 import { ENV } from "../config/app-config.module.js";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
+import { Public } from "../common/decorators/public.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { CustomerService } from "./customer.service.js";
 import { OrderService } from "./order.service.js";
 import { DeliveryTrackingService } from "./delivery-tracking.service.js";
+import { TrackingTokenService } from "./tracking-token.service.js";
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -82,6 +84,7 @@ export class CustomerController {
 export class OrderController {
   constructor(
     private readonly orders: OrderService,
+    private readonly tokens: TrackingTokenService,
     @Inject(ENV) private readonly env: Env
   ) {}
 
@@ -121,6 +124,14 @@ export class OrderController {
   @RequirePermissions("orders.read")
   get(@CurrentUser() u: AuthContext, @Param("id") id: string) {
     return this.orders.get(u.organizationId!, id);
+  }
+
+  // Token para el link de rastreo que se comparte con el cliente (firmado; no expone
+  // datos). El front arma la URL pública /track/<token>.
+  @Get(":id/track-token")
+  @RequirePermissions("orders.read")
+  trackToken(@CurrentUser() u: AuthContext, @Param("id") id: string) {
+    return { token: this.tokens.sign(u.organizationId!, id) };
   }
 
   @Post()
@@ -187,5 +198,26 @@ export class DeliveryController {
       this.orders.pendingDeliveries(u.organizationId!),
     ]);
     return { drivers, stops };
+  }
+}
+
+// Rastreo PÚBLICO para el cliente (sin sesión): el token firmado identifica el pedido
+// y devolvemos solo lo necesario ("tu pedido va en camino" + repartidor + ETA).
+@ApiTags("track")
+@Controller("track")
+export class TrackController {
+  constructor(
+    private readonly tokens: TrackingTokenService,
+    private readonly tracking: DeliveryTrackingService
+  ) {}
+
+  @Public()
+  @Get(":token")
+  async track(@Param("token") token: string) {
+    const decoded = this.tokens.verify(token);
+    if (!decoded) throw new NotFoundException("Rastreo no válido");
+    const status = await this.tracking.publicOrderStatus(decoded.orgId, decoded.orderId);
+    if (!status) throw new NotFoundException("Pedido no encontrado");
+    return status;
   }
 }

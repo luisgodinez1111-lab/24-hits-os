@@ -7,14 +7,15 @@ import { SaleNoteService } from "./sale-note.service.js";
 import { CreditNoteService } from "./credit-note.service.js";
 import { PosService } from "./pos.service.js";
 import { DeliveryTrackingService } from "./delivery-tracking.service.js";
-import { CustomerController, DeliveryController, OrderController } from "./sales.controllers.js";
+import { TrackingTokenService } from "./tracking-token.service.js";
+import { CustomerController, DeliveryController, OrderController, TrackController } from "./sales.controllers.js";
 import { SaleNoteController } from "./sale-note.controller.js";
 import { CreditNoteController } from "./credit-note.controller.js";
 import { PosController } from "./pos.controller.js";
 
 @Module({
   imports: [InventoryModule, CashModule], // Ledger/Cost/Reservation + PaymentService (POS)
-  controllers: [CustomerController, OrderController, DeliveryController, SaleNoteController, CreditNoteController, PosController],
-  providers: [CustomerService, OrderService, SaleNoteService, CreditNoteService, PosService, DeliveryTrackingService],
+  controllers: [CustomerController, OrderController, DeliveryController, TrackController, SaleNoteController, CreditNoteController, PosController],
+  providers: [CustomerService, OrderService, SaleNoteService, CreditNoteService, PosService, DeliveryTrackingService, TrackingTokenService],
 })
 export class SalesModule {}
