@@ -181,4 +181,80 @@ export class PaymentService {
     });
     return reversal;
   }
+
+  // ── Reconciliación de efectivo del repartidor ──────────────────────────────
+  // El efectivo cobrado en reparto entra como Payment CASH SIN turno (cashSessionId
+  // null): dinero en la bolsa del repartidor, invisible para el arqueo. Estas dos
+  // operaciones lo hacen visible y lo "entregan" a un turno de caja abierto.
+
+  // Filtro del efectivo de reparto sin entregar de un repartidor (por usuario).
+  private static floatingCashWhere(userId: string) {
+    return {
+      createdByUserId: userId,
+      method: "CASH" as const,
+      status: "COMPLETED" as const,
+      cashSessionId: null,
+      order: { is: { deliveryStatus: { not: null } } }, // solo pedidos a domicilio
+    };
+  }
+
+  // Cuánto efectivo de reparto trae el repartidor sin entregar todavía + a qué turnos
+  // abiertos puede entregarlo. Base del "corte" al cerrar la ruta.
+  async driverCashSummary(organizationId: string, userId: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const payments = await tx.payment.findMany({
+        where: PaymentService.floatingCashWhere(userId),
+        select: {
+          id: true,
+          amount: true,
+          createdAt: true,
+          order: { select: { number: true, customer: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      const total = payments.reduce((s, p) => s.plus(p.amount), new Prisma.Decimal(0));
+      const openSessions = await tx.cashSession.findMany({
+        where: { status: "OPEN" },
+        select: { id: true, register: { select: { name: true } } },
+        orderBy: { openedAt: "desc" },
+      });
+      return {
+        total: total.toString(),
+        count: payments.length,
+        items: payments.map((p) => ({
+          id: p.id,
+          amount: p.amount.toString(),
+          at: p.createdAt,
+          number: p.order?.number ?? null,
+          customerName: p.order?.customer?.name ?? null,
+        })),
+        openSessions: openSessions.map((s) => ({ id: s.id, register: s.register?.name ?? "Caja" })),
+      };
+    });
+  }
+
+  // Entrega ese efectivo a un turno ABIERTO: liga los cobros al turno para que entren
+  // al arqueo (expectedCash los suma como pagos CASH — sin doble conteo). Al ligarlos
+  // dejan de estar "flotando", así que reintentar no vuelve a sumar nada.
+  async driverCashHandover(organizationId: string, userId: string, cashSessionId: string) {
+    const result = await this.prisma.withTenant(organizationId, async (tx) => {
+      const session = await tx.cashSession.findFirst({ where: { id: cashSessionId }, select: { id: true, status: true } });
+      if (!session) throw new AppException(404, ErrorCode.CASH_SESSION_NOT_FOUND, "Turno de caja no encontrado");
+      if (session.status !== "OPEN") throw new AppException(409, ErrorCode.CASH_SESSION_NOT_OPEN, "El turno de caja no está abierto");
+      const floating = await tx.payment.findMany({ where: PaymentService.floatingCashWhere(userId), select: { id: true, amount: true } });
+      const total = floating.reduce((s, p) => s.plus(p.amount), new Prisma.Decimal(0));
+      if (floating.length > 0) {
+        await tx.payment.updateMany({ where: { id: { in: floating.map((f) => f.id) } }, data: { cashSessionId } });
+      }
+      return { handedOver: total.toString(), count: floating.length };
+    });
+    await this.audit.record({
+      action: "delivery.cash_handover",
+      organizationId,
+      entityType: "CashSession",
+      entityId: cashSessionId,
+      after: { handedOver: result.handedOver, count: result.count, driverUserId: userId },
+    });
+    return result;
+  }
 }

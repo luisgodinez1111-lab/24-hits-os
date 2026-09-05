@@ -90,3 +90,9 @@ export const updateDeliverySchema = z.object({
   deliveryRecipient: z.string().max(120).optional(), // quién recibió (nombre)
 });
 export type UpdateDeliveryInput = z.infer<typeof updateDeliverySchema>;
+
+// Entrega del efectivo de reparto a un turno de caja abierto (corte del repartidor).
+export const cashHandoverSchema = z.object({
+  cashSessionId: z.string().uuid(),
+});
+export type CashHandoverInput = z.infer<typeof cashHandoverSchema>;
