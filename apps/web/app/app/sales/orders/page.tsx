@@ -10,6 +10,7 @@ import {
 import type { Customer, Order, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { useMe } from "@/lib/me";
+import { haversineKm } from "@/lib/route";
 
 const tone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
   DRAFT: "gray", CONFIRMED: "blue", PARTIALLY_FULFILLED: "amber",
@@ -26,6 +27,21 @@ const statusLabel: Record<string, string> = {
   FULFILLED: "Entregado", COMPLETED: "Completado", CANCELLED: "Cancelado",
 };
 const payLabel: Record<string, string> = { PENDING: "Pendiente", PARTIAL: "Parcial", PAID: "Pagado" };
+
+// Prueba de entrega (geo-sello): "14:32 · a 8 m · recibió Juan". La distancia es entre
+// el punto de entrega del pedido y donde el repartidor marcó entregado (evidencia de
+// que estuvo en el lugar). Devuelve null si el pedido aún no se entrega.
+function deliveryProof(o: Order): string | null {
+  if (o.deliveryStatus !== "DELIVERED" || !o.deliveredAt) return null;
+  const time = new Date(o.deliveredAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  let dist = "";
+  if (o.deliveredLat != null && o.deliveredLng != null && o.deliveryLat != null && o.deliveryLng != null) {
+    const m = haversineKm({ lat: o.deliveredLat, lng: o.deliveredLng }, { lat: o.deliveryLat, lng: o.deliveryLng }) * 1000;
+    dist = m < 950 ? ` · a ${Math.round(m)} m` : ` · a ${(m / 1000).toFixed(1)} km`;
+  }
+  const who = o.deliveryRecipient ? ` · recibió ${o.deliveryRecipient}` : "";
+  return `${time}${dist}${who}`;
+}
 
 export default function SalesOrdersPage() {
   const toast = useToast();
@@ -128,18 +144,26 @@ export default function SalesOrdersPage() {
                 <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{payLabel[o.paymentStatus] ?? o.paymentStatus}</Badge></TD>
                 <TD>
                   {o.deliveryStatus ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={deliveryTone[o.deliveryStatus] ?? "gray"}>{deliveryLabel[o.deliveryStatus] ?? o.deliveryStatus}</Badge>
-                      {o.deliveryStatus === "PENDING" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}>Enviar</Button>}
-                      {o.deliveryStatus === "DISPATCHED" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}>Entregado</Button>}
-                      {/* Sin coordenadas = no aparece en la ruta: se ofrece corregir. */}
-                      {o.deliveryLat == null || o.deliveryLng == null ? (
-                        <Button size="sm" variant="outline" onClick={() => setLocating(o)}><MapPin className="h-4 w-4" /> Corregir ubicación</Button>
-                      ) : (
-                        <button onClick={() => setLocating(o)} className="inline-flex items-center gap-1 text-xs text-brand underline"><MapPin className="h-3.5 w-3.5" /> ubicación ✓</button>
-                      )}
-                      {o.deliveryStatus !== "DELIVERED" && o.deliveryLat != null && o.deliveryLng != null && (
-                        <button onClick={() => shareTracking(o.id)} className="inline-flex items-center gap-1 text-xs text-brand underline"><Share2 className="h-3.5 w-3.5" /> Rastreo</button>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={deliveryTone[o.deliveryStatus] ?? "gray"}>{deliveryLabel[o.deliveryStatus] ?? o.deliveryStatus}</Badge>
+                        {o.deliveryStatus === "PENDING" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}>Enviar</Button>}
+                        {o.deliveryStatus === "DISPATCHED" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}>Entregado</Button>}
+                        {/* Sin coordenadas = no aparece en la ruta: se ofrece corregir. */}
+                        {o.deliveryLat == null || o.deliveryLng == null ? (
+                          <Button size="sm" variant="outline" onClick={() => setLocating(o)}><MapPin className="h-4 w-4" /> Corregir ubicación</Button>
+                        ) : (
+                          <button onClick={() => setLocating(o)} className="inline-flex items-center gap-1 text-xs text-brand underline"><MapPin className="h-3.5 w-3.5" /> ubicación ✓</button>
+                        )}
+                        {o.deliveryStatus !== "DELIVERED" && o.deliveryLat != null && o.deliveryLng != null && (
+                          <button onClick={() => shareTracking(o.id)} className="inline-flex items-center gap-1 text-xs text-brand underline"><Share2 className="h-3.5 w-3.5" /> Rastreo</button>
+                        )}
+                      </div>
+                      {/* Prueba de entrega (geo-sello): hora · distancia al punto · quién recibió. */}
+                      {deliveryProof(o) && (
+                        <p className="text-[11px] text-gray-400" title="Prueba de entrega: hora y distancia entre el punto de entrega y donde se marcó entregado">
+                          ✓ {deliveryProof(o)}
+                        </p>
                       )}
                     </div>
                   ) : <span className="text-gray-300">—</span>}

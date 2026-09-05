@@ -1198,6 +1198,14 @@ model Order {
   deliveryLat         Float? // lat/lng extraídos del link (Google/Apple Maps) para la ruta
   deliveryLng         Float?
   deliveryStatus      DeliveryStatus?
+  // Prueba de entrega (geo-sello): dónde/cuándo/quién al marcar DELIVERED. Evidencia
+  // difícil de falsear de que el repartidor estuvo físicamente en el punto de entrega.
+  deliveredAt         DateTime?
+  deliveredLat        Float? // ubicación del REPARTIDOR al entregar (no la del cliente)
+  deliveredLng        Float?
+  deliveredAccuracy   Float? // precisión del GPS en metros (calidad del sello)
+  deliveredByUserId   String?         @db.Uuid // quién cerró la entrega
+  deliveryRecipient   String? // quién recibió (nombre; opcional)
   confirmedAt         DateTime?
   fulfilledAt         DateTime?
   cancelledAt         DateTime?

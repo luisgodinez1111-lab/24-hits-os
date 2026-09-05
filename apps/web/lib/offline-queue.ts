@@ -19,6 +19,11 @@ export interface PendingDelivery {
   method: string; // CASH | CARD | TRANSFER | OTHER
   amount: number; // 0 = solo entregar, sin cobro
   idempotencyKey: string; // estable → cobro no duplicado
+  // Prueba de entrega capturada al cerrar (se sella en el servidor al sincronizar).
+  deliveredLat?: number;
+  deliveredLng?: number;
+  deliveredAccuracy?: number;
+  recipient?: string;
   createdAt: number;
   lastError?: string; // si el servidor rechazó definitivamente (no reintentable)
 }
@@ -59,7 +64,15 @@ export function enqueueDelivery(item: Omit<PendingDelivery, "id" | "createdAt">)
 // Reintentable como unidad: si algo falla a mitad, la próxima corrida repite ambos
 // pasos sin efectos duplicados.
 async function runOne(item: PendingDelivery): Promise<void> {
-  await api.patch(`/orders/${item.orderId}/delivery`, { status: "DELIVERED" });
+  await api.patch(`/orders/${item.orderId}/delivery`, {
+    status: "DELIVERED",
+    // El geo-sello se estampa una sola vez en el servidor (idempotente).
+    ...(item.deliveredLat != null && item.deliveredLng != null
+      ? { deliveredLat: item.deliveredLat, deliveredLng: item.deliveredLng }
+      : {}),
+    ...(item.deliveredAccuracy != null ? { deliveredAccuracy: item.deliveredAccuracy } : {}),
+    ...(item.recipient ? { deliveryRecipient: item.recipient } : {}),
+  });
   if (item.amount > 0) {
     await api.post("/payments", {
       orderId: item.orderId,
