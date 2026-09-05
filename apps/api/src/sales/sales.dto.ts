@@ -83,5 +83,10 @@ export const updateDeliverySchema = z.object({
   deliveryPhone: z.string().max(40).optional(),
   deliveryNotes: z.string().max(500).optional(),
   deliveryLocationUrl: z.string().max(500).optional(), // link de Google/Apple Maps o "lat,lng"
+  // Geo-sello de la prueba de entrega: ubicación del REPARTIDOR al marcar DELIVERED.
+  deliveredLat: z.number().min(-90).max(90).optional(),
+  deliveredLng: z.number().min(-180).max(180).optional(),
+  deliveredAccuracy: z.number().min(0).max(100000).optional(), // precisión GPS en metros
+  deliveryRecipient: z.string().max(120).optional(), // quién recibió (nombre)
 });
 export type UpdateDeliveryInput = z.infer<typeof updateDeliverySchema>;

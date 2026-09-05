@@ -143,7 +143,7 @@ export class OrderService {
     const coords = input.deliveryLocationUrl !== undefined ? await resolveLatLng(input.deliveryLocationUrl) : undefined;
 
     await this.prisma.withTenant(organizationId, async (tx) => {
-      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true, customerId: true } });
+      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true, customerId: true, deliveredAt: true } });
       if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
       await tx.order.update({
         where: { id: orderId },
@@ -154,6 +154,20 @@ export class OrderService {
           ...(input.deliveryNotes !== undefined ? { deliveryNotes: input.deliveryNotes } : {}),
           ...(input.deliveryLocationUrl !== undefined ? { deliveryLocationUrl: input.deliveryLocationUrl } : {}),
           ...(coords !== undefined ? { deliveryLat: coords?.lat ?? null, deliveryLng: coords?.lng ?? null } : {}),
+          // Geo-sello de la prueba de entrega: se estampa UNA sola vez (preserva la
+          // evidencia original ante los reintentos de la cola offline, que reenvían el
+          // mismo DELIVERED). Guarda hora del servidor, quién entregó y dónde estaba.
+          ...(input.status === "DELIVERED" && order.deliveredAt == null
+            ? {
+                deliveredAt: new Date(),
+                deliveredByUserId: userId,
+                ...(input.deliveredLat != null && input.deliveredLng != null
+                  ? { deliveredLat: input.deliveredLat, deliveredLng: input.deliveredLng }
+                  : {}),
+                ...(input.deliveredAccuracy != null ? { deliveredAccuracy: input.deliveredAccuracy } : {}),
+              }
+            : {}),
+          ...(input.deliveryRecipient !== undefined ? { deliveryRecipient: input.deliveryRecipient } : {}),
         },
       });
       if (coords && order.customerId) {

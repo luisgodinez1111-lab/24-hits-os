@@ -203,6 +203,12 @@ export interface Order {
   deliveryLat: number | null;
   deliveryLng: number | null;
   deliveryStatus: "PENDING" | "DISPATCHED" | "DELIVERED" | null;
+  // Prueba de entrega (geo-sello): hora/ubicación/quién recibió al marcar entregado.
+  deliveredAt: string | null;
+  deliveredLat: number | null;
+  deliveredLng: number | null;
+  deliveredAccuracy: number | null;
+  deliveryRecipient: string | null;
   createdAt: string;
   items: Array<{
     id: string;

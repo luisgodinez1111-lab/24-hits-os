@@ -10,6 +10,20 @@ import { enqueueDelivery } from "@/lib/offline-queue";
 import { money } from "@/lib/format";
 import { BarcodeScanner } from "./BarcodeScanner";
 
+// Geo-sello de la entrega: dónde está el repartidor al cerrar. maximumAge alto porque
+// la Ruta ya vigila el GPS (suele haber un fix reciente → responde al instante). Si el
+// dispositivo no da ubicación, la entrega NO se bloquea (la prueba queda sin coords).
+function captureGeo(): Promise<{ lat: number; lng: number; acc: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: typeof p.coords.accuracy === "number" ? p.coords.accuracy : 0 }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 15000 }
+    );
+  });
+}
+
 // Entrega en la puerta: escanea los productos para CONFIRMAR que es el pedido
 // correcto, cobra y marca entregado (consume inventario). Cierra el ciclo del
 // reparto de un tiro. Para productos sin código: "saltar verificación".
@@ -52,6 +66,7 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
   const [override, setOverride] = useState(false);
   const [method, setMethod] = useState("CASH");
   const [amount, setAmount] = useState("");
+  const [recipient, setRecipient] = useState(""); // ¿quién recibió? (opcional)
 
   // Reinicia al abrir un pedido nuevo; monto por defecto = total del pedido.
   useEffect(() => {
@@ -60,6 +75,7 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
       setOverride(false);
       setMethod("CASH");
       setAmount(order?.total ?? "");
+      setRecipient("");
     }
   }, [open, order?.id, order?.total]);
 
@@ -86,24 +102,36 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
       const amt = Number(amount || 0);
       // Clave estable de idempotencia por pedido → reintentar NUNCA duplica el cobro.
       const idempotencyKey = `pay:${stopId}`;
+      // Prueba de entrega: dónde está el repartidor al cerrar + quién recibió.
+      const geo = await captureGeo();
+      const recip = recipient.trim() || undefined;
+      const proof = {
+        ...(geo ? { deliveredLat: geo.lat, deliveredLng: geo.lng, deliveredAccuracy: Math.round(geo.acc) } : {}),
+        ...(recip ? { deliveryRecipient: recip } : {}),
+      };
+      // Payload para la cola offline (lleva la prueba para sellarla al sincronizar).
+      const queueItem = {
+        orderId: stopId, orderNumber: order?.number, method, amount: amt, idempotencyKey,
+        deliveredLat: geo?.lat, deliveredLng: geo?.lng, deliveredAccuracy: geo ? Math.round(geo.acc) : undefined, recipient: recip,
+      };
 
       // Sin señal: encola (entregar + cobrar) y sincroniza sola al reconectar, en vez
       // de fallar la entrega. La entrega no se pierde aunque el repartidor esté offline.
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        enqueueDelivery({ orderId: stopId, orderNumber: order?.number, method, amount: amt, idempotencyKey });
+        enqueueDelivery(queueItem);
         return { queued: true };
       }
 
       try {
-        // 1) Entregar (auto-confirma + fulfill → consume inventario). 2) Cobrar.
-        await api.patch(`/orders/${stopId}/delivery`, { status: "DELIVERED" });
+        // 1) Entregar (auto-confirma + fulfill → consume inventario, sella la prueba). 2) Cobrar.
+        await api.patch(`/orders/${stopId}/delivery`, { status: "DELIVERED", ...proof });
         if (amt > 0) await api.post("/payments", { orderId: stopId, method, amount: amt, idempotencyKey });
         return { queued: false };
       } catch (err) {
         // Error del SERVIDOR (ApiError): rechazo real → propaga y se muestra.
         if (err instanceof ApiError) throw err;
         // Falla de RED a mitad (se cayó la señal): encola para sincronizar luego.
-        enqueueDelivery({ orderId: stopId, orderNumber: order?.number, method, amount: amt, idempotencyKey });
+        enqueueDelivery(queueItem);
         return { queued: true };
       }
     },
@@ -187,7 +215,11 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
               <Input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
             </FormField>
           </div>
-          <p className="text-[11px] text-gray-400">Total del pedido: {money(order.total)}. Deja el monto en 0 si ya está pagado.</p>
+          {/* Prueba de entrega: quién recibió (opcional). La ubicación/hora se sellan solas. */}
+          <FormField label="¿Quién recibió? (opcional)">
+            <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Nombre de quien recibió" maxLength={120} />
+          </FormField>
+          <p className="text-[11px] text-gray-400">Total del pedido: {money(order.total)}. Deja el monto en 0 si ya está pagado. Al entregar se sella hora y ubicación como prueba.</p>
         </div>
       )}
     </Dialog>
