@@ -515,6 +515,7 @@ function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavi
     <div className="rounded-2xl border-2 border-brand/40 bg-brand/5 p-4 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
         <Badge tone="brand">Siguiente parada</Badge>
+        {stop.assignedDriverId && <Badge tone="blue">Asignada a ti</Badge>}
         {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
         {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
         {stop.legKm != null && (
@@ -648,6 +649,7 @@ function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; o
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{stop.customer?.name ?? "Mostrador"}</span>
+            {stop.assignedDriverId && <Badge tone="blue">Asignada a ti</Badge>}
             {stop.priority === "urgent" && <Badge tone="red">Urgente · {waited(stop.minutesPending)}</Badge>}
             {stop.priority === "priority" && <Badge tone="amber">Prioritario · {waited(stop.minutesPending)}</Badge>}
             {stop.customer?.zone && <Badge tone="gray">{zoneLabel[stop.customer.zone]}</Badge>}

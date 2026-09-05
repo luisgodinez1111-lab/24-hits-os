@@ -178,10 +178,22 @@ export class OrderService {
     return this.get(organizationId, orderId);
   }
 
+  // Dispatch: asigna (o desasigna con null) la entrega a un repartidor. La parada deja
+  // de verse en la ruta de los demás y aparece solo en la del repartidor asignado.
+  async assignDriver(organizationId: string, orderId: string, driverId: string | null) {
+    await this.prisma.withTenant(organizationId, async (tx) => {
+      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true } });
+      if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
+      await tx.order.update({ where: { id: orderId }, data: { assignedDriverId: driverId } });
+    });
+    await this.audit.record({ action: "order.driver_assigned", organizationId, entityType: "Order", entityId: orderId, after: { assignedDriverId: driverId } });
+    return { ok: true };
+  }
+
   // Entregas pendientes (PENDING/DISPATCHED) para armar la ruta. El orden por
   // cercanía lo calcula el frontend con el GPS del repartidor (vecino más cercano).
   async pendingDeliveries(organizationId: string) {
-    return this.prisma.withTenant(organizationId, (tx) =>
+    const orders = await this.prisma.withTenant(organizationId, (tx) =>
       tx.order.findMany({
         where: { deliveryStatus: { in: ["PENDING", "DISPATCHED"] }, status: { not: "CANCELLED" } },
         select: {
@@ -195,24 +207,36 @@ export class OrderService {
           deliveryLocationUrl: true,
           deliveryLat: true,
           deliveryLng: true,
+          assignedDriverId: true,
           createdAt: true,
           customer: { select: { name: true, phone: true, zone: true } },
         },
         orderBy: { createdAt: "asc" },
       })
     );
+    // Nombre del repartidor asignado, para el tablero de dispatch. User no es tenant
+    // (se consulta con el cliente base, igual que en el seguimiento en vivo); sin N+1.
+    const driverIds = [...new Set(orders.map((o) => o.assignedDriverId).filter((x): x is string => x != null))];
+    const drivers = driverIds.length
+      ? await this.prisma.client.user.findMany({ where: { id: { in: driverIds } }, select: { id: true, name: true, email: true } })
+      : [];
+    const nameById = new Map(drivers.map((u) => [u.id, u.name ?? u.email ?? "Repartidor"]));
+    return orders.map((o) => ({ ...o, assignedDriverName: o.assignedDriverId ? nameById.get(o.assignedDriverId) ?? null : null }));
   }
 
   // Ruta óptima con PRIORIDAD por tiempo: las entregas que llevan mucho esperando
   // (createdAt) se marcan prioritario/urgente y se visitan PRIMERO; dentro de cada
   // grupo se minimiza el recorrido (vecino más cercano + 2-opt), no solo el
   // siguiente salto. Distancias por carretera si hay OSRM_URL; si no, línea recta.
-  async optimizeRoute(organizationId: string, start: Pt | null, osrmUrl?: string | null, osrmHeaders?: Record<string, string>) {
+  async optimizeRoute(organizationId: string, viewerUserId: string, start: Pt | null, osrmUrl?: string | null, osrmHeaders?: Record<string, string>) {
     const PRIORITY_MIN = 45; // min sin entregar → prioritario
     const URGENT_MIN = 90; // min sin entregar → urgente
     const now = Date.now();
 
-    const all = await this.pendingDeliveries(organizationId);
+    const all0 = await this.pendingDeliveries(organizationId);
+    // Dispatch: cada repartidor ve SUS paradas asignadas + el pool sin asignar (las
+    // asignadas a otro repartidor desaparecen de su ruta).
+    const all = all0.filter((s) => s.assignedDriverId == null || s.assignedDriverId === viewerUserId);
     const coordStops = all.filter((s) => s.deliveryLat != null && s.deliveryLng != null);
     const noCoords = all.filter((s) => s.deliveryLat == null || s.deliveryLng == null);
     if (coordStops.length === 0) {
