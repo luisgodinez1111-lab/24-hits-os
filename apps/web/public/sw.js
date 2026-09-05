@@ -23,6 +23,7 @@ const BUILD = (() => {
 })();
 const SHELL_CACHE = `hits-shell-${BUILD}`;
 const API_CACHE = "hits-api-v1"; // estable entre deploys (datos offline)
+const MAP_CACHE = "hits-map-v1"; // mapa self-hosted (R2): estable entre deploys, offline en campo
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -33,7 +34,7 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== API_CACHE).map((k) => caches.delete(k))
+        keys.filter((k) => k !== SHELL_CACHE && k !== API_CACHE && k !== MAP_CACHE).map((k) => caches.delete(k))
       );
       await self.clients.claim();
     })()
@@ -44,7 +45,63 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return; // mutaciones: siempre a la red, nunca caché
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // no interceptar R2/CDN/OSRM
+
+  // Mapa self-hosted (R2/CDN, cross-origin): cachear para navegar OFFLINE en campo.
+  // Network-first (fresco online, resiliente sin señal). El .pmtiles usa range requests
+  // → clave de caché por rango; y como la Cache API no admite guardar respuestas 206,
+  // guardamos el cuerpo como 200 con el Content-Range en X-Content-Range y reconstruimos
+  // el 206 al servir offline (lo que MapLibre/pmtiles espera).
+  const isMapAsset =
+    /\.pmtiles$/.test(url.pathname) ||
+    /\/fonts\/.+\.pbf$/.test(url.pathname) ||
+    /\/style(\.light)?\.json$/.test(url.pathname);
+  if (isMapAsset) {
+    const range = req.headers.get("range") || "";
+    const key = new Request(range ? req.url + "|range=" + range : req.url);
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(MAP_CACHE);
+        try {
+          const res = await fetch(req);
+          if (res.status === 206) {
+            const buf = await res.clone().arrayBuffer();
+            await cache.put(
+              key,
+              new Response(buf, {
+                status: 200,
+                headers: {
+                  "X-Content-Range": res.headers.get("Content-Range") || "",
+                  "Content-Type": res.headers.get("Content-Type") || "application/octet-stream",
+                },
+              })
+            );
+          } else if (res.ok) {
+            await cache.put(key, res.clone());
+          }
+          return res;
+        } catch {
+          const cached = await cache.match(key);
+          if (!cached) return Response.error();
+          const cr = cached.headers.get("X-Content-Range");
+          if (cr) {
+            const buf = await cached.arrayBuffer();
+            return new Response(buf, {
+              status: 206,
+              headers: {
+                "Content-Range": cr,
+                "Accept-Ranges": "bytes",
+                "Content-Type": cached.headers.get("Content-Type") || "application/octet-stream",
+              },
+            });
+          }
+          return cached;
+        }
+      })()
+    );
+    return;
+  }
+
+  if (url.origin !== self.location.origin) return; // no interceptar OSRM u otros externos
 
   // API GET: network-first → caché → 503 offline.
   if (url.pathname.startsWith("/api/v1/")) {
