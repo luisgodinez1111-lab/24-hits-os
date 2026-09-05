@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp, ArrowUpLeft, ArrowUpRight, Check, CornerUpLeft, CornerUpRight, Crosshair,
   Flag, MapPin, Navigation2, Phone, Power, RefreshCw, RotateCcw, Route as RouteIcon,
-  Volume2, VolumeX, X, type LucideIcon,
+  Volume2, VolumeX, Wallet, X, type LucideIcon,
 } from "lucide-react";
-import { Badge, Button, EmptyState, Skeleton } from "@24hits/ui";
+import { Badge, Button, EmptyState, Skeleton, useToast } from "@24hits/ui";
 import type { CustomerZone, DeliveryStop, OptimizedRoute, OptimizedStop } from "@/lib/catalog-types";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useMe, hasPermission } from "@/lib/me";
 import { money } from "@/lib/format";
 import { navUrl, type LatLng, type Leg } from "@/lib/route";
@@ -361,6 +361,9 @@ export default function RoutePage() {
         </div>
       </div>
 
+      {/* Corte de efectivo: solo repartidores; se oculta si no traen efectivo pendiente. */}
+      {canDeliver && <CashCutCard />}
+
       {geoMsg && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{geoMsg}</p>}
 
       {route && route.priorityCount > 0 && (
@@ -421,6 +424,85 @@ export default function RoutePage() {
       </div>
 
       <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
+    </div>
+  );
+}
+
+// Corte de efectivo del repartidor: cuánto efectivo de reparto trae sin entregar.
+type CashSummary = {
+  total: string;
+  count: number;
+  items: { id: string; amount: string; at: string; number: string | null; customerName: string | null }[];
+  openSessions: { id: string; register: string }[];
+};
+
+// Tarjeta "Corte de efectivo": aparece cuando el repartidor trae efectivo de reparto
+// sin entregar. Muestra el total + desglose y lo entrega a un turno de caja abierto
+// (ahí entra al arqueo). Cierra el ciclo del dinero, no solo el de la entrega.
+function CashCutCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data } = useQuery({
+    queryKey: ["driver-cash-summary"],
+    queryFn: () => api.get<CashSummary>("/delivery/cash-summary"),
+    refetchInterval: 60_000,
+  });
+  const [expanded, setExpanded] = useState(false);
+  const [sessionId, setSessionId] = useState("");
+  const target = sessionId || data?.openSessions[0]?.id || "";
+  const handover = useMutation({
+    mutationFn: () => api.post<{ handedOver: string; count: number }>("/delivery/cash-handover", { cashSessionId: target }),
+    onSuccess: (r) => {
+      toast.push(`Entregaste ${money(r.handedOver)} a caja ✓`, "success");
+      void qc.invalidateQueries({ queryKey: ["driver-cash-summary"] });
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "No se pudo entregar el efectivo", "error"),
+  });
+
+  if (!data || data.count === 0) return null; // sin efectivo pendiente → no estorba
+  const sessions = data.openSessions;
+  return (
+    <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+          <Wallet className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Efectivo de reparto a entregar</p>
+          <p className="font-mono text-2xl font-extrabold tabular-nums text-emerald-900">{money(data.total)}</p>
+          <p className="text-xs text-emerald-700/80">{data.count} {data.count === 1 ? "cobro" : "cobros"} en efectivo · aún en tu poder</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {sessions.length > 1 && (
+            <select value={target} onChange={(e) => setSessionId(e.target.value)} className="rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-sm text-emerald-900">
+              {sessions.map((s) => <option key={s.id} value={s.id}>{s.register}</option>)}
+            </select>
+          )}
+          {sessions.length === 0 ? (
+            <span className="max-w-[12rem] text-xs text-emerald-700">Abre un turno de caja para recibir el efectivo.</span>
+          ) : (
+            <Button size="sm" loading={handover.isPending} onClick={() => handover.mutate()}>
+              <Wallet className="h-4 w-4" /> Entregar a caja
+            </Button>
+          )}
+          <button onClick={() => setExpanded((v) => !v)} className="text-xs font-medium text-emerald-700 underline">
+            {expanded ? "ocultar" : "detalle"}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <ul className="mt-3 space-y-1 border-t border-emerald-200 pt-3 text-sm">
+          {data.items.map((it) => (
+            <li key={it.id} className="flex items-center justify-between gap-2 text-emerald-900">
+              <span className="truncate">
+                <span className="font-mono text-xs text-emerald-700">{it.number ?? "—"}</span>
+                {it.customerName ? ` · ${it.customerName}` : ""}
+              </span>
+              <span className="shrink-0 font-mono tabular-nums">{money(it.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

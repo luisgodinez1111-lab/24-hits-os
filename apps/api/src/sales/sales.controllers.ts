@@ -11,6 +11,7 @@ import { CustomerService } from "./customer.service.js";
 import { OrderService } from "./order.service.js";
 import { DeliveryTrackingService } from "./delivery-tracking.service.js";
 import { TrackingTokenService } from "./tracking-token.service.js";
+import { PaymentService } from "../cash/payment.service.js";
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -18,12 +19,14 @@ import {
   createOrderSchema,
   updateDeliverySchema,
   driverLocationSchema,
+  cashHandoverSchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type InactiveCustomersQuery,
   type CreateOrderInput,
   type UpdateDeliveryInput,
   type DriverLocationInput,
+  type CashHandoverInput,
 } from "./sales.dto.js";
 
 @ApiTags("customers")
@@ -170,7 +173,8 @@ export class OrderController {
 export class DeliveryController {
   constructor(
     private readonly tracking: DeliveryTrackingService,
-    private readonly orders: OrderService
+    private readonly orders: OrderService,
+    private readonly payments: PaymentService
   ) {}
 
   // El repartidor emite su ubicación (mientras está EN LÍNEA con la Ruta abierta).
@@ -198,6 +202,21 @@ export class DeliveryController {
       this.orders.pendingDeliveries(u.organizationId!),
     ]);
     return { drivers, stops };
+  }
+
+  // Corte del repartidor: cuánto efectivo de reparto trae sin entregar (por usuario)
+  // + a qué turnos abiertos puede entregarlo.
+  @Get("cash-summary")
+  @RequirePermissions("orders.deliver")
+  cashSummary(@CurrentUser() u: AuthContext) {
+    return this.payments.driverCashSummary(u.organizationId!, u.userId);
+  }
+
+  // Entrega ese efectivo a un turno de caja abierto (entra al arqueo de ese turno).
+  @Post("cash-handover")
+  @RequirePermissions("payments.record")
+  cashHandover(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(cashHandoverSchema)) b: CashHandoverInput) {
+    return this.payments.driverCashHandover(u.organizationId!, u.userId, b.cashSessionId);
   }
 }
 
