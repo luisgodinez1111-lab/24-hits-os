@@ -7,7 +7,7 @@ import { catalogTabs } from "@/lib/catalog-tabs";
 export default function CatalogLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <SectionTabs title="Catálogo" subtitle="Productos, marcas, categorías, sabores y precios" tabs={catalogTabs} />
+      <SectionTabs title="Catálogo" subtitle="Modelos y sus sabores · marcas y categorías · precios" tabs={catalogTabs} />
       {children}
     </>
   );
