@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Minus, Plus, ScanLine, Trash2 } from "lucide-react";
+import { Check, Minus, Plus, ScanLine, Trash2, Wallet } from "lucide-react";
 import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, useToast } from "@24hits/ui";
-import type { Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
+import type { CashRegister, CashSession, Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
 import { haptics } from "@/lib/haptics";
-import { useMe } from "@/lib/me";
+import { useMe, hasPermission } from "@/lib/me";
 import { BarcodeScanner, type ScanFormat } from "@/components/BarcodeScanner";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
@@ -19,6 +20,12 @@ export default function PosPage() {
   const { data: me } = useMe();
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
+  // Turno de caja abierto (oportunista): si hay uno, el efectivo del POS entra a su
+  // arqueo. Solo se consulta si el usuario puede ver caja; si no, cobra como hoy.
+  const canReadCash = hasPermission(me, "cash.read");
+  const { data: cashSessions } = useQuery({ queryKey: ["cash-sessions"], queryFn: () => api.get<CashSession[]>("/cash-sessions"), enabled: canReadCash });
+  const { data: cashRegisters } = useQuery({ queryKey: ["cash-registers"], queryFn: () => api.get<CashRegister[]>("/cash-registers"), enabled: canReadCash });
+
   // Almacén fijo del usuario (operación por usuario).
   const warehouseId = me?.defaultWarehouse?.id ?? "";
   const [customerId, setCustomerId] = useState("");
@@ -26,8 +33,12 @@ export default function PosPage() {
   const [method, setMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "OTHER">("CASH");
   const [manual, setManual] = useState("");
   const [quick, setQuick] = useState<{ open: boolean; barcode: string; type: ScanFormat }>({ open: false, barcode: "", type: "OTHER" });
+  const [pickedSession, setPickedSession] = useState(""); // turno elegido si hay varios abiertos
 
   const total = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const openSessions = (cashSessions ?? []).filter((s) => s.status === "OPEN");
+  const registerName = (id: string) => cashRegisters?.find((r) => r.id === id)?.name ?? "Caja";
+  const activeSessionId = pickedSession || openSessions[0]?.id || ""; // turno al que se liga el efectivo
 
   // Agrega o incrementa una línea del carrito.
   const addLine = useCallback((v: { variantId: string; sku: string; name: string; unitPrice: number; available: string | null }) => {
@@ -67,7 +78,8 @@ export default function PosPage() {
       warehouseId,
       customerId: customerId || undefined,
       items: cart.map((l) => ({ variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice })),
-      payment: { method },
+      // El efectivo se liga al turno abierto (arqueo). Otros métodos no tocan el cajón.
+      payment: { method, ...(method === "CASH" && activeSessionId ? { cashSessionId: activeSessionId } : {}) },
       issueSaleNote: true,
     }),
     onSuccess: (res) => {
@@ -177,6 +189,28 @@ export default function PosPage() {
                 ]}
               />
             </FormField>
+
+            {/* Turno de caja (oportunista): si hay uno abierto, el efectivo entra a su
+                arqueo; si no, cobra igual pero avisa que no cuadrará en caja. */}
+            {canReadCash && (
+              openSessions.length === 0 ? (
+                <p className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700">
+                  <Wallet className="h-3.5 w-3.5 shrink-0" /> Sin turno de caja abierto — el efectivo no entrará al arqueo.
+                  <Link href="/app/sales/cash" className="font-medium underline">Abrir turno</Link>
+                </p>
+              ) : openSessions.length === 1 ? (
+                <p className="flex flex-wrap items-center gap-1.5 text-xs text-emerald-700">
+                  <Wallet className="h-3.5 w-3.5 shrink-0" /> Turno abierto: <b className="font-semibold">{registerName(openSessions[0]!.registerId)}</b> · el efectivo entra a su arqueo
+                </p>
+              ) : (
+                <label className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                  <span className="flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 shrink-0" /> Turno de caja</span>
+                  <select value={activeSessionId} onChange={(e) => setPickedSession(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900">
+                    {openSessions.map((s) => <option key={s.id} value={s.id}>{registerName(s.registerId)}</option>)}
+                  </select>
+                </label>
+              )
+            )}
             <Button size="lg" className="w-full" loading={sale.isPending} onClick={checkout} data-testid="pos-charge-btn"><Check className="h-4 w-4" /> Cobrar y registrar · {money(total)}</Button>
           </div>
         </div>
