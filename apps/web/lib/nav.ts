@@ -10,6 +10,7 @@ import {
   ShoppingCart,
   TrendingUp,
   UserSquare,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
@@ -41,6 +42,7 @@ export const navSections: NavSection[] = [
       { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
       { href: "/app/sales/route", label: "Ruta de hoy", icon: Route, perm: "orders.read" },
       { href: "/app/sales/tracking", label: "Seguimiento", icon: Radar, perm: "orders.read" },
+      { href: "/app/sales/cash", label: "Caja", icon: Wallet, perm: "cash.read" },
       { href: "/app/sales/customers", label: "Clientes", icon: UserSquare, perm: "customers.read" },
     ],
   },
