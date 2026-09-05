@@ -119,6 +119,10 @@ export default function RoutePage() {
   const [speedKmh, setSpeedKmh] = useState<number | null>(null); // velocidad (km/h) del GPS
   const [map3dFailed, setMap3dFailed] = useState(false); // el 3D no cargó → usar Leaflet
   const startNav = () => { setMap3dFailed(false); setNavMode(true); };
+  // Geofence de llegada: parada cuya llegada ya atendió el repartidor (entregó o
+  // pospuso), para no re-avisar; y ref para vibrar una sola vez al entrar al radio.
+  const [arrivalAckId, setArrivalAckId] = useState<string | null>(null);
+  const buzzedId = useRef<string | null>(null);
 
   // ¿El usuario puede repartir? (rol Driver o cualquier rol con el permiso
   // orders.deliver: admin, gerente, etc.). Solo estos ven el switch "En línea".
@@ -213,6 +217,15 @@ export default function RoutePage() {
     : null;
   const guidance = useNavGuidance(pos, navDest, navMode, voiceOn);
 
+  // GEOFENCE DE LLEGADA: al entrar al radio del destino (guidance.arrived pasa a
+  // true a <30 m) vibra UNA sola vez (Android; iOS lo ignora) para que el
+  // repartidor levante la vista. El aviso visual con "Entregar" se muestra abajo.
+  useEffect(() => {
+    if (!navMode || !guidance.arrived || !nextStop || buzzedId.current === nextStop.id) return;
+    buzzedId.current = nextStop.id;
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate([120, 60, 120]);
+  }, [navMode, guidance.arrived, nextStop?.id]);
+
   // MODO NAVEGACIÓN (in-app): banner de maniobra (gira aquí / sigue derecho) +
   // mapa que te sigue con el trazo por calles + bottom-sheet del pedido.
   if (navMode && nextStop) {
@@ -300,6 +313,15 @@ export default function RoutePage() {
 
         {/* TARJETA DE ENTREGA flotando sobre el mapa (integrada). */}
         <NavSheet stop={nextStop} upcoming={upcoming} onDeliver={() => setDeliverStop(nextStop)} />
+
+        {/* GEOFENCE: al llegar (auto-detectado por GPS), aviso grande con acción directa. */}
+        {guidance.arrived && arrivalAckId !== nextStop.id && (
+          <ArrivalPrompt
+            stop={nextStop}
+            onDeliver={() => { setArrivalAckId(nextStop.id); setDeliverStop(nextStop); }}
+            onDismiss={() => setArrivalAckId(nextStop.id)}
+          />
+        )}
 
         <DeliverDialog stopId={deliverStop?.id ?? null} onClose={() => setDeliverStop(null)} onDone={afterDeliver} />
       </div>
@@ -501,6 +523,36 @@ function NavSheet({ stop, upcoming, onDeliver }: { stop: OptimizedStop; upcoming
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Aviso de LLEGADA (geofence): aparece SOLO cuando el GPS detecta que el repartidor
+// entró al radio del destino. Un toque grande abre la entrega — sin buscar botones
+// mientras maneja. "Aún no" lo pospone (p. ej. sigue buscando dónde estacionarse).
+function ArrivalPrompt({ stop, onDeliver, onDismiss }: { stop: OptimizedStop; onDeliver: () => void; onDismiss: () => void }) {
+  const name = stop.customer?.name ?? "Mostrador";
+  const first = name.split(" ")[0];
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50 p-3 pb-safe">
+      <div className="pointer-events-auto mx-auto max-w-md rounded-2xl border border-green-200 bg-white p-4 shadow-[0_-6px_28px_rgba(0,0,0,0.24)]">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-green-100 text-green-600">
+            <MapPin className="h-6 w-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-green-600">Llegaste</p>
+            <p className="truncate text-lg font-bold leading-tight text-gray-900">{name}</p>
+            <p className="truncate text-sm text-gray-500">{stop.deliveryAddress ?? stop.number}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <Button className="flex-1" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar a {first}</Button>
+          <button onClick={onDismiss} className="shrink-0 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-600 active:scale-95">
+            Aún no
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
