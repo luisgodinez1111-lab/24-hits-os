@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt } from "lucide-react";
+import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt, Share2 } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented,   Table, TBody, TD, TH, THead, TR, useToast,
   TableSkeleton,
@@ -70,6 +70,18 @@ export default function SalesOrdersPage() {
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
+  // Genera y copia el link PÚBLICO de rastreo para compartir con el cliente.
+  async function shareTracking(orderId: string) {
+    try {
+      const { token } = await api.get<{ token: string }>(`/orders/${orderId}/track-token`);
+      const url = `${window.location.origin}/track/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.push("Link de rastreo copiado — compártelo con el cliente", "success");
+    } catch (e) {
+      toast.push(e instanceof ApiError ? e.message : "No se pudo generar el link", "error");
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -125,6 +137,9 @@ export default function SalesOrdersPage() {
                         <Button size="sm" variant="outline" onClick={() => setLocating(o)}><MapPin className="h-4 w-4" /> Corregir ubicación</Button>
                       ) : (
                         <button onClick={() => setLocating(o)} className="inline-flex items-center gap-1 text-xs text-brand underline"><MapPin className="h-3.5 w-3.5" /> ubicación ✓</button>
+                      )}
+                      {o.deliveryStatus !== "DELIVERED" && o.deliveryLat != null && o.deliveryLng != null && (
+                        <button onClick={() => shareTracking(o.id)} className="inline-flex items-center gap-1 text-xs text-brand underline"><Share2 className="h-3.5 w-3.5" /> Rastreo</button>
                       )}
                     </div>
                   ) : <span className="text-gray-300">—</span>}
