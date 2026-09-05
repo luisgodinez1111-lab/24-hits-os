@@ -1206,6 +1206,8 @@ model Order {
   deliveredAccuracy   Float? // precisión del GPS en metros (calidad del sello)
   deliveredByUserId   String?         @db.Uuid // quién cerró la entrega
   deliveryRecipient   String? // quién recibió (nombre; opcional)
+  // Dispatch: repartidor asignado a la entrega. null = pool común (lo ve cualquiera).
+  assignedDriverId    String?         @db.Uuid
   confirmedAt         DateTime?
   fulfilledAt         DateTime?
   cancelledAt         DateTime?
@@ -1228,6 +1230,7 @@ model Order {
   @@index([organizationId, createdAt])
   @@index([organizationId, deliveryStatus])
   @@index([organizationId, paymentStatus])
+  @@index([organizationId, assignedDriverId]) // dispatch: paradas por repartidor
   @@index([customerId])
 }
 

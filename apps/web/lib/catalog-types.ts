@@ -380,6 +380,8 @@ export interface DeliveryStop {
   deliveryLng: number | null;
   createdAt: string;
   customer: { name: string; phone: string | null; zone: CustomerZone | null } | null;
+  assignedDriverId: string | null; // dispatch: repartidor asignado (null = pool)
+  assignedDriverName: string | null;
 }
 
 export interface OptimizedStop extends DeliveryStop {

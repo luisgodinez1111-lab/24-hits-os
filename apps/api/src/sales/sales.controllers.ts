@@ -20,6 +20,7 @@ import {
   updateDeliverySchema,
   driverLocationSchema,
   cashHandoverSchema,
+  assignDriverSchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type InactiveCustomersQuery,
@@ -27,6 +28,7 @@ import {
   type UpdateDeliveryInput,
   type DriverLocationInput,
   type CashHandoverInput,
+  type AssignDriverInput,
 } from "./sales.dto.js";
 
 @ApiTags("customers")
@@ -120,7 +122,7 @@ export class OrderController {
     const la = lat != null ? Number(lat) : NaN;
     const ln = lng != null ? Number(lng) : NaN;
     const start = Number.isFinite(la) && Number.isFinite(ln) ? { lat: la, lng: ln } : null;
-    return this.orders.optimizeRoute(u.organizationId!, start, this.env.OSRM_URL, this.osrmHeaders());
+    return this.orders.optimizeRoute(u.organizationId!, u.userId, start, this.env.OSRM_URL, this.osrmHeaders());
   }
 
   @Get(":id")
@@ -165,6 +167,13 @@ export class OrderController {
   @RequirePermissions("orders.deliver")
   updateDelivery(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(updateDeliverySchema)) b: UpdateDeliveryInput) {
     return this.orders.updateDelivery(u.organizationId!, id, u.userId, b);
+  }
+
+  // Dispatch: asigna/reasigna la entrega a un repartidor (driverId null = pool común).
+  @Patch(":id/assign")
+  @RequirePermissions("orders.deliver")
+  assign(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(assignDriverSchema)) b: AssignDriverInput) {
+    return this.orders.assignDriver(u.organizationId!, id, b.driverId);
   }
 }
 

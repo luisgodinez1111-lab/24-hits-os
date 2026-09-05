@@ -96,3 +96,9 @@ export const cashHandoverSchema = z.object({
   cashSessionId: z.string().uuid(),
 });
 export type CashHandoverInput = z.infer<typeof cashHandoverSchema>;
+
+// Dispatch: asignar la entrega a un repartidor (null = desasignar / pool común).
+export const assignDriverSchema = z.object({
+  driverId: z.string().uuid().nullable(),
+});
+export type AssignDriverInput = z.infer<typeof assignDriverSchema>;
