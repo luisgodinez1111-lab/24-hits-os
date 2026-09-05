@@ -49,7 +49,7 @@ export default function ProductsPage() {
     <div>
       <PageHeader
         title="Modelos"
-        subtitle="Marca → modelo → sabores"
+        subtitle="Tus productos. Entra a un modelo para agregar sus sabores con código y precio."
         actions={
           <>
             <Button variant="outline" onClick={() => setQuickOpen(true)}><ScanLine className="h-4 w-4" /> Alta por escaneo</Button>
