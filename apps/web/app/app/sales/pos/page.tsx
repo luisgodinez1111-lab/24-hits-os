@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Minus, Plus, ScanLine, Trash2, Wallet } from "lucide-react";
+import { Check, Minus, Plus, ScanLine, Search, Trash2, Wallet } from "lucide-react";
 import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, Select, useToast } from "@24hits/ui";
 import type { CashRegister, CashSession, Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
@@ -14,6 +14,8 @@ import { BarcodeScanner, type ScanFormat } from "@/components/BarcodeScanner";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
+// Fila del catálogo plano (GET /variants/catalog) para buscar por nombre en el POS.
+type ProdRow = { id: string; modelo: string | null; marca: string | null; sabor: string; sku: string; status: string; price: string | null; barcode: string | null; stock: number };
 
 export default function PosPage() {
   const toast = useToast();
@@ -92,6 +94,28 @@ export default function PosPage() {
     [warehouseId, addLine, toast]
   );
 
+  // --- Buscar producto por nombre (además del escaneo) ---
+  const [search, setSearch] = useState("");
+  const { data: catalog } = useQuery({ queryKey: ["pos-catalog"], queryFn: () => api.get<ProdRow[]>("/variants/catalog") });
+  const results = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [] as ProdRow[];
+    return (catalog ?? [])
+      .filter((r) => r.status === "ACTIVE" && (
+        r.sabor.toLowerCase().includes(q) ||
+        (r.modelo ?? "").toLowerCase().includes(q) ||
+        (r.marca ?? "").toLowerCase().includes(q) ||
+        r.sku.toLowerCase().includes(q) ||
+        (r.barcode ?? "").toLowerCase().includes(q)
+      ))
+      .slice(0, 8);
+  }, [catalog, search]);
+  const addFromSearch = (r: ProdRow) => {
+    addLine({ variantId: r.id, sku: r.sku, name: r.modelo ? `${r.modelo} · ${r.sabor}` : r.sabor, unitPrice: Number(r.price ?? 0), available: String(r.stock) });
+    haptics.tap();
+    setSearch("");
+  };
+
   // Reparte el descuento del ticket entre los renglones (proporcional al importe de
   // cada uno). La última línea absorbe el redondeo para que la suma cuadre exacta.
   function saleItems() {
@@ -159,6 +183,34 @@ export default function PosPage() {
                 options={[{ value: "", label: "Mostrador" }, ...(customers ?? []).map((c) => ({ value: c.id, label: c.name }))]}
               />
             </FormField>
+          </div>
+
+          {/* Buscar producto por nombre (además del escáner) — rápido y para lo que no trae código. */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input className="pl-9" placeholder="Buscar producto por nombre o sabor…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            {search.trim() && (
+              <ul className="mt-2 max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-100">
+                {results.length === 0 ? (
+                  <li className="px-3 py-3 text-sm text-gray-400">Sin resultados. Escanea el código o da de alta el producto.</li>
+                ) : results.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" onClick={() => addFromSearch(r)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-brand/5">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-gray-900">{r.sabor}</span>
+                        <span className="block truncate text-xs text-gray-400">{r.modelo ?? "—"}{r.marca ? ` · ${r.marca}` : ""}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <span className={`text-xs tabular-nums ${r.stock <= 0 ? "text-red-500" : "text-gray-400"}`}>{r.stock} pz</span>
+                        <span className="font-mono text-sm font-semibold text-gray-900">{money(r.price)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
