@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, ChevronRight, Droplet, FolderTree, MoreHorizontal, Package, ScanLine, Search, Tag } from "lucide-react";
 import {
@@ -194,16 +193,11 @@ function CatalogTree() {
         <div className="flex items-center gap-2">
           <Tag className="h-4 w-4 text-gray-400" />
           <span className="text-sm font-semibold text-gray-900">Marca · Modelo · Sabor</span>
-          <div className="ml-auto flex items-center gap-3">
-            {perms.createModel && (
-              <button onClick={() => setScanOpen(true)} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
-                <ScanLine className="h-3.5 w-3.5" /> Alta por escaneo
-              </button>
-            )}
-            <Link href="/app/catalog/products" className="text-xs font-medium text-gray-500 hover:underline">
-              Vista de modelos →
-            </Link>
-          </div>
+          {perms.createModel && (
+            <button onClick={() => setScanOpen(true)} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
+              <ScanLine className="h-3.5 w-3.5" /> Alta por escaneo
+            </button>
+          )}
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
