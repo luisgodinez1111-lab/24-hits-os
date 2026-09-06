@@ -108,13 +108,30 @@ export class PosService {
     await this.orders.fulfill(organizationId, userId, order.id);
 
     const total = new Prisma.Decimal(order.total);
-    await this.payments.record(organizationId, userId, {
-      orderId: order.id,
-      method: input.payment.method,
-      amount: Number(total.toString()),
-      cashSessionId: input.payment.cashSessionId,
-      reference: input.payment.reference,
-    });
+    const totalNum = Number(total.toString());
+    // Pago DIVIDIDO: los pagos deben sumar el total (tolerancia de centavo). Simple: un
+    // solo pago por el total. Cada pago se asienta en el ledger (idempotencia por pedido).
+    if (input.payments?.length) {
+      const sum = input.payments.reduce((s, p) => s + p.amount, 0);
+      if (Math.abs(sum - totalNum) > 0.01) {
+        throw AppException.badRequest("Los pagos no suman el total de la venta");
+      }
+    }
+    const payList = input.payments?.length
+      ? input.payments
+      : input.payment
+        ? [{ method: input.payment.method, amount: totalNum, cashSessionId: input.payment.cashSessionId, reference: input.payment.reference }]
+        : [];
+    if (payList.length === 0) throw AppException.badRequest("Falta el pago de la venta");
+    for (const p of payList) {
+      await this.payments.record(organizationId, userId, {
+        orderId: order.id,
+        method: p.method,
+        amount: p.amount,
+        cashSessionId: p.cashSessionId,
+        reference: p.reference,
+      });
+    }
 
     const saleNote = input.issueSaleNote
       ? await this.saleNotes.issue(organizationId, userId, { orderId: order.id, series: input.series ?? "A" })
@@ -125,7 +142,7 @@ export class PosService {
       organizationId,
       entityType: "Order",
       entityId: order.id,
-      after: { number: order.number, total: total.toString(), method: input.payment.method },
+      after: { number: order.number, total: total.toString(), methods: payList.map((p) => p.method) },
     });
 
     const finalOrder = await this.orders.get(organizationId, order.id);

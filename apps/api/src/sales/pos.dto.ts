@@ -22,12 +22,29 @@ export const posSaleSchema = z.object({
       })
     )
     .min(1, "Agrega al menos un producto"),
-  payment: z.object({
-    method: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]),
-    cashSessionId: z.string().uuid().optional(),
-    reference: z.string().max(120).optional(),
-  }),
+  // Pago simple (un método cubre el total) …
+  payment: z
+    .object({
+      method: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]),
+      cashSessionId: z.string().uuid().optional(),
+      reference: z.string().max(120).optional(),
+    })
+    .optional(),
+  // … o pago DIVIDIDO: varios pagos que suman el total (efectivo + tarjeta, etc.).
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]),
+        amount: z.coerce.number().positive(),
+        cashSessionId: z.string().uuid().optional(),
+        reference: z.string().max(120).optional(),
+      })
+    )
+    .optional(),
   issueSaleNote: z.coerce.boolean().default(true),
   series: z.string().min(1).max(10).optional(),
+}).refine((d) => Boolean(d.payment) || (d.payments?.length ?? 0) > 0, {
+  message: "Falta el pago",
+  path: ["payment"],
 });
 export type PosSaleInput = z.infer<typeof posSaleSchema>;
