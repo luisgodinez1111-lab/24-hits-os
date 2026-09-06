@@ -84,6 +84,14 @@ export class VariantController {
     return this.products.listVariants(u.organizationId!, search);
   }
 
+  // Catálogo plano (vista de tabla): todos los sabores con modelo · marca · precio ·
+  // código · stock. Antes de :id para no colisionar (aunque no hay GET :id aquí).
+  @Get("catalog")
+  @RequirePermissions("products.read")
+  catalog(@CurrentUser() u: AuthContext) {
+    return this.products.catalogVariants(u.organizationId!);
+  }
+
   @Post(":id/barcodes")
   @RequirePermissions("products.update")
   addBarcode(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(addBarcodeSchema)) b: AddBarcodeInput) {

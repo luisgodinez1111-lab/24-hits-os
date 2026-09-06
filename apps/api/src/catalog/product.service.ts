@@ -384,6 +384,58 @@ export class ProductService {
     );
   }
 
+  // Catálogo PLANO para la vista de tabla: TODOS los sabores con modelo · marca ·
+  // precio · código principal · stock. La búsqueda/orden/filtro se hacen en el front
+  // (miles de filas ligeras). Stock desde InventoryBalance (materializado, sin ledger).
+  async catalogVariants(organizationId: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const variants = await tx.productVariant.findMany({
+        select: {
+          id: true,
+          productId: true,
+          sku: true,
+          name: true,
+          status: true,
+          flavor: { select: { name: true } },
+          product: { select: { name: true, brand: { select: { name: true } } } },
+          barcodes: { select: { barcode: true, isPrimary: true } },
+        },
+        orderBy: [{ product: { name: "asc" } }, { name: "asc" }],
+        take: 5000,
+      });
+      const variantIds = variants.map((v) => v.id);
+      if (variantIds.length === 0) return [];
+
+      // Precio de venta vigente (RETAIL) por sabor.
+      const list = await tx.priceList.findFirst({ where: { type: "RETAIL", status: "ACTIVE" }, select: { id: true } });
+      const items = list
+        ? await tx.priceListItem.findMany({ where: { priceListId: list.id, variantId: { in: variantIds }, validTo: null }, select: { variantId: true, price: true } })
+        : [];
+      const priceMap = new Map(items.map((i) => [i.variantId, i.price.toString()]));
+
+      // Stock (onHand) sumado por variante desde el saldo materializado.
+      const balances = await tx.inventoryBalance.groupBy({ by: ["variantId"], where: { variantId: { in: variantIds } }, _sum: { onHand: true } });
+      const stockMap = new Map(balances.map((b) => [b.variantId, Number(b._sum.onHand ?? 0)]));
+
+      return variants.map((v) => {
+        const primary = v.barcodes.find((b) => b.isPrimary) ?? v.barcodes[0] ?? null;
+        return {
+          id: v.id,
+          modeloId: v.productId,
+          modelo: v.product?.name ?? null,
+          marca: v.product?.brand?.name ?? null,
+          sabor: v.flavor?.name ?? v.name,
+          sku: v.sku,
+          status: v.status,
+          price: priceMap.get(v.id) ?? null,
+          barcode: primary?.barcode ?? null,
+          barcodeCount: v.barcodes.length,
+          stock: stockMap.get(v.id) ?? 0,
+        };
+      });
+    });
+  }
+
   // Alta rápida por escaneo: crea modelo (producto) + sabor (variante) + código
   // de barras + precio, todo en una transacción tenant-scoped. Marca y sabor se
   // resuelven por nombre (se reutilizan si existen, se crean si no). Devuelve la

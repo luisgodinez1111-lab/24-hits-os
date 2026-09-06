@@ -11,6 +11,7 @@ import { api, ApiError } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
 import { FlavorsDialog, type FlavorModel } from "@/components/FlavorsDialog";
 import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
+import { CatalogTable } from "@/components/CatalogTable";
 
 // --------------------------------------------------------------------------- helpers
 const money = (v?: string | null) => (v != null ? `$${Number(v).toFixed(2)}` : "—");
@@ -36,10 +37,22 @@ export default function AttributesPage() {
   const { data: me, isLoading } = useMe();
   const can = (p: Parameters<typeof hasPermission>[1]) => isLoading || hasPermission(me, p);
   const canAnyDict = can("brands.read") || can("categories.read") || can("flavors.read");
+  // Vista: Tabla (eficiente a escala — buscar/escanear → lista plana) por defecto;
+  // Árbol para navegar por marca. Se recuerda la elección del usuario.
+  const [view, setView] = useState<"table" | "tree">(() => {
+    try { return (localStorage.getItem("catalog:view") as "table" | "tree") || "table"; } catch { return "table"; }
+  });
+  const pick = (v: "table" | "tree") => { setView(v); try { localStorage.setItem("catalog:view", v); } catch { /* almacenamiento indisponible */ } };
 
   return (
     <div className="space-y-6">
-      {can("brands.read") && <CatalogTree />}
+      {/* Toggle de vista: Tabla ⇄ Árbol. */}
+      <div className="inline-flex rounded-lg border border-gray-200 p-0.5 text-sm">
+        <button onClick={() => pick("table")} className={`rounded-md px-3 py-1.5 font-medium ${view === "table" ? "bg-brand text-white" : "text-gray-600 hover:text-gray-900"}`}>Tabla</button>
+        <button onClick={() => pick("tree")} className={`rounded-md px-3 py-1.5 font-medium ${view === "tree" ? "bg-brand text-white" : "text-gray-600 hover:text-gray-900"}`}>Árbol</button>
+      </div>
+
+      {view === "table" ? <CatalogTable /> : (can("brands.read") && <CatalogTree />)}
 
       {/* Listas maestras: reutilizables entre modelos. Secundario → detrás de un disclosure. */}
       {canAnyDict && (
