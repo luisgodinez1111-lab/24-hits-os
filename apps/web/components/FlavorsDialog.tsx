@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, ChevronDown, Plus } from "lucide-react";
 import { Badge, Button, Combobox, Dialog, Input, Select, useToast } from "@24hits/ui";
-import type { Flavor, Variant } from "@/lib/catalog-types";
+import type { Warehouse } from "@24hits/contracts";
+import type { Flavor, InventoryBalanceRow, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { StockAdjustDialog } from "@/components/StockAdjustDialog";
 
 // Referencia mínima a un modelo (lo único que necesita el editor de sabores).
 export type FlavorModel = { id: string; name: string };
@@ -34,6 +36,17 @@ export function FlavorsDialog({ model, onClose, onChanged }: {
     enabled,
   });
   const { data: flavors } = useQuery({ queryKey: ["flavors"], queryFn: () => api.get<Flavor[]>("/flavors"), enabled });
+  // Stock por sabor (existencia): se lee del inventario y se ajusta reusando el mismo
+  // flujo de Existencias, sin salir del catálogo.
+  const canStock = hasPermission(me, "inventory.adjust");
+  const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses"), enabled });
+  const { data: balances } = useQuery({ queryKey: ["catalog-stock"], queryFn: () => api.get<InventoryBalanceRow[]>("/inventory"), enabled });
+  const stockByVariant = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of balances ?? []) m.set(r.variantId, (m.get(r.variantId) ?? 0) + Number(r.onHand));
+    return m;
+  }, [balances]);
+  const [stockFor, setStockFor] = useState<string | null>(null);
   const [flavorName, setFlavorName] = useState("");
   const [price, setPrice] = useState("");
   const [barcode, setBarcode] = useState("");
@@ -67,7 +80,8 @@ export function FlavorsDialog({ model, onClose, onChanged }: {
   };
 
   return (
-    <Dialog open={enabled} onClose={onClose} title={`Sabores — ${model?.name ?? ""}`}>
+    <>
+      <Dialog open={enabled} onClose={onClose} title={`Sabores — ${model?.name ?? ""}`}>
       <div className="space-y-3">
         {detail?.variants?.length ? (
           <div className="space-y-1">
@@ -81,6 +95,7 @@ export function FlavorsDialog({ model, onClose, onChanged }: {
                     <Badge tone={v.barcodes && v.barcodes.length ? "green" : "gray"}>
                       <Barcode className="mr-1 inline h-3 w-3" />{v.barcodes?.length ?? 0}
                     </Badge>
+                    <span className="text-[11px] font-medium tabular-nums text-gray-500" title="Existencia (stock)">{stockByVariant.get(v.id) ?? 0} pz</span>
                     <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${expanded === v.id ? "rotate-180" : ""}`} />
                   </span>
                 </button>
@@ -91,6 +106,15 @@ export function FlavorsDialog({ model, onClose, onChanged }: {
                       <p className="mb-2 text-xs font-semibold text-gray-500">Código(s) de barras de este sabor</p>
                       <VariantBarcodes variant={v} onChanged={refetch} />
                     </div>
+                    {canStock && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-gray-500">Stock (existencia)</p>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold tabular-nums text-gray-900">{stockByVariant.get(v.id) ?? 0} pz</span>
+                          <Button size="sm" variant="outline" onClick={() => setStockFor(v.id)}>Cargar / ajustar</Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -139,7 +163,16 @@ export function FlavorsDialog({ model, onClose, onChanged }: {
           <p className="mt-1.5 text-[11px] text-gray-500">Escanea el código, escribe el sabor y su precio, y pulsa Enter. Se agrega con todo — el SKU y la unidad “Pieza” salen solos. Listo para el siguiente.</p>
         </div>
       </div>
-    </Dialog>
+      </Dialog>
+      {/* Ajuste de stock del sabor: reusa el flujo de Existencias, sobre el editor. */}
+      <StockAdjustDialog
+        open={!!stockFor}
+        onClose={() => setStockFor(null)}
+        onDone={() => { setStockFor(null); void qc.invalidateQueries({ queryKey: ["catalog-stock"] }); }}
+        warehouses={warehouses ?? []}
+        prefill={{ variantId: stockFor ?? undefined, warehouseId: me?.defaultWarehouse?.id }}
+      />
+    </>
   );
 }
 
