@@ -48,6 +48,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [inviteRoles, setInviteRoles] = useState<string[]>([]);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null); // link para compartir
 
   const { data: members, isLoading } = useQuery({
     queryKey: ["members"],
@@ -73,15 +74,27 @@ export default function UsersPage() {
 
   const invite = useMutation({
     mutationFn: (values: InviteValues) =>
-      api.post("/members/invite", { ...values, roleIds: inviteRoles }),
-    onSuccess: async () => {
+      api.post<{ membershipId: string; inviteUrl: string }>("/members/invite", { ...values, roleIds: inviteRoles }),
+    onSuccess: async (res) => {
       reset({ email: "", name: "" });
       setInviteRoles([]);
+      setInviteLink(res.inviteUrl); // se muestra para copiar y compartir
       await invalidateMembers();
-      toast.push("Invitación enviada", "success");
+      toast.push("Usuario creado — copia el link y envíaselo", "success");
     },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
+
+  // Copia el link de invitación (para pegarlo en WhatsApp, etc.).
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      toast.push("Link copiado", "success");
+    } catch {
+      toast.push("No se pudo copiar; selecciónalo y cópialo a mano", "error");
+    }
+  }
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "SUSPENDED" }) =>
@@ -114,7 +127,7 @@ export default function UsersPage() {
       <PageHeader title="Usuarios" subtitle="Miembros de la organización y sus roles" />
 
       <Card className="mb-6">
-        <CardHeader title="Invitar usuario" subtitle="Recibirá un correo para establecer su contraseña" />
+        <CardHeader title="Invitar usuario" subtitle="Se genera un link para que cree su contraseña — cópialo y envíaselo (WhatsApp, etc.)" />
         <CardBody>
           <form
             onSubmit={handleSubmit((v) => {
@@ -149,9 +162,21 @@ export default function UsersPage() {
               </div>
             </div>
             <Button type="submit" loading={invite.isPending}>
-              Enviar invitación
+              Crear usuario y generar link
             </Button>
           </form>
+
+          {/* Link de invitación recién generado: se copia y se comparte manualmente. */}
+          {inviteLink && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3">
+              <p className="text-xs font-semibold text-green-800">✓ Link de invitación — envíaselo al usuario</p>
+              <p className="mt-0.5 text-[11px] text-green-700">Al abrirlo creará su contraseña y podrá entrar. El link caduca por seguridad.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <Input readOnly value={inviteLink} onFocus={(e) => e.currentTarget.select()} className="flex-1 font-mono text-xs" />
+                <Button type="button" size="sm" onClick={copyInviteLink}>Copiar link</Button>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
 
