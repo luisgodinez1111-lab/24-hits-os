@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Minus, Plus, ScanLine, Search, Trash2, Wallet } from "lucide-react";
@@ -16,6 +16,13 @@ import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
 // Fila del catálogo plano (GET /variants/catalog) para buscar por nombre en el POS.
 type ProdRow = { id: string; modelo: string | null; marca: string | null; sabor: string; sku: string; status: string; price: string | null; barcode: string | null; stock: number };
+
+// Venta EN ESPERA (apartado): el carrito guardado para atender a otro cliente y retomarlo.
+// Vive en el navegador (por caja/dispositivo); sobrevive recargas.
+type HeldSale = { id: string; at: number; customerId: string; cart: CartLine[]; discountKind: "pct" | "amount"; discountValue: string };
+const HELD_KEY = "hits:pos:held";
+const loadHeld = (): HeldSale[] => { try { return JSON.parse(localStorage.getItem(HELD_KEY) || "[]") as HeldSale[]; } catch { return []; } };
+const saveHeld = (list: HeldSale[]) => { try { localStorage.setItem(HELD_KEY, JSON.stringify(list)); } catch { /* almacenamiento indisponible */ } };
 
 export default function PosPage() {
   const toast = useToast();
@@ -115,6 +122,24 @@ export default function PosPage() {
     haptics.tap();
     setSearch("");
   };
+
+  // --- Ventas en espera (apartados) ---
+  const [held, setHeld] = useState<HeldSale[]>([]);
+  useEffect(() => { setHeld(loadHeld()); }, []); // carga tras montar (evita desajuste de hidratación)
+  const hold = () => {
+    if (cart.length === 0) return;
+    const next: HeldSale[] = [{ id: crypto.randomUUID(), at: Date.now(), customerId, cart, discountKind, discountValue }, ...held];
+    setHeld(next); saveHeld(next);
+    setCart([]); setCustomerId(""); setDiscountValue("");
+    haptics.success(); toast.push("Venta guardada en espera", "success");
+  };
+  const resume = (h: HeldSale) => {
+    if (cart.length > 0) { haptics.error(); return toast.push("Cobra o guarda la venta actual antes de retomar otra", "error"); }
+    setCart(h.cart); setCustomerId(h.customerId); setDiscountKind(h.discountKind); setDiscountValue(h.discountValue);
+    const next = held.filter((x) => x.id !== h.id);
+    setHeld(next); saveHeld(next);
+  };
+  const discardHeld = (id: string) => { const next = held.filter((x) => x.id !== id); setHeld(next); saveHeld(next); };
 
   // Reparte el descuento del ticket entre los renglones (proporcional al importe de
   // cada uno). La última línea absorbe el redondeo para que la suma cuadre exacta.
@@ -233,8 +258,32 @@ export default function PosPage() {
 
         {/* Columna derecha: carrito + cobro */}
         <div className="space-y-4">
+          {/* Ventas en espera (apartados): retomar el carrito de otro cliente. */}
+          {held.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <p className="mb-2 text-xs font-semibold text-amber-800">En espera ({held.length})</p>
+              <ul className="space-y-1.5">
+                {held.map((h) => (
+                  <li key={h.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-2 text-sm">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{h.cart.length} {h.cart.length === 1 ? "producto" : "productos"} · {money(h.cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0))}</span>
+                      <span className="block text-xs text-gray-400">{new Date(h.at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </span>
+                    <span className="flex shrink-0 gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => resume(h)}>Retomar</Button>
+                      <IconButton tone="danger" size="sm" label="Descartar apartado" onClick={() => discardHeld(h.id)}><Trash2 className="h-4 w-4" /></IconButton>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="rounded-xl border border-gray-200 bg-white shadow-card">
-            <div className="border-b border-gray-100 px-4 py-3 text-sm font-semibold">Carrito ({cart.length})</div>
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 text-sm">
+              <span className="font-semibold">Carrito ({cart.length})</span>
+              {cart.length > 0 && <button type="button" onClick={hold} className="text-xs font-medium text-brand hover:underline">Guardar en espera</button>}
+            </div>
             {cart.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-gray-400">Escanea o agrega productos.</p>
             ) : (
