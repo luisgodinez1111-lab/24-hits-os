@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Minus, Plus, ScanLine, Trash2, Wallet } from "lucide-react";
-import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, useToast } from "@24hits/ui";
+import { Button, Combobox, FormField, IconButton, Input, PageHeader, Segmented, Select, useToast } from "@24hits/ui";
 import type { CashRegister, CashSession, Customer, PosLookup, QuickRegisterResult } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
@@ -36,6 +36,9 @@ export default function PosPage() {
   const [pickedSession, setPickedSession] = useState(""); // turno elegido si hay varios abiertos
   const [discountKind, setDiscountKind] = useState<"pct" | "amount">("pct");
   const [discountValue, setDiscountValue] = useState("");
+  const [received, setReceived] = useState("");   // efectivo recibido → cambio (pago simple)
+  const [split, setSplit] = useState(false);       // pago dividido (varios métodos)
+  const [splitPays, setSplitPays] = useState<Array<{ method: "CASH" | "CARD" | "TRANSFER" | "OTHER"; amount: string }>>([{ method: "CASH", amount: "" }]);
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
@@ -44,6 +47,15 @@ export default function PosPage() {
   const dv = Number(discountValue || 0);
   const discountAmount = round2(Math.min(discountKind === "pct" ? (subtotal * dv) / 100 : dv, subtotal));
   const total = round2(subtotal - discountAmount);
+
+  // Cambio (pago simple en efectivo) y cobertura del pago dividido.
+  const change = round2(Math.max(0, Number(received || 0) - total));
+  const paidSplit = round2(splitPays.reduce((s, p) => s + Number(p.amount || 0), 0));
+  const remainingSplit = round2(total - paidSplit);
+  const setPayRow = (i: number, patch: Partial<{ method: "CASH" | "CARD" | "TRANSFER" | "OTHER"; amount: string }>) =>
+    setSplitPays((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const addPayRow = () => setSplitPays((p) => [...p, { method: "CASH", amount: "" }]);
+  const removePayRow = (i: number) => setSplitPays((p) => p.filter((_, j) => j !== i));
   const openSessions = (cashSessions ?? []).filter((s) => s.status === "OPEN");
   const registerName = (id: string) => cashRegisters?.find((r) => r.id === id)?.name ?? "Caja";
   const activeSessionId = pickedSession || openSessions[0]?.id || ""; // turno al que se liga el efectivo
@@ -102,14 +114,18 @@ export default function PosPage() {
       warehouseId,
       customerId: customerId || undefined,
       items: saleItems(),
-      // El efectivo se liga al turno abierto (arqueo). Otros métodos no tocan el cajón.
-      payment: { method, ...(method === "CASH" && activeSessionId ? { cashSessionId: activeSessionId } : {}) },
+      // Pago simple, o DIVIDIDO (varios métodos que suman el total). El efectivo se liga
+      // al turno abierto (arqueo); otros métodos no tocan el cajón.
+      ...(split
+        ? { payments: splitPays.filter((p) => Number(p.amount) > 0).map((p) => ({ method: p.method, amount: round2(Number(p.amount)), ...(p.method === "CASH" && activeSessionId ? { cashSessionId: activeSessionId } : {}) })) }
+        : { payment: { method, ...(method === "CASH" && activeSessionId ? { cashSessionId: activeSessionId } : {}) } }),
       issueSaleNote: true,
     }),
     onSuccess: (res) => {
       haptics.success(); // doble pulso al cerrar la venta
       toast.push(`Venta registrada · ${res.order.number}${res.saleNote ? ` · Nota ${res.saleNote.number}` : ""}`, "success");
       setCart([]); setCustomerId(""); setDiscountValue("");
+      setReceived(""); setSplit(false); setSplitPays([{ method: "CASH", amount: "" }]);
     },
     onError: (e) => { haptics.error(); toast.push(e instanceof ApiError ? e.message : "Error al cobrar", "error"); },
   });
@@ -117,6 +133,7 @@ export default function PosPage() {
   function checkout() {
     if (!warehouseId) { haptics.error(); return toast.push("No tienes un almacén asignado. Pídele a un admin que lo configure.", "error"); }
     if (cart.length === 0) { haptics.error(); return toast.push("El carrito está vacío", "error"); }
+    if (split && Math.abs(remainingSplit) > 0.01) { haptics.error(); return toast.push(`Los pagos no cuadran el total (${remainingSplit > 0 ? "falta" : "sobra"} ${money(Math.abs(remainingSplit))})`, "error"); }
     sale.mutate();
   }
 
@@ -211,20 +228,69 @@ export default function PosPage() {
           </div>
 
           <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 shadow-card">
-            <FormField label="Método de pago">
-              <Segmented
-                full
-                ariaLabel="Método de pago"
-                value={method}
-                onChange={setMethod}
-                options={[
-                  { value: "CASH", label: "Efectivo" },
-                  { value: "CARD", label: "Tarjeta" },
-                  { value: "TRANSFER", label: "Transf." },
-                  { value: "OTHER", label: "Otro" },
-                ]}
-              />
-            </FormField>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Cobro</span>
+              <button type="button" onClick={() => setSplit((v) => !v)} className="text-xs font-medium text-brand hover:underline">
+                {split ? "← Un solo pago" : "Dividir pago"}
+              </button>
+            </div>
+
+            {!split ? (
+              <>
+                <Segmented
+                  full
+                  ariaLabel="Método de pago"
+                  value={method}
+                  onChange={setMethod}
+                  options={[
+                    { value: "CASH", label: "Efectivo" },
+                    { value: "CARD", label: "Tarjeta" },
+                    { value: "TRANSFER", label: "Transf." },
+                    { value: "OTHER", label: "Otro" },
+                  ]}
+                />
+                {/* Cambio: si paga en efectivo con más del total. Lo cobrado sigue siendo el total. */}
+                {method === "CASH" && (
+                  <FormField label="Recibido (para el cambio)">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                      <Input type="number" inputMode="decimal" min="0" className="pl-7" placeholder="0.00" value={received} onChange={(e) => setReceived(e.target.value)} />
+                    </div>
+                    {Number(received) > 0 && (
+                      <p className="mt-1.5 text-sm">{change > 0 ? <>Cambio: <b className="font-mono font-semibold text-green-600">{money(change)}</b></> : <span className="text-gray-400">Exacto, sin cambio</span>}</p>
+                    )}
+                  </FormField>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-600">Pagos (deben sumar el total)</p>
+                {splitPays.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Select value={p.method} onChange={(e) => setPayRow(i, { method: e.target.value as "CASH" | "CARD" | "TRANSFER" | "OTHER" })} className="w-28">
+                      <option value="CASH">Efectivo</option>
+                      <option value="CARD">Tarjeta</option>
+                      <option value="TRANSFER">Transf.</option>
+                      <option value="OTHER">Otro</option>
+                    </Select>
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                      <Input type="number" inputMode="decimal" min="0" className="pl-7" placeholder="0.00" value={p.amount} onChange={(e) => setPayRow(i, { amount: e.target.value })} />
+                    </div>
+                    {splitPays.length > 1 && (
+                      <IconButton tone="danger" size="sm" label="Quitar pago" onClick={() => removePayRow(i)}><Trash2 className="h-4 w-4" /></IconButton>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={addPayRow} className="text-xs font-medium text-brand hover:underline">+ Agregar pago</button>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-sm">
+                  <span className="text-gray-500">Pagado <b className="font-mono tabular-nums text-gray-700">{money(paidSplit)}</b></span>
+                  <span className={remainingSplit > 0.01 ? "font-semibold text-amber-600" : remainingSplit < -0.01 ? "font-semibold text-red-600" : "font-semibold text-green-600"}>
+                    {remainingSplit > 0.01 ? `Falta ${money(remainingSplit)}` : remainingSplit < -0.01 ? `Sobra ${money(-remainingSplit)}` : "Cubierto ✓"}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Descuento del ticket: % o monto. Se reparte a los renglones al cobrar. */}
             <FormField label="Descuento (opcional)">
