@@ -34,8 +34,16 @@ export default function PosPage() {
   const [manual, setManual] = useState("");
   const [quick, setQuick] = useState<{ open: boolean; barcode: string; type: ScanFormat }>({ open: false, barcode: "", type: "OTHER" });
   const [pickedSession, setPickedSession] = useState(""); // turno elegido si hay varios abiertos
+  const [discountKind, setDiscountKind] = useState<"pct" | "amount">("pct");
+  const [discountValue, setDiscountValue] = useState("");
 
-  const total = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  // Descuento al ticket (% o monto). Se muestra aquí y, al cobrar, se reparte entre los
+  // renglones (el backend ya calcula net = base − discount por línea).
+  const dv = Number(discountValue || 0);
+  const discountAmount = round2(Math.min(discountKind === "pct" ? (subtotal * dv) / 100 : dv, subtotal));
+  const total = round2(subtotal - discountAmount);
   const openSessions = (cashSessions ?? []).filter((s) => s.status === "OPEN");
   const registerName = (id: string) => cashRegisters?.find((r) => r.id === id)?.name ?? "Caja";
   const activeSessionId = pickedSession || openSessions[0]?.id || ""; // turno al que se liga el efectivo
@@ -72,12 +80,28 @@ export default function PosPage() {
     [warehouseId, addLine, toast]
   );
 
+  // Reparte el descuento del ticket entre los renglones (proporcional al importe de
+  // cada uno). La última línea absorbe el redondeo para que la suma cuadre exacta.
+  function saleItems() {
+    if (discountAmount <= 0 || subtotal <= 0) {
+      return cart.map((l) => ({ variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice }));
+    }
+    let remaining = discountAmount;
+    return cart.map((l, i) => {
+      const lineBase = l.unitPrice * l.quantity;
+      const share = i === cart.length - 1 ? remaining : round2((discountAmount * lineBase) / subtotal);
+      const d = Math.min(share, lineBase, remaining);
+      remaining = round2(remaining - d);
+      return { variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice, discount: d };
+    });
+  }
+
   // --- Cobrar ---
   const sale = useMutation({
     mutationFn: () => api.post<{ order: { number: string }; saleNote: { number: string } | null }>("/pos/sale", {
       warehouseId,
       customerId: customerId || undefined,
-      items: cart.map((l) => ({ variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice })),
+      items: saleItems(),
       // El efectivo se liga al turno abierto (arqueo). Otros métodos no tocan el cajón.
       payment: { method, ...(method === "CASH" && activeSessionId ? { cashSessionId: activeSessionId } : {}) },
       issueSaleNote: true,
@@ -85,7 +109,7 @@ export default function PosPage() {
     onSuccess: (res) => {
       haptics.success(); // doble pulso al cerrar la venta
       toast.push(`Venta registrada · ${res.order.number}${res.saleNote ? ` · Nota ${res.saleNote.number}` : ""}`, "success");
-      setCart([]); setCustomerId("");
+      setCart([]); setCustomerId(""); setDiscountValue("");
     },
     onError: (e) => { haptics.error(); toast.push(e instanceof ApiError ? e.message : "Error al cobrar", "error"); },
   });
@@ -168,9 +192,21 @@ export default function PosPage() {
                 ))}
               </ul>
             )}
-            <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
-              <span className="text-sm text-gray-500">Total</span>
-              <span className="font-mono text-xl font-bold tabular-nums">{money(total)}</span>
+            <div className="space-y-1 border-t border-gray-100 px-4 py-3 text-sm">
+              <div className="flex items-center justify-between text-gray-500">
+                <span>Subtotal</span>
+                <span className="font-mono tabular-nums">{money(subtotal)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between text-green-600">
+                  <span>Descuento{discountKind === "pct" && dv > 0 ? ` (${dv}%)` : ""}</span>
+                  <span className="font-mono tabular-nums">−{money(discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                <span className="font-semibold text-gray-700">Total</span>
+                <span className="font-mono text-xl font-bold tabular-nums">{money(total)}</span>
+              </div>
             </div>
           </div>
 
@@ -188,6 +224,22 @@ export default function PosPage() {
                   { value: "OTHER", label: "Otro" },
                 ]}
               />
+            </FormField>
+
+            {/* Descuento del ticket: % o monto. Se reparte a los renglones al cobrar. */}
+            <FormField label="Descuento (opcional)">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">{discountKind === "pct" ? "%" : "$"}</span>
+                  <Input type="number" inputMode="decimal" min="0" className="pl-7" placeholder="0" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} />
+                </div>
+                <Segmented
+                  ariaLabel="Tipo de descuento"
+                  value={discountKind}
+                  onChange={setDiscountKind}
+                  options={[{ value: "pct", label: "%" }, { value: "amount", label: "$" }]}
+                />
+              </div>
             </FormField>
 
             {/* Turno de caja (oportunista): si hay uno abierto, el efectivo entra a su
