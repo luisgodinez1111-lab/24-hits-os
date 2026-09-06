@@ -3,13 +3,15 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, ChevronRight, Droplet, FolderTree, MoreHorizontal, Package, Search, Tag } from "lucide-react";
+import { Barcode, ChevronRight, Droplet, FolderTree, MoreHorizontal, Package, ScanLine, Search, Tag } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Dialog, Dropdown, DropdownItem, EmptyState, Input, Skeleton, cn, useToast,
 } from "@24hits/ui";
 import type { Brand, Category, Flavor, ProductListItem, ProductPage, Variant } from "@/lib/catalog-types";
 import { api, ApiError } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
+import { FlavorsDialog, type FlavorModel } from "@/components/FlavorsDialog";
+import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 // --------------------------------------------------------------------------- helpers
 const money = (v?: string | null) => (v != null ? `$${Number(v).toFixed(2)}` : "—");
@@ -25,6 +27,7 @@ type TreeCtx = {
   isOpen: (id: string) => boolean;
   toggle: (id: string) => void;
   openNode: (id: string) => void;
+  openFlavors: (model: FlavorModel) => void; // abre el editor de sabores (alta de un tiro con código + edición)
   perms: { brand: boolean; createModel: boolean; editProduct: boolean };
   refreshTree: () => Promise<void>;
 };
@@ -155,10 +158,16 @@ function CatalogTree() {
   const anyOpen = nodes.some((n) => open.has(n.id));
   const toggleAll = () => setOpen(anyOpen ? new Set() : new Set(nodes.map((n) => n.id)));
 
+  // Editor de sabores (alta de un tiro con código + edición) y alta por escaneo: los
+  // mismos flujos que la tabla de Modelos, para que el árbol sea autosuficiente.
+  const [flavorsModel, setFlavorsModel] = useState<FlavorModel | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+
   const ctx: TreeCtx = {
     isOpen: (id) => open.has(id),
     toggle,
     openNode,
+    openFlavors: setFlavorsModel,
     perms,
     refreshTree: async () => {
       await qc.invalidateQueries({ queryKey: ["products", "tree"] });
@@ -185,9 +194,16 @@ function CatalogTree() {
         <div className="flex items-center gap-2">
           <Tag className="h-4 w-4 text-gray-400" />
           <span className="text-sm font-semibold text-gray-900">Marca · Modelo · Sabor</span>
-          <Link href="/app/catalog/products" className="ml-auto text-xs font-medium text-brand hover:underline">
-            Vista de modelos →
-          </Link>
+          <div className="ml-auto flex items-center gap-3">
+            {perms.createModel && (
+              <button onClick={() => setScanOpen(true)} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
+                <ScanLine className="h-3.5 w-3.5" /> Alta por escaneo
+              </button>
+            )}
+            <Link href="/app/catalog/products" className="text-xs font-medium text-gray-500 hover:underline">
+              Vista de modelos →
+            </Link>
+          </div>
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -262,6 +278,10 @@ function CatalogTree() {
           </div>
         )}
       </CardBody>
+      {/* Mismos flujos que la tabla de Modelos: editor de sabores (alta de un tiro con
+          código + edición) y alta por escaneo — sin salir del árbol. */}
+      <FlavorsDialog model={flavorsModel} onClose={() => setFlavorsModel(null)} onChanged={() => { void ctx.refreshTree(); }} />
+      <QuickRegisterDialog open={scanOpen} onClose={() => setScanOpen(false)} onRegistered={() => { void ctx.refreshTree(); }} />
     </Card>
   );
 }
@@ -447,7 +467,6 @@ function BrandNode({ node, ctx, forceOpen }: { node: BrandNodeData; ctx: TreeCtx
 function ModelNode({ model, ctx }: { model: ProductListItem; ctx: TreeCtx }) {
   const isOpen = ctx.isOpen(model.id);
   const inactive = model.status !== "ACTIVE";
-  const qc = useQueryClient();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
 
@@ -458,11 +477,6 @@ function ModelNode({ model, ctx }: { model: ProductListItem; ctx: TreeCtx }) {
   });
   const refresh = async () => { await refetch(); await ctx.refreshTree(); };
 
-  const addSabor = useMutation({
-    mutationFn: (v: { name: string; price?: number }) => api.post(`/products/${model.id}/variants`, { flavorName: v.name, name: v.name, ...(v.price != null ? { price: v.price } : {}) }),
-    onSuccess: async () => { await refresh(); void qc.invalidateQueries({ queryKey: ["flavors"] }); toast.push("Sabor agregado", "success"); },
-    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error al agregar", "error"),
-  });
   const setStatus = useMutation({
     mutationFn: (s: "ACTIVE" | "INACTIVE") => api.patch(`/products/${model.id}`, { status: s }),
     onSuccess: async (_r, s) => { await ctx.refreshTree(); toast.push(s === "INACTIVE" ? "Modelo dado de baja" : "Modelo reactivado", "success"); },
@@ -490,7 +504,7 @@ function ModelNode({ model, ctx }: { model: ProductListItem; ctx: TreeCtx }) {
         menu={
           ctx.perms.editProduct ? (
             <RowMenu label={`Acciones de ${model.name}`}>
-              <DropdownItem onClick={() => ctx.openNode(model.id)}>Agregar sabor</DropdownItem>
+              <DropdownItem onClick={() => ctx.openFlavors(model)}>Agregar sabor…</DropdownItem>
               <DropdownItem onClick={() => setStatus.mutate(inactive ? "ACTIVE" : "INACTIVE")}>{inactive ? "Reactivar" : "Dar de baja"}</DropdownItem>
               <DropdownItem onClick={() => setConfirming(true)}><span className="text-red-600">Eliminar modelo…</span></DropdownItem>
             </RowMenu>
@@ -510,7 +524,10 @@ function ModelNode({ model, ctx }: { model: ProductListItem; ctx: TreeCtx }) {
               )}
               {ctx.perms.editProduct && (
                 <li>
-                  <AddRow icon={<Droplet className="h-3.5 w-3.5" />} placeholder="Agregar sabor…" withPrice pending={addSabor.isPending} onSubmit={(name, price) => addSabor.mutate({ name, price })} />
+                  <button type="button" onClick={() => ctx.openFlavors(model)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-brand hover:bg-brand/5">
+                    <Droplet className="h-3.5 w-3.5" /> Agregar sabor (con código y precio)…
+                  </button>
                 </li>
               )}
             </>
