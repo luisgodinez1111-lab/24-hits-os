@@ -127,13 +127,16 @@ export class MemberService {
         expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
       },
     });
-    // Envío directo; no bloquea la invitación si el correo falla (se puede reenviar).
+    // Link para que el invitado establezca su contraseña. Se DEVUELVE al admin para que
+    // lo comparta (WhatsApp, etc.) — no dependemos del correo. El envío por email queda
+    // como intento extra (no bloquea si no hay proveedor configurado).
+    const inviteUrl = `${this.env.APP_URL}/reset-password?token=${token}`;
     await this.email
       .send({
         to: user.email,
         subject: "Te invitaron a 24 HITS OS",
         template: "member-invitation",
-        data: { url: `${this.env.APP_URL}/reset-password?token=${token}` },
+        data: { url: inviteUrl },
       })
       .catch(() => undefined);
 
@@ -144,7 +147,7 @@ export class MemberService {
       entityId: membership.id,
       after: { email: user.email, roleIds: input.roleIds },
     });
-    return { membershipId: membership.id };
+    return { membershipId: membership.id, inviteUrl };
   }
 
   async updateRoles(
