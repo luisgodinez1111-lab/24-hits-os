@@ -15,7 +15,7 @@ import { QuickRegisterDialog } from "@/components/QuickRegisterDialog";
 
 interface CartLine { variantId: string; sku: string; name: string; unitPrice: number; quantity: number; available: string | null }
 // Fila del catálogo plano (GET /variants/catalog) para buscar por nombre en el POS.
-type ProdRow = { id: string; modelo: string | null; marca: string | null; sabor: string; sku: string; status: string; price: string | null; barcode: string | null; stock: number };
+type ProdRow = { id: string; modelo: string | null; marca: string | null; sabor: string; sku: string; status: string; price: string | null; cost: string | null; barcode: string | null; stock: number };
 
 // Venta EN ESPERA (apartado): el carrito guardado para atender a otro cliente y retomarlo.
 // Vive en el navegador (por caja/dispositivo); sobrevive recargas.
@@ -32,6 +32,7 @@ export default function PosPage() {
   // Turno de caja abierto (oportunista): si hay uno, el efectivo del POS entra a su
   // arqueo. Solo se consulta si el usuario puede ver caja; si no, cobra como hoy.
   const canReadCash = hasPermission(me, "cash.read");
+  const canReadCosts = hasPermission(me, "costs.read"); // margen visible solo con este permiso
   const { data: cashSessions } = useQuery({ queryKey: ["cash-sessions"], queryFn: () => api.get<CashSession[]>("/cash-sessions"), enabled: canReadCash });
   const { data: cashRegisters } = useQuery({ queryKey: ["cash-registers"], queryFn: () => api.get<CashRegister[]>("/cash-registers"), enabled: canReadCash });
 
@@ -104,6 +105,23 @@ export default function PosPage() {
   // --- Buscar producto por nombre (además del escaneo) ---
   const [search, setSearch] = useState("");
   const { data: catalog } = useQuery({ queryKey: ["pos-catalog"], queryFn: () => api.get<ProdRow[]>("/variants/catalog") });
+
+  // Margen (solo con costs.read): costo promedio por variante desde el catálogo.
+  // El costo del carrito y el margen post-descuento se muestran junto al total; el
+  // costByVariant también da el margen por renglón. Si a alguna línea le falta costo,
+  // no se afirma un margen (se avisa que falta costo).
+  const costByVariant = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of catalog ?? []) if (r.cost != null) m.set(r.id, Number(r.cost));
+    return m;
+  }, [catalog]);
+  const cartCost = round2(cart.reduce((s, l) => s + (costByVariant.get(l.variantId) ?? 0) * l.quantity, 0));
+  const allCosted = cart.length > 0 && cart.every((l) => costByVariant.has(l.variantId));
+  const missingCost = cart.filter((l) => !costByVariant.has(l.variantId)).length;
+  const marginAmount = round2(total - cartCost); // margen sobre el total ya con descuento
+  const marginPct = total > 0 ? (marginAmount / total) * 100 : 0;
+  const showMargin = canReadCosts && cart.length > 0;
+
   const results = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [] as ProdRow[];
@@ -325,6 +343,17 @@ export default function PosPage() {
                 <span className="font-semibold text-gray-700">Total</span>
                 <span className="font-mono text-xl font-bold tabular-nums">{money(total)}</span>
               </div>
+              {showMargin && (allCosted ? (
+                <div className="flex items-center justify-between text-xs text-gray-400" title="Precio de venta menos costo promedio, ya con el descuento aplicado">
+                  <span>Margen estimado</span>
+                  <span className="font-mono tabular-nums"><span className={marginAmount >= 0 ? "font-semibold text-gray-500" : "font-semibold text-red-500"}>{money(marginAmount)}</span> · {marginPct.toFixed(0)}%</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs text-gray-300">
+                  <span>Margen estimado</span>
+                  <span>falta costo de {missingCost} {missingCost === 1 ? "producto" : "productos"}</span>
+                </div>
+              ))}
             </div>
           </div>
 

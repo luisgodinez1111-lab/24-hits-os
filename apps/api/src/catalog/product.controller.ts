@@ -4,6 +4,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
+import { PermissionService } from "../iam/permission.service.js";
 import { ProductService } from "./product.service.js";
 import {
   addBarcodeSchema,
@@ -76,7 +77,10 @@ export class ProductController {
 @ApiTags("variants")
 @Controller("variants")
 export class VariantController {
-  constructor(private readonly products: ProductService) {}
+  constructor(
+    private readonly products: ProductService,
+    private readonly permissions: PermissionService
+  ) {}
 
   @Get()
   @RequirePermissions("products.read")
@@ -88,8 +92,10 @@ export class VariantController {
   // código · stock. Antes de :id para no colisionar (aunque no hay GET :id aquí).
   @Get("catalog")
   @RequirePermissions("products.read")
-  catalog(@CurrentUser() u: AuthContext) {
-    return this.products.catalogVariants(u.organizationId!);
+  async catalog(@CurrentUser() u: AuthContext) {
+    // El costo (para margen) solo se incluye si el usuario puede ver costos.
+    const canReadCosts = await this.permissions.can(u.membershipId!, ["costs.read"]);
+    return this.products.catalogVariants(u.organizationId!, canReadCosts);
   }
 
   @Post(":id/barcodes")

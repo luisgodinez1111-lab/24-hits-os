@@ -387,7 +387,7 @@ export class ProductService {
   // Catálogo PLANO para la vista de tabla: TODOS los sabores con modelo · marca ·
   // precio · código principal · stock. La búsqueda/orden/filtro se hacen en el front
   // (miles de filas ligeras). Stock desde InventoryBalance (materializado, sin ledger).
-  async catalogVariants(organizationId: string) {
+  async catalogVariants(organizationId: string, canReadCosts = false) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const variants = await tx.productVariant.findMany({
         select: {
@@ -417,6 +417,14 @@ export class ProductService {
       const balances = await tx.inventoryBalance.groupBy({ by: ["variantId"], where: { variantId: { in: variantIds } }, _sum: { onHand: true } });
       const stockMap = new Map(balances.map((b) => [b.variantId, Number(b._sum.onHand ?? 0)]));
 
+      // Costo promedio móvil por variante — SOLO si el usuario puede ver costos
+      // (para calcular el margen en el POS/catálogo). Si no, cost queda null.
+      const costMap = new Map<string, string>();
+      if (canReadCosts) {
+        const costs = await tx.variantCost.findMany({ where: { variantId: { in: variantIds } }, select: { variantId: true, averageCost: true } });
+        for (const c of costs) costMap.set(c.variantId, c.averageCost.toString());
+      }
+
       return variants.map((v) => {
         const primary = v.barcodes.find((b) => b.isPrimary) ?? v.barcodes[0] ?? null;
         return {
@@ -428,6 +436,7 @@ export class ProductService {
           sku: v.sku,
           status: v.status,
           price: priceMap.get(v.id) ?? null,
+          cost: costMap.get(v.id) ?? null,
           barcode: primary?.barcode ?? null,
           barcodeCount: v.barcodes.length,
           stock: stockMap.get(v.id) ?? 0,
