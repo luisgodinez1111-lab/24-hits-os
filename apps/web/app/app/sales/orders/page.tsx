@@ -52,11 +52,26 @@ export default function SalesOrdersPage() {
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<Order | null>(null);
   const [locating, setLocating] = useState<Order | null>(null);
+  const [filter, setFilter] = useState<"all" | "unpaid" | "pending">("all");
   const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["sales-orders"], queryFn: () => api.get<Order[]>("/orders") });
   const { data: customers } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
 
+  // Deep-link: "?pay=unpaid" (por cobrar) o "?delivery=pending" (por entregar), desde
+  // el Inicio y desde Caja → aterriza en la lista ya filtrada.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("pay") === "unpaid") setFilter("unpaid");
+    else if (q.get("delivery") === "pending") setFilter("pending");
+  }, []);
+
   const customerName = (id: string | null) => (id ? customers?.find((c) => c.id === id)?.name ?? id.slice(0, 8) : "Mostrador");
   const refresh = () => qc.invalidateQueries({ queryKey: ["sales-orders"] });
+  const matchesFilter = (o: Order) =>
+    filter === "all" ? true
+      : filter === "unpaid" ? o.status !== "CANCELLED" && o.paymentStatus !== "PAID"
+        : o.deliveryStatus === "PENDING" || o.deliveryStatus === "DISPATCHED";
+  const shown = (data ?? []).filter(matchesFilter);
 
   const action = useMutation({
     mutationFn: ({ id, verb }: { id: string; verb: string }) => api.post(`/orders/${id}/${verb}`),
@@ -126,10 +141,26 @@ export default function SalesOrdersPage() {
           action={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo pedido</Button>}
         />
       ) : (
-        <Table stickyHeader>
+        <>
+          <div className="mb-3">
+            <Segmented
+              ariaLabel="Filtrar pedidos"
+              value={filter}
+              onChange={(v) => setFilter(v)}
+              options={[
+                { value: "all", label: `Todos (${data.length})` },
+                { value: "unpaid", label: "Por cobrar" },
+                { value: "pending", label: "Por entregar" },
+              ]}
+            />
+          </div>
+          {shown.length === 0 ? (
+            <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin resultados" description="Ningún pedido con este filtro." />
+          ) : (
+          <Table stickyHeader>
           <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH>Entrega</TH><TH className="text-right">Acciones</TH></TR></THead>
           <TBody>
-            {data.map((o) => (
+            {shown.map((o) => (
               <TR key={o.id}>
                 <TD className="font-mono text-xs">{o.number}</TD>
                 <TD className="font-medium">
@@ -191,6 +222,8 @@ export default function SalesOrdersPage() {
             ))}
           </TBody>
         </Table>
+          )}
+        </>
       )}
 
       <CreateOrderDialog open={creating} onClose={() => setCreating(false)} customers={customers ?? []}
