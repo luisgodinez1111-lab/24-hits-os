@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Pencil, Plus, UserSquare, Wallet } from "lucide-react";
@@ -61,7 +62,7 @@ export default function CustomersPage() {
             {data.map((c) => (
               <TR key={c.id}>
                 <TD className="font-mono text-xs text-gray-500">{c.code ?? "—"}</TD>
-                <TD className="font-medium">{c.name}</TD>
+                <TD className="font-medium"><Link href={`/app/sales/customers/${c.id}`} className="text-brand hover:underline">{c.name}</Link></TD>
                 <TD className="text-gray-500">{c.phone ?? "—"}</TD>
                 <TD>{c.zone ? <Badge tone={zoneTone[c.zone]}>{zoneLabel[c.zone]}</Badge> : <span className="text-gray-300">—</span>}</TD>
                 <TD className="text-right tabular-nums">{c.orderCount ?? 0}</TD>

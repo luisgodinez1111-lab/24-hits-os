@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -132,7 +133,9 @@ export default function SalesOrdersPage() {
               <TR key={o.id}>
                 <TD className="font-mono text-xs">{o.number}</TD>
                 <TD className="font-medium">
-                  {customerName(o.customerId)}
+                  {o.customerId
+                    ? <Link href={`/app/sales/customers/${o.customerId}`} className="text-brand hover:underline">{customerName(o.customerId)}</Link>
+                    : customerName(o.customerId)}
                   {/* Qué se entrega: vape (modelo) · sabor · cantidad, por renglón. */}
                   {o.items?.length ? (
                     <ul className="mt-1 space-y-0.5 font-normal">
