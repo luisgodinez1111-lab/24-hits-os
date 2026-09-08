@@ -15,7 +15,7 @@ function available(b: {
 }
 
 // Genera notificaciones LOW_STOCK (difusión a la organización) para las políticas de
-// inventario cuyo disponible cae en o por debajo del mínimo. Deduplica por
+// inventario cuyo disponible cae en o por debajo del punto de reorden. Deduplica por
 // (almacén, variante) en una ventana de 24h para no repetir la misma alerta.
 // Debe ejecutarse dentro de una transacción de tenant (withTenant). Reutilizado por
 // el worker (cron, cross-tenant) y por el endpoint de escaneo bajo demanda (ADR-026).
@@ -24,21 +24,29 @@ export async function scanLowStockForOrg(
   organizationId: string,
   now: Date = new Date()
 ): Promise<number> {
+  // Umbral unificado: el punto de reorden manda; si no está, cae al mínimo. Mismo
+  // criterio que el estado "Reorden" de Existencias y las sugerencias de compra.
   const policies = await tx.inventoryPolicy.findMany({
-    where: { organizationId, enabled: true, minimumStock: { gt: 0 } },
-    select: { warehouseId: true, variantId: true, minimumStock: true },
+    where: {
+      organizationId,
+      enabled: true,
+      OR: [{ reorderPoint: { gt: 0 } }, { minimumStock: { gt: 0 } }],
+    },
+    select: { warehouseId: true, variantId: true, minimumStock: true, reorderPoint: true },
   });
 
   let created = 0;
   const since = new Date(now.getTime() - DEDUPE_WINDOW_MS);
 
   for (const policy of policies) {
+    const threshold = policy.reorderPoint ?? policy.minimumStock;
+    if (threshold.lte(0)) continue;
     const balance = await tx.inventoryBalance.findFirst({
       where: { organizationId, warehouseId: policy.warehouseId, variantId: policy.variantId },
       select: { onHand: true, reserved: true, allocated: true, damaged: true, quarantine: true },
     });
     const avail = balance ? available(balance) : new Prisma.Decimal(0);
-    if (avail.gt(policy.minimumStock)) continue;
+    if (avail.gt(threshold)) continue;
 
     const dedupeKey = `low-stock:${policy.warehouseId}:${policy.variantId}`;
     const recent = await tx.notification.findFirst({
@@ -60,7 +68,7 @@ export async function scanLowStockForOrg(
         type: "LOW_STOCK",
         severity: avail.lte(0) ? "CRITICAL" : "WARNING",
         title: avail.lte(0) ? "Sin existencias" : "Stock bajo",
-        body: `${label}: disponible ${avail.toString()}, mínimo ${policy.minimumStock.toString()}.`,
+        body: `${label}: disponible ${avail.toString()}, punto de reorden ${threshold.toString()}.`,
         entityType: "ProductVariant",
         entityId: policy.variantId,
         dedupeKey,

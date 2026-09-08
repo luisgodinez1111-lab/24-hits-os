@@ -94,6 +94,21 @@ describe("Notificaciones — stock bajo, deduplicación y lectura (ADR-026)", ()
     expect(low!.severity).toBe("WARNING");
   });
 
+  it("dispara con el punto de reorden aunque el mínimo sea 0", async () => {
+    const v = await createVariant();
+    await inventory.openingBalance(orgId, userId, { warehouseId, variantId: v, quantity: 8, unitCost: 10 });
+    // Solo punto de reorden (mínimo 0), como lo fija el diálogo de Existencias.
+    await withSystem(prisma, (tx) =>
+      tx.inventoryPolicy.create({
+        data: { organizationId: orgId, warehouseId, variantId: v, minimumStock: 0, reorderPoint: 10, enabled: true },
+      })
+    );
+    const res = await notifications.scanLowStock(orgId);
+    expect(res.created).toBe(1);
+    const list = await notifications.list(orgId, userId);
+    expect(list.some((n) => n.type === "LOW_STOCK" && n.entityId === v)).toBe(true);
+  });
+
   it("marca CRITICAL cuando no hay disponibilidad", async () => {
     const v = await createVariant();
     await withSystem(prisma, (tx) => tx.inventoryPolicy.create({ data: { organizationId: orgId, warehouseId, variantId: v, minimumStock: 5, enabled: true } }));
