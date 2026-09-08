@@ -6,9 +6,11 @@ import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { SupplierService } from "./supplier.service.js";
 import {
+  bulkSetSupplierReferenceSchema,
   createSupplierSchema,
   setSupplierReferenceSchema,
   updateSupplierSchema,
+  type BulkSetSupplierReferenceInput,
   type CreateSupplierInput,
   type SetSupplierReferenceInput,
   type UpdateSupplierInput,
@@ -51,5 +53,12 @@ export class SupplierController {
   @RequirePermissions("suppliers.manage")
   setReference(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(setSupplierReferenceSchema)) b: SetSupplierReferenceInput) {
     return this.suppliers.setReference(u.organizationId!, id, b);
+  }
+
+  // Asignación masiva: este proveedor como preferido de varias variantes de una vez.
+  @Post(":id/references/bulk")
+  @RequirePermissions("suppliers.manage")
+  bulkSetReferences(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(bulkSetSupplierReferenceSchema)) b: BulkSetSupplierReferenceInput) {
+    return this.suppliers.bulkSetReferences(u.organizationId!, id, b);
   }
 }

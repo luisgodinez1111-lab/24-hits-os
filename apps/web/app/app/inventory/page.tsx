@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, ListChecks, PackagePlus, Search, SlidersHorizontal, Target } from "lucide-react";
+import { Boxes, ListChecks, PackagePlus, Search, SlidersHorizontal, Target, Truck } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
   PageHeader,
@@ -14,6 +14,7 @@ import { hasPermission, useMe } from "@/lib/me";
 import { StockAdjustDialog } from "@/components/StockAdjustDialog";
 import { ReorderPolicyDialog, type ReorderPolicyTarget } from "@/components/ReorderPolicyDialog";
 import { BulkReorderPolicyDialog } from "@/components/BulkReorderPolicyDialog";
+import { BulkAssignSupplierDialog } from "@/components/BulkAssignSupplierDialog";
 
 type PolicyRow = {
   variantId: string; warehouseId: string; minimumStock: number;
@@ -40,9 +41,12 @@ export default function InventoryPage() {
   const [stockDialog, setStockDialog] = useState<{ variantId?: string; warehouseId?: string } | null>(null);
   const [policyDialog, setPolicyDialog] = useState<ReorderPolicyTarget | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const { data: me } = useMe();
   const canAdjust = hasPermission(me, "inventory.adjust");
+  const canManageSuppliers = hasPermission(me, "suppliers.manage");
+  const canBulk = canAdjust || canManageSuppliers;
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
   const { data: policies } = useQuery({ queryKey: ["inventory-policies"], queryFn: () => api.get<PolicyRow[]>("/inventory/policies") });
   const policyMap = useMemo(() => {
@@ -79,6 +83,7 @@ export default function InventoryPage() {
   const selectedVisible = detailRows.filter((r) => selected.has(rowKey(r)));
   const bulkTargets = selectedVisible.length > 0 ? selectedVisible : detailRows;
   const bulkItems = bulkTargets.map((r) => ({ variantId: r.variantId, warehouseId: r.warehouseId }));
+  const bulkVariantIds = [...new Set(bulkTargets.map((r) => r.variantId))];
   const bulkScopeLabel =
     selectedVisible.length > 0
       ? `${selectedVisible.length} producto(s) seleccionado(s)`
@@ -184,11 +189,21 @@ export default function InventoryPage() {
                   checked={lowStock} onChange={(e) => setLowStock(e.target.checked)} />
                 Solo stock bajo / agotado
               </label>
-              {canAdjust && (
-                <Button variant="outline" size="sm" className="ml-auto" disabled={detailRows.length === 0} onClick={() => setBulkOpen(true)}>
-                  <ListChecks className="h-4 w-4" />
-                  {selectedVisible.length > 0 ? `Reorden en masa (${selectedVisible.length})` : "Reorden en masa"}
-                </Button>
+              {canBulk && (
+                <div className="ml-auto flex flex-wrap gap-2">
+                  {canAdjust && (
+                    <Button variant="outline" size="sm" disabled={detailRows.length === 0} onClick={() => setBulkOpen(true)}>
+                      <ListChecks className="h-4 w-4" />
+                      {selectedVisible.length > 0 ? `Reorden en masa (${selectedVisible.length})` : "Reorden en masa"}
+                    </Button>
+                  )}
+                  {canManageSuppliers && (
+                    <Button variant="outline" size="sm" disabled={detailRows.length === 0} onClick={() => setAssignOpen(true)}>
+                      <Truck className="h-4 w-4" />
+                      {selectedVisible.length > 0 ? `Asignar proveedor (${selectedVisible.length})` : "Asignar proveedor"}
+                    </Button>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -241,7 +256,7 @@ export default function InventoryPage() {
         <Table stickyHeader>
           <THead>
             <TR>
-              {canAdjust && (
+              {canBulk && (
                 <TH className="w-8">
                   <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
                     aria-label="Seleccionar todo" checked={allVisibleSelected} onChange={toggleAllVisible} />
@@ -269,7 +284,7 @@ export default function InventoryPage() {
                 });
               return (
                 <TR key={k}>
-                  {canAdjust && (
+                  {canBulk && (
                     <TD>
                       <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
                         aria-label="Seleccionar producto" checked={selected.has(k)} onChange={() => toggleRow(k)} />
@@ -339,6 +354,15 @@ export default function InventoryPage() {
             onDone={() => { setBulkOpen(false); setSelected(new Set()); }}
           />
         </>
+      )}
+      {canManageSuppliers && (
+        <BulkAssignSupplierDialog
+          open={assignOpen}
+          variantIds={bulkVariantIds}
+          scopeLabel={bulkScopeLabel}
+          onClose={() => setAssignOpen(false)}
+          onDone={() => { setAssignOpen(false); setSelected(new Set()); }}
+        />
       )}
     </div>
   );
