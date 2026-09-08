@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { withSystem, withTenant, type ExtendedPrismaClient } from "./client.js";
 import { computeBalanceBuckets } from "./inventory-compute.js";
-import { scanLowStockForOrg } from "./notifications.js";
+import { scanLowStockForOrg, scanStaleCashSessionsForOrg } from "./notifications.js";
 
 // Redes de seguridad de inventario, cross-tenant y worker-agnósticas (devuelven datos,
 // el caller decide cómo registrarlas). Las usan tanto el worker persistente como el
@@ -252,6 +252,25 @@ export async function scanLowStockAllOrgs(
   let created = 0;
   for (const org of orgs) {
     created += await withTenant(prisma, org.id, (tx) => scanLowStockForOrg(tx, org.id, now));
+  }
+  return created;
+}
+
+// Recordatorio de corte de caja: turnos abiertos demasiado tiempo, cross-tenant.
+export async function scanStaleCashSessionsAllOrgs(
+  prisma: ExtendedPrismaClient,
+  now: Date = new Date()
+): Promise<number> {
+  const orgs = await withSystem(prisma, (tx) =>
+    tx.organization.findMany({
+      where: { status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
+      select: { id: true },
+    })
+  );
+
+  let created = 0;
+  for (const org of orgs) {
+    created += await withTenant(prisma, org.id, (tx) => scanStaleCashSessionsForOrg(tx, org.id, now));
   }
   return created;
 }

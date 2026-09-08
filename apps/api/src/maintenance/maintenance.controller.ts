@@ -9,6 +9,7 @@ import {
   notifyPaymentDrift,
   reconcileOrphanOrderHolds,
   scanLowStockAllOrgs,
+  scanStaleCashSessionsAllOrgs,
 } from "@24hits/database";
 import { ENV } from "../config/app-config.module.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -45,6 +46,8 @@ export class MaintenanceController {
     const driftAlerts = await notifyInventoryDrift(prisma, drift);
     const paymentDrift = await detectPaymentDrift(prisma);
     const paymentDriftAlerts = await notifyPaymentDrift(prisma, paymentDrift);
+    // Recordatorio de corte de caja: turnos abiertos demasiado tiempo (rompe el arqueo).
+    const staleCashSessions = await scanStaleCashSessionsAllOrgs(prisma);
 
     return {
       ok: true,
@@ -56,6 +59,7 @@ export class MaintenanceController {
       driftAlerts, // notificaciones CRÍTICAS creadas por descuadre de inventario
       paymentDrift: paymentDrift.length, // >0 = pedidos con paymentStatus que no cuadra
       paymentDriftAlerts,
+      staleCashSessions, // notificaciones de turnos de caja abiertos demasiado tiempo
     };
   }
 
