@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, PackagePlus, Search, SlidersHorizontal, Target } from "lucide-react";
+import { Boxes, ListChecks, PackagePlus, Search, SlidersHorizontal, Target } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
   PageHeader,
@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
 import { StockAdjustDialog } from "@/components/StockAdjustDialog";
 import { ReorderPolicyDialog, type ReorderPolicyTarget } from "@/components/ReorderPolicyDialog";
+import { BulkReorderPolicyDialog } from "@/components/BulkReorderPolicyDialog";
 
 type PolicyRow = {
   variantId: string; warehouseId: string; minimumStock: number;
@@ -38,6 +39,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [stockDialog, setStockDialog] = useState<{ variantId?: string; warehouseId?: string } | null>(null);
   const [policyDialog, setPolicyDialog] = useState<ReorderPolicyTarget | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const { data: me } = useMe();
   const canAdjust = hasPermission(me, "inventory.adjust");
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
@@ -64,6 +67,37 @@ export default function InventoryPage() {
     (r.product ?? "").toLowerCase().includes(term) ||
     (r.flavor ?? "").toLowerCase().includes(term) ||
     (r.sku ?? "").toLowerCase().includes(term);
+
+  // Filas visibles en la vista Detalle (respetan búsqueda + filtros de arriba).
+  // Son el universo de la selección y de la carga masiva de puntos de reorden.
+  const rowKey = (r: { warehouseId: string; variantId: string }) => `${r.warehouseId}:${r.variantId}`;
+  const detailRows = useMemo(
+    () => (view === "detail" ? (data ?? []).filter(matches) : []),
+    [data, term, view]
+  );
+  // Objetivo de la carga masiva: lo seleccionado (si hay), si no, todo lo filtrado.
+  const selectedVisible = detailRows.filter((r) => selected.has(rowKey(r)));
+  const bulkTargets = selectedVisible.length > 0 ? selectedVisible : detailRows;
+  const bulkItems = bulkTargets.map((r) => ({ variantId: r.variantId, warehouseId: r.warehouseId }));
+  const bulkScopeLabel =
+    selectedVisible.length > 0
+      ? `${selectedVisible.length} producto(s) seleccionado(s)`
+      : `los ${detailRows.length} producto(s) filtrados`;
+  const allVisibleSelected = detailRows.length > 0 && selectedVisible.length === detailRows.length;
+  const toggleAllVisible = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) detailRows.forEach((r) => next.delete(rowKey(r)));
+      else detailRows.forEach((r) => next.add(rowKey(r)));
+      return next;
+    });
+  const toggleRow = (k: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
 
   // Pivote: una fila por variante (modelo · sabor), una columna por bodega.
   const pivot = useMemo(() => {
@@ -150,6 +184,12 @@ export default function InventoryPage() {
                   checked={lowStock} onChange={(e) => setLowStock(e.target.checked)} />
                 Solo stock bajo / agotado
               </label>
+              {canAdjust && (
+                <Button variant="outline" size="sm" className="ml-auto" disabled={detailRows.length === 0} onClick={() => setBulkOpen(true)}>
+                  <ListChecks className="h-4 w-4" />
+                  {selectedVisible.length > 0 ? `Reorden en masa (${selectedVisible.length})` : "Reorden en masa"}
+                </Button>
+              )}
             </>
           )}
         </CardBody>
@@ -201,6 +241,12 @@ export default function InventoryPage() {
         <Table stickyHeader>
           <THead>
             <TR>
+              {canAdjust && (
+                <TH className="w-8">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
+                    aria-label="Seleccionar todo" checked={allVisibleSelected} onChange={toggleAllVisible} />
+                </TH>
+              )}
               <TH>Almacén</TH><TH>SKU</TH><TH>Producto</TH><TH>Sabor</TH>
               <TH className="text-right">On hand</TH><TH className="text-right">Reservado</TH>
               <TH className="text-right">Disponible</TH><TH className="text-right">Dañado</TH>
@@ -209,8 +255,9 @@ export default function InventoryPage() {
             </TR>
           </THead>
           <TBody>
-            {data.filter(matches).map((r) => {
+            {detailRows.map((r) => {
               const p = policyMap.get(`${r.warehouseId}:${r.variantId}`);
+              const k = rowKey(r);
               const openPolicy = () =>
                 setPolicyDialog({
                   variantId: r.variantId,
@@ -221,7 +268,13 @@ export default function InventoryPage() {
                   targetStock: p?.targetStock ?? null,
                 });
               return (
-                <TR key={`${r.warehouseId}:${r.variantId}`}>
+                <TR key={k}>
+                  {canAdjust && (
+                    <TD>
+                      <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
+                        aria-label="Seleccionar producto" checked={selected.has(k)} onChange={() => toggleRow(k)} />
+                    </TD>
+                  )}
                   <TD className="font-medium">{r.warehouseName ?? "—"}</TD>
                   <TD className="font-mono text-xs">{r.sku ?? "—"}</TD>
                   <TD className="font-medium">{r.product ?? "—"}</TD>
@@ -277,6 +330,13 @@ export default function InventoryPage() {
             target={policyDialog}
             onClose={() => setPolicyDialog(null)}
             onDone={() => setPolicyDialog(null)}
+          />
+          <BulkReorderPolicyDialog
+            open={bulkOpen}
+            items={bulkItems}
+            scopeLabel={bulkScopeLabel}
+            onClose={() => setBulkOpen(false)}
+            onDone={() => { setBulkOpen(false); setSelected(new Set()); }}
           />
         </>
       )}

@@ -64,6 +64,23 @@ export const upsertPolicySchema = z.object({
 });
 export type UpsertPolicyBody = z.infer<typeof upsertPolicySchema>;
 
+// Carga masiva: aplica el mismo punto de reorden / stock objetivo a varios productos
+// (pares variante+almacén) de una vez. Pensado para catálogos grandes.
+export const bulkUpsertPolicySchema = z
+  .object({
+    items: z
+      .array(z.object({ variantId: z.string().uuid(), warehouseId: z.string().uuid() }))
+      .min(1)
+      .max(2000),
+    reorderPoint: z.coerce.number().positive(),
+    targetStock: z.coerce.number().positive().nullable().optional(),
+  })
+  .refine((d) => d.targetStock == null || d.targetStock >= d.reorderPoint, {
+    message: "El stock objetivo debe ser mayor o igual al punto de reorden",
+    path: ["targetStock"],
+  });
+export type BulkUpsertPolicyBody = z.infer<typeof bulkUpsertPolicySchema>;
+
 export const balancesQuerySchema = z.object({
   warehouseId: z.string().uuid().optional(),
   variantId: z.string().uuid().optional(),
