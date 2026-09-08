@@ -22,17 +22,24 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
   app.enableCors({ origin: env.APP_URL, credentials: true });
 
+  // Detrás de Vercel/proxy: confía en el primer x-forwarded-for para que req.ip sea
+  // la IP real del cliente (rate limiting por IP correcto).
+  app.getHttpAdapter().getInstance().set("trust proxy", 1);
+
   // /health y /ready quedan en la raíz; el resto bajo /api/v1.
   app.setGlobalPrefix("api/v1", { exclude: ["health", "ready"] });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("24 HITS OS API")
-    .setDescription("API del núcleo SaaS (auth, tenancy, RBAC, auditoría)")
-    .setVersion("1.0")
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("api/v1/docs", app, document);
+  // Swagger SOLO fuera de producción: no exponer el mapa de la API en prod.
+  if (env.NODE_ENV !== "production") {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("24 HITS OS API")
+      .setDescription("API del núcleo SaaS (auth, tenancy, RBAC, auditoría)")
+      .setVersion("1.0")
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup("api/v1/docs", app, document);
+  }
 
   await app.listen(env.PORT);
 

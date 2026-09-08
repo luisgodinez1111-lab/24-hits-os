@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
+import { RateLimit } from "../common/decorators/rate-limit.decorator.js";
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { SupplierService } from "./supplier.service.js";
@@ -57,6 +58,7 @@ export class SupplierController {
 
   // Asignación masiva: este proveedor como preferido de varias variantes de una vez.
   @Post(":id/references/bulk")
+  @RateLimit({ limit: 20, windowSec: 60 })
   @RequirePermissions("suppliers.manage")
   bulkSetReferences(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(bulkSetSupplierReferenceSchema)) b: BulkSetSupplierReferenceInput) {
     return this.suppliers.bulkSetReferences(u.organizationId!, id, b);

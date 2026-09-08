@@ -29,6 +29,11 @@ export const envSchema = z.object({
   COOKIE_SAMESITE: z.enum(["lax", "none", "strict"]).default("lax"),
   COOKIE_DOMAIN: z.string().optional(),
 
+  // Rate limiting: tope por defecto (por IP+ruta) para TODO endpoint sin @RateLimit
+  // propio. Los sensibles (login, etc.) definen límites más estrictos aparte.
+  RATE_LIMIT_DEFAULT: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+
   // Almacenamiento (S3/MinIO)
   S3_ENDPOINT: z.string().url().default("http://localhost:9000"),
   S3_REGION: z.string().default("us-east-1"),

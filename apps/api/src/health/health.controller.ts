@@ -2,6 +2,7 @@ import { Controller, Get, Inject } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import Redis from "ioredis";
 import { Public } from "../common/decorators/public.decorator.js";
+import { SkipRateLimit } from "../common/decorators/rate-limit.decorator.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { REDIS } from "../redis/redis.module.js";
 
@@ -16,12 +17,14 @@ export class HealthController {
   ) {}
 
   @Public()
+  @SkipRateLimit()
   @Get("health")
   health(): { status: string; ts: string } {
     return { status: "ok", ts: new Date().toISOString() };
   }
 
   @Public()
+  @SkipRateLimit()
   @Get("ready")
   async ready(): Promise<{ status: string; checks: Record<string, string> }> {
     const checks: Record<string, string> = {};
