@@ -343,8 +343,10 @@ export class InventoryService {
       const rows = balances.map((b) => {
         const available = this.balances.available(b);
         const policy = pMap.get(`${b.warehouseId}:${b.variantId}`);
-        const min = policy ? new Prisma.Decimal(policy.minimumStock) : null;
-        const reorderStatus = min && available.lte(min) ? (available.lte(0) ? "OUT_OF_STOCK" : "LOW") : "OK";
+        // Umbral unificado: el punto de reorden manda; si no está, cae al mínimo.
+        // Mismo criterio que las sugerencias de compra y las alertas de stock bajo.
+        const min = policy ? new Prisma.Decimal(policy.reorderPoint ?? policy.minimumStock) : null;
+        const reorderStatus = min && min.gt(0) && available.lte(min) ? (available.lte(0) ? "OUT_OF_STOCK" : "LOW") : "OK";
         return {
           variantId: b.variantId,
           warehouseId: b.warehouseId,
