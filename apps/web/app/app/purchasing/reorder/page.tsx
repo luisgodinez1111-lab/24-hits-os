@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PackagePlus, Truck } from "lucide-react";
+import { Download, PackagePlus, Truck } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, EmptyState, Input, PageHeader, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
 } from "@24hits/ui";
 import { api, ApiError } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
+import { downloadCsv, csvDateTag } from "@/lib/csv";
 
 type Suggestion = {
   variantId: string; warehouseId: string; warehouseName: string | null;
@@ -61,9 +62,37 @@ export default function ReorderPage() {
   });
   const creatingKey = create.isPending && create.variables ? gKey(create.variables.supplierId, create.variables.warehouseId) : null;
 
+  // Exporta las sugerencias (con la cantidad editada) para mandar al proveedor.
+  function exportCsv() {
+    const rows = (data ?? []).map((s) => [
+      s.supplierName ?? "Sin proveedor",
+      s.warehouseName ?? "",
+      s.product ?? "",
+      s.flavor ?? "",
+      s.sku ?? "",
+      s.available,
+      s.reorderPoint,
+      qty[rowKey(s)] ?? s.suggestedQty,
+      s.unitCost ?? "",
+    ]);
+    downloadCsv(
+      `sugerencias_compra_${csvDateTag()}`,
+      ["Proveedor", "Almacén", "Producto", "Sabor", "SKU", "Disponible", "Punto de reorden", "Sugerido", "Costo unitario"],
+      rows
+    );
+  }
+
   return (
     <div>
-      <PageHeader title="Reabastecer" subtitle="Qué comprar, cuánto y a quién — según tu punto de reorden. Crea la orden de compra en un clic." />
+      <PageHeader
+        title="Reabastecer"
+        subtitle="Qué comprar, cuánto y a quién — según tu punto de reorden. Crea la orden de compra en un clic."
+        actions={
+          <Button variant="outline" disabled={!(data && data.length > 0)} onClick={exportCsv}>
+            <Download className="h-4 w-4" /> Exportar CSV
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
