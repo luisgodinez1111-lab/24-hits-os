@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, PackagePlus, Truck } from "lucide-react";
+import { Download, PackagePlus, ShoppingCart, Truck } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, EmptyState, Input, PageHeader, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -26,6 +27,7 @@ const money = (v?: number | null) => (v != null ? `$${Number(v).toFixed(2)}` : "
 export default function ReorderPage() {
   const toast = useToast();
   const qc = useQueryClient();
+  const router = useRouter();
   const { data: me } = useMe();
   const canPurchase = hasPermission(me, "purchase.order.create");
   const { data, isLoading } = useQuery({ queryKey: ["reorder-suggestions"], queryFn: () => api.get<Suggestion[]>("/inventory/reorder-suggestions") });
@@ -88,9 +90,14 @@ export default function ReorderPage() {
         title="Reabastecer"
         subtitle="Qué comprar, cuánto y a quién — según tu punto de reorden. Crea la orden de compra en un clic."
         actions={
-          <Button variant="outline" disabled={!(data && data.length > 0)} onClick={exportCsv}>
-            <Download className="h-4 w-4" /> Exportar CSV
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => router.push("/app/purchasing/orders")}>
+              <ShoppingCart className="h-4 w-4" /> Órdenes de compra
+            </Button>
+            <Button variant="outline" disabled={!(data && data.length > 0)} onClick={exportCsv}>
+              <Download className="h-4 w-4" /> Exportar CSV
+            </Button>
+          </>
         }
       />
 
@@ -101,6 +108,7 @@ export default function ReorderPage() {
           icon={<PackagePlus className="h-8 w-8 text-gray-400" />}
           title="Todo con buen nivel"
           description="Ningún producto por debajo de su punto de reorden. Define puntos de reorden en Existencias para recibir sugerencias de compra."
+          action={<Button variant="outline" onClick={() => router.push("/app/inventory?filter=low")}><Truck className="h-4 w-4" /> Ir a Existencias</Button>}
         />
       ) : (
         <div className="space-y-4">
