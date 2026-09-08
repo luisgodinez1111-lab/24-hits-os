@@ -149,7 +149,7 @@ export default function AppHomePage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {canOrders && <Attn href="/app/sales/orders" icon={Truck} label="Entregas pendientes" count={pendingDeliveries} />}
             {canOrders && <Attn href="/app/sales/orders" icon={Wallet} label="Pedidos por cobrar" count={unpaid} />}
-            {canInv && <Attn href="/app/inventory" icon={PackageX} label="Productos con stock bajo" count={lowStock?.length ?? 0} />}
+            {canInv && <Attn href="/app/inventory?filter=low" icon={PackageX} label="Productos con stock bajo" count={lowStock?.length ?? 0} />}
             {canCust && <Attn href="/app/reports" icon={UserX} label="Clientes inactivos (30d+)" count={inactive?.count ?? 0} />}
           </div>
         </section>

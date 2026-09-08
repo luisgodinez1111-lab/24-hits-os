@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt, Share2 } from "lucide-react";
+import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt, Route as RouteIcon, Share2 } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented,   Table, TBody, TD, TH, THead, TR, useToast,
   TableSkeleton,
@@ -46,6 +47,7 @@ function deliveryProof(o: Order): string | null {
 export default function SalesOrdersPage() {
   const toast = useToast();
   const qc = useQueryClient();
+  const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<Order | null>(null);
   const [locating, setLocating] = useState<Order | null>(null);
@@ -103,7 +105,12 @@ export default function SalesOrdersPage() {
       <PageHeader
         title="Pedidos"
         subtitle="Confirmar reserva stock · entregar consume inventario y captura COGS"
-        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => router.push("/app/sales/route")}><RouteIcon className="h-4 w-4" /> Ruta de hoy</Button>
+            <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Nuevo</Button>
+          </>
+        }
       />
 
       {isLoading ? (

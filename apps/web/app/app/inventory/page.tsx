@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, Download, ListChecks, PackagePlus, Search, SlidersHorizontal, Target, Truck } from "lucide-react";
 import {
@@ -35,9 +36,19 @@ const qty = (v: string | number) => String(Number(v));
 type View = "pivot" | "detail";
 
 export default function InventoryPage() {
+  const router = useRouter();
   const [view, setView] = useState<View>("pivot");
   const [warehouseId, setWarehouseId] = useState("");
   const [lowStock, setLowStock] = useState(false);
+
+  // Deep-link "?filter=low": llega pre-filtrado a stock bajo (desde el Inicio o alertas).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("filter") === "low") {
+      setView("detail");
+      setLowStock(true);
+    }
+  }, []);
   const [search, setSearch] = useState("");
   const [stockDialog, setStockDialog] = useState<{ variantId?: string; warehouseId?: string } | null>(null);
   const [policyDialog, setPolicyDialog] = useState<ReorderPolicyTarget | null>(null);
@@ -48,6 +59,7 @@ export default function InventoryPage() {
   const canAdjust = hasPermission(me, "inventory.adjust");
   const canManageSuppliers = hasPermission(me, "suppliers.manage");
   const canBulk = canAdjust || canManageSuppliers;
+  const canPurchase = hasPermission(me, "purchasing.read");
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
   const { data: policies } = useQuery({ queryKey: ["inventory-policies"], queryFn: () => api.get<PolicyRow[]>("/inventory/policies") });
   const policyMap = useMemo(() => {
@@ -178,6 +190,7 @@ export default function InventoryPage() {
         subtitle="Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)"
         actions={
           <>
+            {canPurchase && <Button variant="outline" onClick={() => router.push("/app/purchasing/reorder")}><Truck className="h-4 w-4" /> Reabastecer</Button>}
             <Button variant="outline" disabled={!canExport} onClick={exportCsv}><Download className="h-4 w-4" /> Exportar CSV</Button>
             {canAdjust && <Button onClick={() => setStockDialog({})}><PackagePlus className="h-4 w-4" /> Cargar / ajustar stock</Button>}
           </>
