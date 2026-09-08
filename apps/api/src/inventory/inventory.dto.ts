@@ -51,6 +51,19 @@ export const movementsQuerySchema = z.object({
 });
 export type MovementsQuery = z.infer<typeof movementsQuerySchema>;
 
+// Fijar el punto de reorden / stock objetivo de una variante en un almacén.
+// `null` limpia el umbral; omitir el campo lo deja intacto.
+export const upsertPolicySchema = z.object({
+  warehouseId: z.string().uuid(),
+  variantId: z.string().uuid(),
+  minimumStock: z.coerce.number().nonnegative().optional(),
+  reorderPoint: z.coerce.number().nonnegative().nullable().optional(),
+  targetStock: z.coerce.number().nonnegative().nullable().optional(),
+  leadTimeDays: z.coerce.number().int().nonnegative().nullable().optional(),
+  enabled: z.boolean().optional(),
+});
+export type UpsertPolicyBody = z.infer<typeof upsertPolicySchema>;
+
 export const balancesQuerySchema = z.object({
   warehouseId: z.string().uuid().optional(),
   variantId: z.string().uuid().optional(),

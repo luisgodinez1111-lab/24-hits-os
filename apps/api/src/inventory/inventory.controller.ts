@@ -14,12 +14,14 @@ import {
   movementsQuerySchema,
   openingBalanceSchema,
   reserveSchema,
+  upsertPolicySchema,
   type BalancesQuery,
   type DamageBody,
   type ManualAdjustmentBody,
   type MovementsQuery,
   type OpeningBalanceBody,
   type ReserveBody,
+  type UpsertPolicyBody,
 } from "./inventory.dto.js";
 
 @ApiTags("inventory")
@@ -60,6 +62,29 @@ export class InventoryController {
   @RequirePermissions("costs.read")
   value(@CurrentUser() user: AuthContext, @Query("warehouseId") warehouseId?: string) {
     return this.inventory.inventoryValue(user.organizationId!, warehouseId);
+  }
+
+  // Reabastecimiento sugerido: qué comprar, cuánto y a quién (punto de reorden + proveedor).
+  @Get("reorder-suggestions")
+  @RequirePermissions("inventory.read")
+  reorderSuggestions(@CurrentUser() user: AuthContext, @Query("warehouseId") warehouseId?: string) {
+    return this.inventory.reorderSuggestions(user.organizationId!, warehouseId);
+  }
+
+  // Políticas de reorden: leer las configuradas y fijar el umbral de una variante.
+  @Get("policies")
+  @RequirePermissions("inventory.read")
+  policies(@CurrentUser() user: AuthContext, @Query("warehouseId") warehouseId?: string) {
+    return this.inventory.listPolicies(user.organizationId!, warehouseId);
+  }
+
+  @Post("policies")
+  @RequirePermissions("inventory.adjust")
+  upsertPolicy(
+    @CurrentUser() user: AuthContext,
+    @Body(new ZodValidationPipe(upsertPolicySchema)) body: UpsertPolicyBody
+  ) {
+    return this.inventory.upsertPolicy(user.organizationId!, body);
   }
 
   // Capital atrapado: existencias sin venta en `days` días (default 60), valoradas.

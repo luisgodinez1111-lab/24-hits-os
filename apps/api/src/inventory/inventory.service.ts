@@ -45,6 +45,16 @@ export interface DamageInput {
   idempotencyKey?: string | null;
 }
 
+export interface UpsertPolicyInput {
+  warehouseId: string;
+  variantId: string;
+  minimumStock?: number;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
+  leadTimeDays?: number | null;
+  enabled?: boolean;
+}
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -355,6 +365,137 @@ export class InventoryService {
         };
       });
       return rows.filter((r) => (filters.lowStock ? r.reorderStatus !== "OK" : true));
+    });
+  }
+
+  // Sugerencias de reabastecimiento: qué comprar, cuánto y a quién. Cruza el saldo con
+  // la política (punto de reorden / stock objetivo) y el proveedor preferido de cada
+  // variante. Base del flujo "reorden → orden de compra en un clic".
+  async reorderSuggestions(organizationId: string, warehouseId?: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const balances = await tx.inventoryBalance.findMany({
+        where: { ...(warehouseId ? { warehouseId } : {}) },
+        take: 5000,
+      });
+      const variantIds = [...new Set(balances.map((b) => b.variantId))];
+      if (variantIds.length === 0) return [];
+      const [variants, policies, refs, warehouses] = await Promise.all([
+        tx.productVariant.findMany({
+          where: { id: { in: variantIds } },
+          select: { id: true, sku: true, name: true, product: { select: { name: true } }, flavor: { select: { name: true } } },
+        }),
+        tx.inventoryPolicy.findMany({ where: { variantId: { in: variantIds }, enabled: true } }),
+        tx.productSupplierReference.findMany({
+          where: { variantId: { in: variantIds } },
+          select: { variantId: true, supplierId: true, isPreferred: true, lastCost: true, supplier: { select: { name: true } } },
+        }),
+        tx.warehouse.findMany({ select: { id: true, name: true } }),
+      ]);
+      const vMap = new Map(variants.map((v) => [v.id, v]));
+      const pMap = new Map(policies.map((p) => [`${p.warehouseId}:${p.variantId}`, p]));
+      const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
+      // Proveedor preferido por variante (o el primero que exista).
+      const refByVariant = new Map<string, (typeof refs)[number]>();
+      for (const r of refs) {
+        const cur = refByVariant.get(r.variantId);
+        if (!cur || (r.isPreferred && !cur.isPreferred)) refByVariant.set(r.variantId, r);
+      }
+
+      const out = [];
+      for (const b of balances) {
+        const policy = pMap.get(`${b.warehouseId}:${b.variantId}`);
+        if (!policy) continue;
+        const available = Number(this.balances.available(b).toString());
+        const reorderPoint = policy.reorderPoint != null ? Number(policy.reorderPoint) : Number(policy.minimumStock);
+        if (reorderPoint <= 0 || available > reorderPoint) continue; // aún no toca reordenar
+        const target = policy.targetStock != null ? Number(policy.targetStock) : reorderPoint * 2;
+        const suggestedQty = Math.max(1, Math.ceil(target - available));
+        const ref = refByVariant.get(b.variantId);
+        const v = vMap.get(b.variantId);
+        out.push({
+          variantId: b.variantId,
+          warehouseId: b.warehouseId,
+          warehouseName: whMap.get(b.warehouseId) ?? null,
+          product: v?.product?.name ?? null,
+          flavor: v?.flavor?.name ?? v?.name ?? null,
+          sku: v?.sku ?? null,
+          available,
+          reorderPoint,
+          suggestedQty,
+          supplierId: ref?.supplierId ?? null,
+          supplierName: ref?.supplier?.name ?? null,
+          unitCost: ref?.lastCost != null ? Number(ref.lastCost) : null,
+        });
+      }
+      return out.sort((a, b) => (a.supplierName ?? "￿").localeCompare(b.supplierName ?? "￿"));
+    });
+  }
+
+  // Políticas de reorden por variante+almacén: es lo que alimenta el estado "Reorden"
+  // de Existencias y las sugerencias de compra. Devuelve el mapa que ya está configurado.
+  listPolicies(organizationId: string, warehouseId?: string) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const policies = await tx.inventoryPolicy.findMany({
+        where: { ...(warehouseId ? { warehouseId } : {}) },
+        take: 5000,
+      });
+      return policies.map((p) => ({
+        variantId: p.variantId,
+        warehouseId: p.warehouseId,
+        minimumStock: Number(p.minimumStock),
+        reorderPoint: p.reorderPoint != null ? Number(p.reorderPoint) : null,
+        targetStock: p.targetStock != null ? Number(p.targetStock) : null,
+        leadTimeDays: p.leadTimeDays ?? null,
+        enabled: p.enabled,
+      }));
+    });
+  }
+
+  // Fija (o actualiza) el punto de reorden / stock objetivo de una variante en un almacén.
+  // Solo toca los campos enviados: `undefined` = no tocar, `null` = limpiar el umbral.
+  upsertPolicy(organizationId: string, input: UpsertPolicyInput) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      // El almacén y la variante deben existir dentro de la organización.
+      await this.resolveBranchId(tx, input.warehouseId);
+      await this.assertVariant(tx, input.variantId);
+
+      const dec = (v: number | null | undefined) => (v != null ? new Prisma.Decimal(v) : null);
+      const update: Prisma.InventoryPolicyUpdateInput = {};
+      if (input.minimumStock !== undefined) update.minimumStock = new Prisma.Decimal(input.minimumStock ?? 0);
+      if (input.reorderPoint !== undefined) update.reorderPoint = dec(input.reorderPoint);
+      if (input.targetStock !== undefined) update.targetStock = dec(input.targetStock);
+      if (input.leadTimeDays !== undefined) update.leadTimeDays = input.leadTimeDays ?? null;
+      if (input.enabled !== undefined) update.enabled = input.enabled;
+
+      const policy = await tx.inventoryPolicy.upsert({
+        where: {
+          organizationId_warehouseId_variantId: {
+            organizationId,
+            warehouseId: input.warehouseId,
+            variantId: input.variantId,
+          },
+        },
+        create: {
+          organizationId,
+          warehouseId: input.warehouseId,
+          variantId: input.variantId,
+          minimumStock: new Prisma.Decimal(input.minimumStock ?? 0),
+          reorderPoint: dec(input.reorderPoint),
+          targetStock: dec(input.targetStock),
+          leadTimeDays: input.leadTimeDays ?? null,
+          enabled: input.enabled ?? true,
+        },
+        update,
+      });
+      return {
+        variantId: policy.variantId,
+        warehouseId: policy.warehouseId,
+        minimumStock: Number(policy.minimumStock),
+        reorderPoint: policy.reorderPoint != null ? Number(policy.reorderPoint) : null,
+        targetStock: policy.targetStock != null ? Number(policy.targetStock) : null,
+        leadTimeDays: policy.leadTimeDays ?? null,
+        enabled: policy.enabled,
+      };
     });
   }
 
