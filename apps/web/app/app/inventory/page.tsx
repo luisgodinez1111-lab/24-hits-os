@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
+import { Boxes, PackagePlus, Search, SlidersHorizontal, Target } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
   PageHeader,
@@ -12,6 +12,12 @@ import type { Warehouse } from "@24hits/contracts";
 import { api } from "@/lib/api";
 import { hasPermission, useMe } from "@/lib/me";
 import { StockAdjustDialog } from "@/components/StockAdjustDialog";
+import { ReorderPolicyDialog, type ReorderPolicyTarget } from "@/components/ReorderPolicyDialog";
+
+type PolicyRow = {
+  variantId: string; warehouseId: string; minimumStock: number;
+  reorderPoint: number | null; targetStock: number | null; leadTimeDays: number | null; enabled: boolean;
+};
 
 const reorderTone: Record<InventoryBalanceRow["reorderStatus"], "green" | "amber" | "red"> = {
   OK: "green", LOW: "amber", OUT_OF_STOCK: "red",
@@ -31,9 +37,16 @@ export default function InventoryPage() {
   const [lowStock, setLowStock] = useState(false);
   const [search, setSearch] = useState("");
   const [stockDialog, setStockDialog] = useState<{ variantId?: string; warehouseId?: string } | null>(null);
+  const [policyDialog, setPolicyDialog] = useState<ReorderPolicyTarget | null>(null);
   const { data: me } = useMe();
   const canAdjust = hasPermission(me, "inventory.adjust");
   const { data: warehouses } = useQuery({ queryKey: ["warehouses"], queryFn: () => api.get<Warehouse[]>("/warehouses") });
+  const { data: policies } = useQuery({ queryKey: ["inventory-policies"], queryFn: () => api.get<PolicyRow[]>("/inventory/policies") });
+  const policyMap = useMemo(() => {
+    const m = new Map<string, PolicyRow>();
+    for (const p of policies ?? []) m.set(`${p.warehouseId}:${p.variantId}`, p);
+    return m;
+  }, [policies]);
 
   // En pivote traemos TODOS los almacenes (columnas por bodega). En detalle
   // respetamos el filtro de almacén y "stock bajo".
@@ -196,42 +209,76 @@ export default function InventoryPage() {
             </TR>
           </THead>
           <TBody>
-            {data.filter(matches).map((r) => (
-              <TR key={`${r.warehouseId}:${r.variantId}`}>
-                <TD className="font-medium">{r.warehouseName ?? "—"}</TD>
-                <TD className="font-mono text-xs">{r.sku ?? "—"}</TD>
-                <TD className="font-medium">{r.product ?? "—"}</TD>
-                <TD className="text-gray-500">{r.flavor ?? "—"}</TD>
-                <TD className="text-right">{qty(r.onHand)}</TD>
-                <TD className="text-right text-gray-500">{qty(r.reserved)}</TD>
-                <TD className="text-right font-semibold">{qty(r.available)}</TD>
-                <TD className="text-right text-gray-500">{qty(r.damaged)}</TD>
-                <TD className="text-right text-gray-500">{qty(r.inTransitIncoming)}</TD>
-                <TD><Badge tone={reorderTone[r.reorderStatus]}>{reorderLabel[r.reorderStatus]}</Badge></TD>
-                {canAdjust && (
+            {data.filter(matches).map((r) => {
+              const p = policyMap.get(`${r.warehouseId}:${r.variantId}`);
+              const openPolicy = () =>
+                setPolicyDialog({
+                  variantId: r.variantId,
+                  warehouseId: r.warehouseId,
+                  label: [r.product, r.flavor].filter(Boolean).join(" · ") || r.sku || "Producto",
+                  warehouseName: r.warehouseName ?? "Almacén",
+                  reorderPoint: p?.reorderPoint ?? null,
+                  targetStock: p?.targetStock ?? null,
+                });
+              return (
+                <TR key={`${r.warehouseId}:${r.variantId}`}>
+                  <TD className="font-medium">{r.warehouseName ?? "—"}</TD>
+                  <TD className="font-mono text-xs">{r.sku ?? "—"}</TD>
+                  <TD className="font-medium">{r.product ?? "—"}</TD>
+                  <TD className="text-gray-500">{r.flavor ?? "—"}</TD>
+                  <TD className="text-right">{qty(r.onHand)}</TD>
+                  <TD className="text-right text-gray-500">{qty(r.reserved)}</TD>
+                  <TD className="text-right font-semibold">{qty(r.available)}</TD>
+                  <TD className="text-right text-gray-500">{qty(r.damaged)}</TD>
+                  <TD className="text-right text-gray-500">{qty(r.inTransitIncoming)}</TD>
                   <TD>
-                    <button
-                      onClick={() => setStockDialog({ variantId: r.variantId, warehouseId: r.warehouseId })}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 active:scale-95"
-                    >
-                      <SlidersHorizontal className="h-3.5 w-3.5" /> Ajustar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={reorderTone[r.reorderStatus]}>{reorderLabel[r.reorderStatus]}</Badge>
+                      {p?.reorderPoint != null && <span className="text-xs text-gray-400">≤ {p.reorderPoint}</span>}
+                      {canAdjust && (
+                        <button
+                          onClick={openPolicy}
+                          title={p?.reorderPoint != null ? "Editar punto de reorden" : "Definir punto de reorden"}
+                          className="text-gray-300 hover:text-brand active:scale-95"
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </TD>
-                )}
-              </TR>
-            ))}
+                  {canAdjust && (
+                    <TD>
+                      <button
+                        onClick={() => setStockDialog({ variantId: r.variantId, warehouseId: r.warehouseId })}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 active:scale-95"
+                      >
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Ajustar
+                      </button>
+                    </TD>
+                  )}
+                </TR>
+              );
+            })}
           </TBody>
         </Table>
       )}
 
       {canAdjust && (
-        <StockAdjustDialog
-          open={stockDialog !== null}
-          prefill={stockDialog}
-          warehouses={warehouses ?? []}
-          onClose={() => setStockDialog(null)}
-          onDone={() => setStockDialog(null)}
-        />
+        <>
+          <StockAdjustDialog
+            open={stockDialog !== null}
+            prefill={stockDialog}
+            warehouses={warehouses ?? []}
+            onClose={() => setStockDialog(null)}
+            onDone={() => setStockDialog(null)}
+          />
+          <ReorderPolicyDialog
+            open={policyDialog !== null}
+            target={policyDialog}
+            onClose={() => setPolicyDialog(null)}
+            onDone={() => setPolicyDialog(null)}
+          />
+        </>
       )}
     </div>
   );
