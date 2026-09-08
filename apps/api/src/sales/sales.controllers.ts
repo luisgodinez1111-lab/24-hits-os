@@ -21,6 +21,8 @@ import {
   driverLocationSchema,
   cashHandoverSchema,
   assignDriverSchema,
+  routeSequenceSchema,
+  routeExcludeSchema,
   type CreateCustomerInput,
   type UpdateCustomerInput,
   type InactiveCustomersQuery,
@@ -29,6 +31,8 @@ import {
   type DriverLocationInput,
   type CashHandoverInput,
   type AssignDriverInput,
+  type RouteSequenceInput,
+  type RouteExcludeInput,
 } from "./sales.dto.js";
 
 @ApiTags("customers")
@@ -125,6 +129,23 @@ export class OrderController {
     return this.orders.optimizeRoute(u.organizationId!, u.userId, start, this.env.OSRM_URL, this.osrmHeaders());
   }
 
+  // Ruta editable: fija el orden manual de las paradas (lista ordenada; vacío = automático).
+  @Patch("route/sequence")
+  @RequirePermissions("orders.deliver")
+  setRouteSequence(@CurrentUser() u: AuthContext, @Body(new ZodValidationPipe(routeSequenceSchema)) b: RouteSequenceInput) {
+    return this.orders.setRouteSequence(u.organizationId!, b.orderIds);
+  }
+
+  // Ruta editable: calcula el orden óptimo y lo fija como secuencia manual (sugerencia editable).
+  @Post("route/optimize")
+  @RequirePermissions("orders.deliver")
+  optimizeRoute(@CurrentUser() u: AuthContext, @Query("lat") lat?: string, @Query("lng") lng?: string) {
+    const la = lat != null ? Number(lat) : NaN;
+    const ln = lng != null ? Number(lng) : NaN;
+    const start = Number.isFinite(la) && Number.isFinite(ln) ? { lat: la, lng: ln } : null;
+    return this.orders.optimizeAndPersistRoute(u.organizationId!, u.userId, start, this.env.OSRM_URL, this.osrmHeaders());
+  }
+
   @Get(":id")
   @RequirePermissions("orders.read")
   get(@CurrentUser() u: AuthContext, @Param("id") id: string) {
@@ -174,6 +195,13 @@ export class OrderController {
   @RequirePermissions("orders.deliver")
   assign(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(assignDriverSchema)) b: AssignDriverInput) {
     return this.orders.assignDriver(u.organizationId!, id, b.driverId);
+  }
+
+  // Ruta editable: saca (posponer) o repone una parada en la ruta de hoy.
+  @Patch(":id/route-status")
+  @RequirePermissions("orders.deliver")
+  setRouteStatus(@CurrentUser() u: AuthContext, @Param("id") id: string, @Body(new ZodValidationPipe(routeExcludeSchema)) b: RouteExcludeInput) {
+    return this.orders.setRouteExcluded(u.organizationId!, id, b.excluded);
   }
 }
 

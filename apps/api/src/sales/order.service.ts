@@ -207,6 +207,8 @@ export class OrderService {
           deliveryLocationUrl: true,
           deliveryLat: true,
           deliveryLng: true,
+          deliverySequence: true,
+          deliveryExcluded: true,
           assignedDriverId: true,
           createdAt: true,
           customer: { select: { name: true, phone: true, zone: true } },
@@ -228,7 +230,7 @@ export class OrderService {
   // (createdAt) se marcan prioritario/urgente y se visitan PRIMERO; dentro de cada
   // grupo se minimiza el recorrido (vecino más cercano + 2-opt), no solo el
   // siguiente salto. Distancias por carretera si hay OSRM_URL; si no, línea recta.
-  async optimizeRoute(organizationId: string, viewerUserId: string, start: Pt | null, osrmUrl?: string | null, osrmHeaders?: Record<string, string>) {
+  async optimizeRoute(organizationId: string, viewerUserId: string, start: Pt | null, osrmUrl?: string | null, osrmHeaders?: Record<string, string>, respectManual = true) {
     const PRIORITY_MIN = 45; // min sin entregar → prioritario
     const URGENT_MIN = 90; // min sin entregar → urgente
     const now = Date.now();
@@ -236,11 +238,14 @@ export class OrderService {
     const all0 = await this.pendingDeliveries(organizationId);
     // Dispatch: cada repartidor ve SUS paradas asignadas + el pool sin asignar (las
     // asignadas a otro repartidor desaparecen de su ruta).
-    const all = all0.filter((s) => s.assignedDriverId == null || s.assignedDriverId === viewerUserId);
+    const visible = all0.filter((s) => s.assignedDriverId == null || s.assignedDriverId === viewerUserId);
+    // Ruta editable: las paradas pospuestas (deliveryExcluded) se muestran aparte y NO se rutean.
+    const postponed = visible.filter((s) => s.deliveryExcluded);
+    const all = visible.filter((s) => !s.deliveryExcluded);
     const coordStops = all.filter((s) => s.deliveryLat != null && s.deliveryLng != null);
     const noCoords = all.filter((s) => s.deliveryLat == null || s.deliveryLng == null);
     if (coordStops.length === 0) {
-      return { provider: "none" as const, totalKm: 0, totalMin: null, priorityCount: 0, stops: [], noCoords };
+      return { provider: "none" as const, totalKm: 0, totalMin: null, priorityCount: 0, hasManualOrder: false, geometry: null, stops: [], noCoords, postponed };
     }
 
     // Antigüedad y nivel de prioridad por parada.
@@ -259,27 +264,45 @@ export class OrderService {
     const primary = matrix.dur ?? matrix.dist;
     const cost = (a: number, b: number) => primary[a]![b]!;
 
-    // Índices (en espacio de nodos) de prioritarios y normales.
-    const priIdx = coordStops.map((_, i) => base + i).filter((_, i) => meta[i]!.priority != null);
-    const normIdx = coordStops.map((_, i) => base + i).filter((_, i) => meta[i]!.priority == null);
+    // Ruta editable: las paradas con deliverySequence fija van PRIMERO, en el orden que
+    // eligió el operador (manda sobre la prioridad y el optimizador). El resto se optimiza
+    // a continuación (prioridad por antigüedad + 2-opt).
+    const manualIdx = (respectManual ? coordStops.map((_, i) => base + i) : [])
+      .filter((n) => coordStops[n - base]!.deliverySequence != null)
+      .sort((a, b) => coordStops[a - base]!.deliverySequence! - coordStops[b - base]!.deliverySequence!);
+    const autoIdx = coordStops.map((_, i) => base + i).filter((n) => coordStops[n - base]!.deliverySequence == null);
+    const hasManualOrder = manualIdx.length > 0;
 
-    // Ancla inicial: el repartidor (si hay GPS) o la 1ª parada (prioritaria si existe).
-    let anchor: number;
-    let anchorIsStop = false;
-    if (start) {
-      anchor = 0;
-    } else if (priIdx.length > 0) {
-      anchor = priIdx.shift()!;
-      anchorIsStop = true;
+    // Prioridad aplica solo al bloque automático (lo manual es decisión explícita).
+    const priIdx = autoIdx.filter((n) => meta[n - base]!.priority != null);
+    const normIdx = autoIdx.filter((n) => meta[n - base]!.priority == null);
+
+    let visit: number[];
+    if (hasManualOrder) {
+      // El bloque auto se optimiza continuando desde la última parada manual.
+      const anchor = manualIdx[manualIdx.length - 1]!;
+      const priOrder = optimizeSubset(priIdx, anchor, cost);
+      const afterPri = priOrder.length > 0 ? priOrder[priOrder.length - 1]! : anchor;
+      const normOrder = optimizeSubset(normIdx, afterPri, cost);
+      visit = [...manualIdx, ...priOrder, ...normOrder];
     } else {
-      anchor = normIdx.shift()!;
-      anchorIsStop = true;
+      // Sin orden manual: ancla = repartidor (GPS) o la 1ª parada (prioritaria si existe).
+      let anchor: number;
+      let anchorIsStop = false;
+      if (start) {
+        anchor = 0;
+      } else if (priIdx.length > 0) {
+        anchor = priIdx.shift()!;
+        anchorIsStop = true;
+      } else {
+        anchor = normIdx.shift()!;
+        anchorIsStop = true;
+      }
+      const priOrder = optimizeSubset(priIdx, anchor, cost); // prioritarios primero
+      const afterPri = priOrder.length > 0 ? priOrder[priOrder.length - 1]! : anchor;
+      const normOrder = optimizeSubset(normIdx, afterPri, cost); // luego el resto
+      visit = anchorIsStop ? [anchor, ...priOrder, ...normOrder] : [...priOrder, ...normOrder];
     }
-
-    const priOrder = optimizeSubset(priIdx, anchor, cost); // prioritarios primero
-    const afterPri = priOrder.length > 0 ? priOrder[priOrder.length - 1]! : anchor;
-    const normOrder = optimizeSubset(normIdx, afterPri, cost); // luego el resto
-    const visit = anchorIsStop ? [anchor, ...priOrder, ...normOrder] : [...priOrder, ...normOrder];
 
     const round1 = (n: number) => Math.round(n * 10) / 10;
     const stops: Array<(typeof coordStops)[number] & { legKm: number | null; legMin: number | null; priority: "urgent" | "priority" | null; minutesPending: number }> = [];
@@ -317,10 +340,69 @@ export class OrderService {
       totalKm: round1(totalKm),
       totalMin: matrix.dur ? Math.round(totalMin) : null,
       priorityCount: meta.filter((m) => m.priority != null).length,
+      hasManualOrder,
       geometry,
       stops,
       noCoords,
+      postponed,
     };
+  }
+
+  // Ruta editable: fija el orden manual de la ruta de hoy. `orderIds` es la lista
+  // ordenada de paradas (posición 1..N); las entregas pendientes que NO aparezcan
+  // vuelven a "automático" (deliverySequence = null). Lista vacía = todo automático.
+  async setRouteSequence(organizationId: string, orderIds: string[]) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      // Solo pedidos entregables del tenant (defensa: ignora ids ajenos o inválidos).
+      const deliverable = await tx.order.findMany({
+        where: { deliveryStatus: { in: ["PENDING", "DISPATCHED"] }, status: { not: "CANCELLED" } },
+        select: { id: true },
+      });
+      const valid = new Set(deliverable.map((o) => o.id));
+      const seq = orderIds.filter((id) => valid.has(id));
+      // Todas a automático primero…
+      await tx.order.updateMany({
+        where: { id: { in: [...valid] }, deliverySequence: { not: null } },
+        data: { deliverySequence: null },
+      });
+      // …y luego las elegidas reciben su posición 1..N.
+      let applied = 0;
+      for (let i = 0; i < seq.length; i++) {
+        await tx.order.update({ where: { id: seq[i]! }, data: { deliverySequence: i + 1 } });
+        applied++;
+      }
+      return { applied, cleared: orderIds.length === 0 };
+    });
+  }
+
+  // Ruta editable: saca (posponer) o repone una parada en la ruta de hoy. Al posponer
+  // también se limpia el orden manual de esa parada (deja de contar en la secuencia).
+  async setRouteExcluded(organizationId: string, orderId: string, excluded: boolean) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const order = await tx.order.findFirst({ where: { id: orderId }, select: { id: true } });
+      if (!order) throw new AppException(404, ErrorCode.ORDER_NOT_FOUND, "Pedido no encontrado");
+      await tx.order.update({
+        where: { id: orderId },
+        data: { deliveryExcluded: excluded, ...(excluded ? { deliverySequence: null } : {}) },
+      });
+      return { id: orderId, excluded };
+    });
+  }
+
+  // Ruta editable: calcula la ruta óptima IGNORANDO el orden manual actual y la
+  // PERSISTE como nueva secuencia manual — así "Optimizar" es una sugerencia que el
+  // operador puede luego ajustar arrastrando, no una imposición en cada carga.
+  async optimizeAndPersistRoute(
+    organizationId: string,
+    viewerUserId: string,
+    start: Pt | null,
+    osrmUrl?: string | null,
+    osrmHeaders?: Record<string, string>
+  ) {
+    const route = await this.optimizeRoute(organizationId, viewerUserId, start, osrmUrl, osrmHeaders, false);
+    const orderedIds = route.stops.map((s) => s.id);
+    await this.setRouteSequence(organizationId, orderedIds);
+    return { ...route, hasManualOrder: orderedIds.length > 0 };
   }
 
   // Crea un pedido en DRAFT. Resuelve precio por renglón (override o lista de

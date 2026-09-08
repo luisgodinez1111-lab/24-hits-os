@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUp, ArrowUpLeft, ArrowUpRight, Check, CornerUpLeft, CornerUpRight, Crosshair,
-  Flag, MapPin, Navigation2, Phone, Power, RefreshCw, RotateCcw, Route as RouteIcon,
+  ArrowUp, ArrowUpLeft, ArrowUpRight, ArrowUpToLine, Check, ChevronDown, ChevronUp,
+  CornerUpLeft, CornerUpRight, Crosshair, Flag, MapPin, Navigation2, Phone, Power,
+  RefreshCw, RotateCcw, Route as RouteIcon, Sparkles, Undo2,
   Volume2, VolumeX, Wallet, X, type LucideIcon,
 } from "lucide-react";
 import { Badge, Button, EmptyState, Skeleton, useToast } from "@24hits/ui";
@@ -107,6 +108,7 @@ function toOptStop(s: DeliveryStop): OptimizedStop {
 
 export default function RoutePage() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [pos, setPos] = useState<LatLng | null>(null); // posición EN VIVO (marcador)
   const [start, setStart] = useState<LatLng | null>(null); // origen para optimizar (bajo demanda)
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
@@ -202,6 +204,24 @@ export default function RoutePage() {
     await qc.invalidateQueries({ queryKey: ["route"] });
   };
 
+  // ---- Ruta editable: el operador manda sobre el orden ----
+  const routeErr = (e: unknown) => toast.push(e instanceof ApiError ? e.message : "No se pudo actualizar la ruta", "error");
+  const invalidateRoute = () => { void qc.invalidateQueries({ queryKey: ["route"] }); };
+  const seqMut = useMutation({
+    mutationFn: (orderIds: string[]) => api.patch("/orders/route/sequence", { orderIds }),
+    onSuccess: invalidateRoute, onError: routeErr,
+  });
+  const optimizeMut = useMutation({
+    mutationFn: () => api.post(`/orders/route/optimize${start ? `?lat=${start.lat}&lng=${start.lng}` : ""}`, {}),
+    onSuccess: () => { toast.push("Ruta optimizada ✓", "success"); invalidateRoute(); },
+    onError: routeErr,
+  });
+  const excludeMut = useMutation({
+    mutationFn: (v: { id: string; excluded: boolean }) => api.patch(`/orders/${v.id}/route-status`, { excluded: v.excluded }),
+    onSuccess: (_r, v) => { toast.push(v.excluded ? "Parada pospuesta" : "Parada repuesta ✓", "success"); invalidateRoute(); },
+    onError: routeErr,
+  });
+
   const stops: OptimizedStop[] = route?.stops ?? [];
   const legs: Leg[] = stops.map((s) => ({ stop: s, km: s.legKm }));
   const noCoords = route?.noCoords ?? [];
@@ -209,6 +229,22 @@ export default function RoutePage() {
   const providerLabel = route?.provider === "osrm" ? "por calles" : route?.provider === "haversine" ? "línea recta" : "";
   const nextStop = stops[0] ?? null; // el siguiente pedido más cercano/prioritario
   const restStops = stops.slice(1);
+  const postponed = route?.postponed ?? [];
+
+  // Reordenar la ruta: la secuencia manual es el orden completo de paradas con ubicación.
+  const orderedIds = stops.map((s) => s.id);
+  const moveTo = (id: string, target: number) => {
+    const cur = orderedIds.indexOf(id);
+    if (cur < 0) return;
+    const next = orderedIds.slice();
+    next.splice(cur, 1);
+    next.splice(Math.max(0, Math.min(target, next.length)), 0, id);
+    seqMut.mutate(next);
+  };
+  const moveUp = (id: string) => { const i = orderedIds.indexOf(id); if (i > 0) moveTo(id, i - 1); };
+  const moveDown = (id: string) => { const i = orderedIds.indexOf(id); if (i >= 0 && i < orderedIds.length - 1) moveTo(id, i + 1); };
+  const makeFirst = (id: string) => moveTo(id, 0);
+  const busyRoute = seqMut.isPending || excludeMut.isPending || optimizeMut.isPending;
 
   // Guía turn-by-turn hacia el siguiente pedido (maniobras + voz). Se llama
   // SIEMPRE (regla de hooks); solo trabaja cuando navMode está activo.
@@ -336,7 +372,8 @@ export default function RoutePage() {
           <p className="text-sm text-gray-500">
             {total} {total === 1 ? "entrega" : "entregas"}{route && route.totalKm > 0 ? ` · ~${route.totalKm.toFixed(1)} km` : ""}
             {route?.totalMin != null ? ` · ~${route.totalMin} min` : ""}
-            {providerLabel ? ` · ruta ${providerLabel}, orden óptimo` : ""}
+            {providerLabel ? ` · ruta ${providerLabel}` : ""}
+            {route ? (route.hasManualOrder ? " · orden manual" : " · orden óptimo") : ""}
             {isFetching && !isLoading ? <span className="ml-1 text-brand">· actualizando…</span> : ""}
           </p>
         </div>
@@ -357,6 +394,16 @@ export default function RoutePage() {
             </button>
           )}
           {nextStop && <Button onClick={startNav}><Navigation2 className="h-4 w-4" /> Iniciar navegación</Button>}
+          {canDeliver && stops.length > 1 && (
+            <Button variant="outline" loading={optimizeMut.isPending} onClick={() => optimizeMut.mutate()} title="Calcula el orden más corto y lo deja como punto de partida (puedes ajustarlo después)">
+              <Sparkles className="h-4 w-4" /> Optimizar
+            </Button>
+          )}
+          {canDeliver && route?.hasManualOrder && (
+            <Button variant="outline" loading={seqMut.isPending} onClick={() => seqMut.mutate([])} title="Descarta tu orden manual y vuelve al orden automático">
+              <Undo2 className="h-4 w-4" /> Auto
+            </Button>
+          )}
           <Button variant="outline" onClick={recalc}><Crosshair className="h-4 w-4" /> Recalcular</Button>
         </div>
       </div>
@@ -395,16 +442,31 @@ export default function RoutePage() {
         ) : (
           <>
             {/* SIGUIENTE PEDIDO — tarjeta grande, lo primero que ves. */}
-            {nextStop && <NextCard stop={nextStop} onNavigate={startNav} onDeliver={() => setDeliverStop(nextStop)} />}
+            {nextStop && <NextCard stop={nextStop} onNavigate={startNav} onDeliver={() => setDeliverStop(nextStop)} onPostpone={canDeliver ? () => excludeMut.mutate({ id: nextStop.id, excluded: true }) : undefined} />}
 
             {/* El resto de la ruta, en orden. */}
             {(restStops.length > 0 || noCoords.length > 0) && (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Después ({restStops.length + noCoords.length})</p>
                 <ol className="space-y-2">
-                  {restStops.map((s, i) => (
-                    <Stop key={s.id} n={i + 2} stop={s} onDeliver={() => setDeliverStop(s)} />
-                  ))}
+                  {restStops.map((s, i) => {
+                    const fullIdx = i + 1; // posición real (la Siguiente parada es la 0)
+                    return (
+                      <Stop
+                        key={s.id}
+                        n={i + 2}
+                        stop={s}
+                        onDeliver={() => setDeliverStop(s)}
+                        edit={canDeliver ? {
+                          onFirst: () => makeFirst(s.id),
+                          onUp: () => moveUp(s.id),
+                          onDown: fullIdx < stops.length - 1 ? () => moveDown(s.id) : undefined,
+                          onPostpone: () => excludeMut.mutate({ id: s.id, excluded: true }),
+                          busy: busyRoute,
+                        } : undefined}
+                      />
+                    );
+                  })}
                   {noCoords.length > 0 && (
                     <li className="pt-2">
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Sin ubicación en el mapa (pídeles el pin)</p>
@@ -420,6 +482,28 @@ export default function RoutePage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Pospuestas: paradas sacadas de la ruta de hoy. Se pueden reponer. */}
+        {postponed.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Pospuestas ({postponed.length})</p>
+            <div className="space-y-2">
+              {postponed.map((s) => (
+                <div key={s.id} className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-600">{s.customer?.name ?? "Mostrador"}</p>
+                    <p className="truncate font-mono text-xs text-gray-400">{s.number} · {money(s.total)}{s.deliveryAddress ? ` · ${s.deliveryAddress}` : ""}</p>
+                  </div>
+                  {canDeliver && (
+                    <button onClick={() => excludeMut.mutate({ id: s.id, excluded: false })} disabled={busyRoute} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 active:scale-95 disabled:opacity-40">
+                      <Undo2 className="h-4 w-4" /> Reponer
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -509,7 +593,7 @@ function CashCutCard() {
 
 // Tarjeta destacada del siguiente pedido. La acción principal ENTRA a la
 // navegación in-app (no lanza a Google Maps).
-function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavigate: () => void; onDeliver: () => void }) {
+function NextCard({ stop, onNavigate, onDeliver, onPostpone }: { stop: OptimizedStop; onNavigate: () => void; onDeliver: () => void; onPostpone?: () => void }) {
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
     <div className="rounded-2xl border-2 border-brand/40 bg-brand/5 p-4 shadow-sm">
@@ -541,6 +625,11 @@ function NextCard({ stop, onNavigate, onDeliver }: { stop: OptimizedStop; onNavi
         <button data-testid="route-deliver-btn" onClick={onDeliver} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95">
           <Check className="h-4 w-4" /> Entregar
         </button>
+        {onPostpone && (
+          <button onClick={onPostpone} title="Posponer (sacar de la ruta de hoy)" className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-500 active:scale-95">
+            <X className="h-4 w-4" /> Posponer
+          </button>
+        )}
       </div>
     </div>
   );
@@ -640,7 +729,9 @@ function ArrivalPrompt({ stop, onDeliver, onDismiss }: { stop: OptimizedStop; on
   );
 }
 
-function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; onDeliver: () => void }) {
+type StopEdit = { onUp?: () => void; onDown?: () => void; onFirst?: () => void; onPostpone: () => void; busy: boolean };
+
+function Stop({ n, stop, onDeliver, edit }: { n: number | null; stop: OptimizedStop; onDeliver: () => void; edit?: StopEdit }) {
   const phone = stop.deliveryPhone || stop.customer?.phone || null;
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3">
@@ -663,7 +754,15 @@ function Stop({ n, stop, onDeliver }: { n: number | null; stop: OptimizedStop; o
           <p className="font-mono text-xs text-gray-400">{stop.number} · {money(stop.total)}{stop.deliveryNotes ? ` · ${stop.deliveryNotes}` : ""}</p>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {edit && (
+          <div className="flex items-center gap-1">
+            <button onClick={edit.onFirst} disabled={!edit.onFirst || edit.busy} title="Poner de primero" className="grid h-8 w-8 place-items-center rounded-lg border border-gray-300 text-gray-600 active:scale-95 disabled:opacity-30"><ArrowUpToLine className="h-4 w-4" /></button>
+            <button onClick={edit.onUp} disabled={!edit.onUp || edit.busy} title="Subir" className="grid h-8 w-8 place-items-center rounded-lg border border-gray-300 text-gray-600 active:scale-95 disabled:opacity-30"><ChevronUp className="h-4 w-4" /></button>
+            <button onClick={edit.onDown} disabled={!edit.onDown || edit.busy} title="Bajar" className="grid h-8 w-8 place-items-center rounded-lg border border-gray-300 text-gray-600 active:scale-95 disabled:opacity-30"><ChevronDown className="h-4 w-4" /></button>
+            <button onClick={edit.onPostpone} disabled={edit.busy} title="Posponer (sacar de la ruta de hoy)" className="grid h-8 w-8 place-items-center rounded-lg border border-gray-300 text-gray-500 active:scale-95 disabled:opacity-30"><X className="h-4 w-4" /></button>
+          </div>
+        )}
         {phone && <a href={`tel:${phone}`} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"><Phone className="h-4 w-4" /> Llamar</a>}
         <Button size="sm" onClick={onDeliver}><Check className="h-4 w-4" /> Entregar</Button>
       </div>

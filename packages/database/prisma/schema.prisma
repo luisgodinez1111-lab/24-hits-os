@@ -1198,6 +1198,10 @@ model Order {
   deliveryLat         Float? // lat/lng extraídos del link (Google/Apple Maps) para la ruta
   deliveryLng         Float?
   deliveryStatus      DeliveryStatus?
+  // Ruta editable: el operador puede reordenar (deliverySequence: posición manual;
+  // null = la decide el optimizador) y sacar/posponer paradas del día (deliveryExcluded).
+  deliverySequence    Int? // orden manual en la ruta de hoy; null = automático
+  deliveryExcluded    Boolean         @default(false) // fuera de la ruta de hoy (pospuesta)
   // Prueba de entrega (geo-sello): dónde/cuándo/quién al marcar DELIVERED. Evidencia
   // difícil de falsear de que el repartidor estuvo físicamente en el punto de entrega.
   deliveredAt         DateTime?
