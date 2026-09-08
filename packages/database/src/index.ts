@@ -28,6 +28,8 @@ export {
   notifyPaymentDrift,
   scanLowStockAllOrgs,
   scanStaleCashSessionsAllOrgs,
+  autoDraftPurchaseOrdersForOrg,
+  autoDraftPurchaseOrdersAllOrgs,
   type DriftEntry,
   type PaymentDriftEntry,
 } from "./maintenance.js";
