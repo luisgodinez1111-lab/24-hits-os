@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownUp, LockKeyhole, Plus, Wallet } from "lucide-react";
+import { ArrowDownUp, CreditCard, LockKeyhole, Plus, Wallet } from "lucide-react";
 import {
   Badge, Button, Combobox, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -15,6 +16,7 @@ interface Branch { id: string; name: string }
 export default function CashSessionsPage() {
   const toast = useToast();
   const qc = useQueryClient();
+  const router = useRouter();
   const [opening, setOpening] = useState(false);
   const [managingRegisters, setManagingRegisters] = useState(false);
   const [closing, setClosing] = useState<CashSession | null>(null);
@@ -33,7 +35,8 @@ export default function CashSessionsPage() {
           <h1 className="text-2xl font-bold">Turnos de caja</h1>
           <p className="text-sm text-gray-500">Apertura con fondo · arqueo al cierre · efectivo esperado derivado</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.push("/app/sales/orders?pay=unpaid")}><CreditCard className="h-4 w-4" /> Pedidos por cobrar</Button>
           <Button variant="outline" onClick={() => setManagingRegisters(true)}><Wallet className="h-4 w-4" /> Cajas</Button>
           <Button onClick={() => setOpening(true)}><Plus className="h-4 w-4" /> Abrir turno</Button>
         </div>

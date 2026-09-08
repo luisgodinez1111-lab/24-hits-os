@@ -147,8 +147,8 @@ export default function AppHomePage() {
         <section className="mb-8">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Requiere atención</h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {canOrders && <Attn href="/app/sales/orders" icon={Truck} label="Entregas pendientes" count={pendingDeliveries} />}
-            {canOrders && <Attn href="/app/sales/orders" icon={Wallet} label="Pedidos por cobrar" count={unpaid} />}
+            {canOrders && <Attn href="/app/sales/orders?delivery=pending" icon={Truck} label="Entregas pendientes" count={pendingDeliveries} />}
+            {canOrders && <Attn href="/app/sales/orders?pay=unpaid" icon={Wallet} label="Pedidos por cobrar" count={unpaid} />}
             {canInv && <Attn href="/app/inventory?filter=low" icon={PackageX} label="Productos con stock bajo" count={lowStock?.length ?? 0} />}
             {canCust && <Attn href="/app/reports" icon={UserX} label="Clientes inactivos (30d+)" count={inactive?.count ?? 0} />}
           </div>
