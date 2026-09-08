@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
+import { RateLimit } from "../common/decorators/rate-limit.decorator.js";
 import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { PermissionService } from "../iam/permission.service.js";
@@ -91,6 +92,7 @@ export class InventoryController {
 
   // Carga masiva: mismo punto de reorden / stock objetivo para muchos productos.
   @Post("policies/bulk")
+  @RateLimit({ limit: 20, windowSec: 60 })
   @RequirePermissions("inventory.adjust")
   bulkUpsertPolicy(
     @CurrentUser() user: AuthContext,
