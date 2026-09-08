@@ -79,3 +79,52 @@ export async function scanLowStockForOrg(
 
   return created;
 }
+
+// Horas tras las que un turno de caja abierto se considera "olvidado". Un turno que
+// pasa la noche abierto arruina el arqueo del día: el efectivo esperado no cuadra.
+const STALE_CASH_HOURS = 14;
+
+// Genera notificaciones (difusión) para turnos de caja que llevan demasiado tiempo
+// abiertos, para recordar el corte/arqueo. Deduplica por turno en 24h. Reutilizable
+// por el worker (cron) y el endpoint de mantenimiento. Corre dentro de withTenant.
+export async function scanStaleCashSessionsForOrg(
+  tx: TenantTx,
+  organizationId: string,
+  now: Date = new Date()
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - STALE_CASH_HOURS * 3_600_000);
+  const sessions = await tx.cashSession.findMany({
+    where: { organizationId, status: "OPEN", openedAt: { lt: cutoff } },
+    select: { id: true, openedAt: true, register: { select: { name: true } } },
+  });
+
+  let created = 0;
+  const since = new Date(now.getTime() - DEDUPE_WINDOW_MS);
+
+  for (const s of sessions) {
+    const dedupeKey = `cash-open:${s.id}`;
+    const recent = await tx.notification.findFirst({
+      where: { organizationId, dedupeKey, createdAt: { gt: since } },
+      select: { id: true },
+    });
+    if (recent) continue;
+
+    const hours = Math.floor((now.getTime() - new Date(s.openedAt).getTime()) / 3_600_000);
+    await tx.notification.create({
+      data: {
+        organizationId,
+        recipientUserId: null,
+        type: "SYSTEM",
+        severity: "WARNING",
+        title: "Turno de caja abierto",
+        body: `La caja ${s.register?.name ?? "(sin nombre)"} lleva ${hours} h abierta. Ciérrala (arqueo) para cuadrar el efectivo del día.`,
+        entityType: "CashSession",
+        entityId: s.id,
+        dedupeKey,
+      },
+    });
+    created += 1;
+  }
+
+  return created;
+}

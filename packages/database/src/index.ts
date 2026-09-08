@@ -14,7 +14,7 @@ export {
   type BalanceBuckets,
   type BalanceKeyLite,
 } from "./inventory-compute.js";
-export { scanLowStockForOrg } from "./notifications.js";
+export { scanLowStockForOrg, scanStaleCashSessionsForOrg } from "./notifications.js";
 export {
   reconcileOrphanOrderHolds,
   type OrphanHoldReleased,
@@ -27,6 +27,7 @@ export {
   detectPaymentDrift,
   notifyPaymentDrift,
   scanLowStockAllOrgs,
+  scanStaleCashSessionsAllOrgs,
   type DriftEntry,
   type PaymentDriftEntry,
 } from "./maintenance.js";
