@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, ListChecks, PackagePlus, Search, SlidersHorizontal, Target, Truck } from "lucide-react";
+import { Boxes, Download, ListChecks, PackagePlus, Search, SlidersHorizontal, Target, Truck } from "lucide-react";
 import {
   Badge, Button, Card, CardBody, Combobox, EmptyState, Input, Skeleton, Table, TBody, TD, TH, THead, TR,
   PageHeader,
@@ -15,6 +15,7 @@ import { StockAdjustDialog } from "@/components/StockAdjustDialog";
 import { ReorderPolicyDialog, type ReorderPolicyTarget } from "@/components/ReorderPolicyDialog";
 import { BulkReorderPolicyDialog } from "@/components/BulkReorderPolicyDialog";
 import { BulkAssignSupplierDialog } from "@/components/BulkAssignSupplierDialog";
+import { downloadCsv, csvDateTag } from "@/lib/csv";
 
 type PolicyRow = {
   variantId: string; warehouseId: string; minimumStock: number;
@@ -143,12 +144,44 @@ export default function InventoryPage() {
     return { cols, items, colTotals, grand };
   }, [data, term]);
 
+  // Exporta lo que estás viendo (respeta búsqueda + filtros): la matriz por bodega
+  // en vista pivote, o el detalle fila a fila. Abrible en Excel.
+  const canExport = view === "pivot" ? pivot.items.length > 0 : detailRows.length > 0;
+  function exportCsv() {
+    const tag = csvDateTag();
+    if (view === "pivot") {
+      const headers = ["Modelo", "Sabor", ...pivot.cols.map((c) => c.name), "Total"];
+      const rows = pivot.items.map((it) => [
+        it.product ?? "", it.flavor ?? "",
+        ...pivot.cols.map((c) => Number(it.cells.get(c.id) ?? 0)),
+        it.total,
+      ]);
+      downloadCsv(`existencias_por_bodega_${tag}`, headers, rows);
+    } else {
+      const headers = ["Almacén", "SKU", "Producto", "Sabor", "On hand", "Reservado", "Disponible", "Dañado", "Tránsito", "Estado reorden", "Punto de reorden"];
+      const rows = detailRows.map((r) => {
+        const p = policyMap.get(rowKey(r));
+        return [
+          r.warehouseName ?? "", r.sku ?? "", r.product ?? "", r.flavor ?? "",
+          Number(r.onHand), Number(r.reserved), Number(r.available), Number(r.damaged), Number(r.inTransitIncoming),
+          reorderLabel[r.reorderStatus], p?.reorderPoint ?? "",
+        ];
+      });
+      downloadCsv(`existencias_detalle_${tag}`, headers, rows);
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Existencias"
         subtitle="Piezas físicas por modelo, sabor y almacén (On hand = piezas en la bodega)"
-        actions={canAdjust ? <Button onClick={() => setStockDialog({})}><PackagePlus className="h-4 w-4" /> Cargar / ajustar stock</Button> : undefined}
+        actions={
+          <>
+            <Button variant="outline" disabled={!canExport} onClick={exportCsv}><Download className="h-4 w-4" /> Exportar CSV</Button>
+            {canAdjust && <Button onClick={() => setStockDialog({})}><PackagePlus className="h-4 w-4" /> Cargar / ajustar stock</Button>}
+          </>
+        }
       />
 
       <Card className="mb-6">
