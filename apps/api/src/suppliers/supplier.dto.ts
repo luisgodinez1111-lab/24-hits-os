@@ -24,3 +24,11 @@ export const setSupplierReferenceSchema = z.object({
   isPreferred: z.boolean().default(false),
 });
 export type SetSupplierReferenceInput = z.infer<typeof setSupplierReferenceSchema>;
+
+// Asignación masiva: marca a este proveedor como referencia (preferido) de varias
+// variantes de una vez. Pensado para catálogos grandes.
+export const bulkSetSupplierReferenceSchema = z.object({
+  variantIds: z.array(z.string().uuid()).min(1).max(2000),
+  isPreferred: z.boolean().default(true),
+});
+export type BulkSetSupplierReferenceInput = z.infer<typeof bulkSetSupplierReferenceSchema>;

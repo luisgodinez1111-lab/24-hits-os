@@ -1,8 +1,10 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@24hits/database";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import type {
+  BulkSetSupplierReferenceInput,
   CreateSupplierInput,
   SetSupplierReferenceInput,
   UpdateSupplierInput,
@@ -107,5 +109,43 @@ export class SupplierService {
         },
       })
     );
+  }
+
+  // Asignación masiva de proveedor a varias variantes en una sola escritura
+  // (INSERT … ON CONFLICT). Si se marca como preferido, desmarca a los demás
+  // proveedores de esas variantes para garantizar un único preferido por variante
+  // (que es el que toman las sugerencias de compra). Filtra a variantes del tenant.
+  async bulkSetReferences(organizationId: string, supplierId: string, input: BulkSetSupplierReferenceInput) {
+    await this.getById(organizationId, supplierId); // valida que el proveedor sea del tenant
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const variantIds = [...new Set(input.variantIds)];
+      const variants = await tx.productVariant.findMany({
+        where: { id: { in: variantIds } },
+        select: { id: true },
+      });
+      const ok = variants.map((v) => v.id);
+      if (ok.length === 0) return { applied: 0, skipped: input.variantIds.length };
+
+      // Un único preferido por variante: desmarca a los demás proveedores.
+      if (input.isPreferred) {
+        await tx.productSupplierReference.updateMany({
+          where: { variantId: { in: ok }, supplierId: { not: supplierId }, isPreferred: true },
+          data: { isPreferred: false },
+        });
+      }
+
+      const rows = ok.map(
+        (v) =>
+          Prisma.sql`(gen_random_uuid(), ${organizationId}::uuid, ${supplierId}::uuid, ${v}::uuid, ${input.isPreferred}, now(), now())`
+      );
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "ProductSupplierReference"
+          ("id", "organizationId", "supplierId", "variantId", "isPreferred", "createdAt", "updatedAt")
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT ("supplierId", "variantId") DO UPDATE
+          SET "isPreferred" = EXCLUDED."isPreferred", "updatedAt" = now()
+      `);
+      return { applied: ok.length, skipped: input.variantIds.length - ok.length };
+    });
   }
 }
