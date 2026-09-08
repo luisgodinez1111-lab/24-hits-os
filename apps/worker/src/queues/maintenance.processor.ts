@@ -6,6 +6,7 @@ import { verifyInventoryDrift } from "../inventory/verify-drift.js";
 import { scanLowStock } from "../inventory/low-stock.js";
 import { reconcileOrphanOrderHolds } from "../inventory/reconcile-orphan-holds.js";
 import { scanStaleCashSessions } from "../cash/stale-sessions.js";
+import { autoDraftPurchaseOrders } from "../purchasing/auto-draft-po.js";
 import type { RedisConnection } from "./email.processor.js";
 
 export const MAINTENANCE_QUEUE_NAME = "maintenance";
@@ -14,6 +15,7 @@ export const JOB_BALANCE_VERIFY = "inventory.balance.verify";
 export const JOB_LOW_STOCK_SCAN = "inventory.low_stock.scan";
 export const JOB_ORPHAN_HOLDS_RECONCILE = "inventory.orphan_holds.reconcile";
 export const JOB_STALE_CASH_SCAN = "cash.stale_sessions.scan";
+export const JOB_AUTO_DRAFT_PO = "purchasing.auto_draft_po";
 
 // Programa los jobs repetibles (cron) y arranca el worker de mantenimiento de inventario.
 export async function startMaintenanceWorker(params: {
@@ -33,6 +35,8 @@ export async function startMaintenanceWorker(params: {
   await queue.add(JOB_ORPHAN_HOLDS_RECONCILE, {}, { repeat: { every: 600_000 }, jobId: "orphan-holds-reconcile", removeOnComplete: 100, removeOnFail: 100 });
   // Recordatorio de corte de caja cada hora (turnos abiertos demasiado tiempo).
   await queue.add(JOB_STALE_CASH_SCAN, {}, { repeat: { every: 3_600_000 }, jobId: "stale-cash-scan", removeOnComplete: 100, removeOnFail: 100 });
+  // OC en borrador por reorden cada 6h (DRAFT, deduplicada; requiere aprobación humana).
+  await queue.add(JOB_AUTO_DRAFT_PO, {}, { repeat: { every: 21_600_000 }, jobId: "auto-draft-po", removeOnComplete: 100, removeOnFail: 100 });
 
   const worker = new Worker(
     MAINTENANCE_QUEUE_NAME,
@@ -55,6 +59,10 @@ export async function startMaintenanceWorker(params: {
       }
       if (job.name === JOB_STALE_CASH_SCAN) {
         await scanStaleCashSessions(prisma, logger);
+        return;
+      }
+      if (job.name === JOB_AUTO_DRAFT_PO) {
+        await autoDraftPurchaseOrders(prisma, logger);
         return;
       }
       logger.warn("Job de mantenimiento desconocido", { name: job.name });

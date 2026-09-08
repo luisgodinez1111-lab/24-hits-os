@@ -10,6 +10,7 @@ import {
   reconcileOrphanOrderHolds,
   scanLowStockAllOrgs,
   scanStaleCashSessionsAllOrgs,
+  autoDraftPurchaseOrdersAllOrgs,
 } from "@24hits/database";
 import { ENV } from "../config/app-config.module.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -48,6 +49,9 @@ export class MaintenanceController {
     const paymentDriftAlerts = await notifyPaymentDrift(prisma, paymentDrift);
     // Recordatorio de corte de caja: turnos abiertos demasiado tiempo (rompe el arqueo).
     const staleCashSessions = await scanStaleCashSessionsAllOrgs(prisma);
+    // OC en borrador automática: faltantes con proveedor → deja la OC en DRAFT (dedup;
+    // requiere aprobación humana, no toca inventario ni dinero hasta recibirse).
+    const autoDraftPurchaseOrders = await autoDraftPurchaseOrdersAllOrgs(prisma);
 
     return {
       ok: true,
@@ -60,6 +64,7 @@ export class MaintenanceController {
       paymentDrift: paymentDrift.length, // >0 = pedidos con paymentStatus que no cuadra
       paymentDriftAlerts,
       staleCashSessions, // notificaciones de turnos de caja abiertos demasiado tiempo
+      autoDraftPurchaseOrders, // OC en borrador creadas automáticamente por reorden
     };
   }
 
