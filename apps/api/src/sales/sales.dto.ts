@@ -102,3 +102,15 @@ export const assignDriverSchema = z.object({
   driverId: z.string().uuid().nullable(),
 });
 export type AssignDriverInput = z.infer<typeof assignDriverSchema>;
+
+// Ruta editable: orden manual (lista ordenada de paradas; vacío = automático) y
+// posponer / reponer una parada del día.
+export const routeSequenceSchema = z.object({
+  orderIds: z.array(z.string().uuid()).max(2000),
+});
+export type RouteSequenceInput = z.infer<typeof routeSequenceSchema>;
+
+export const routeExcludeSchema = z.object({
+  excluded: z.boolean(),
+});
+export type RouteExcludeInput = z.infer<typeof routeExcludeSchema>;

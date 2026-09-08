@@ -395,9 +395,11 @@ export interface OptimizedRoute {
   totalKm: number;
   totalMin: number | null;
   priorityCount: number;
+  hasManualOrder: boolean; // true = el operador fijó el orden (manda sobre el optimizador)
   geometry: [number, number][] | null; // trazo por calles (OSRM); null = línea recta
   stops: OptimizedStop[];
   noCoords: DeliveryStop[];
+  postponed: DeliveryStop[]; // paradas sacadas de la ruta de hoy (pospuestas)
 }
 
 export interface LiveDriver {
