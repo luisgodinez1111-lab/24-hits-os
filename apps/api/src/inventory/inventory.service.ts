@@ -55,6 +55,12 @@ export interface UpsertPolicyInput {
   enabled?: boolean;
 }
 
+export interface BulkUpsertPolicyInput {
+  items: Array<{ variantId: string; warehouseId: string }>;
+  reorderPoint: number;
+  targetStock?: number | null;
+}
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -498,6 +504,50 @@ export class InventoryService {
         leadTimeDays: policy.leadTimeDays ?? null,
         enabled: policy.enabled,
       };
+    });
+  }
+
+  // Carga masiva de puntos de reorden: aplica el mismo umbral a muchos productos en
+  // una sola escritura (INSERT … ON CONFLICT), tras filtrar a pares variante+almacén
+  // válidos del propio tenant. Un loop de upserts reventaría el timeout de la
+  // transacción con cientos de variantes; esto es una sola sentencia.
+  bulkUpsertPolicy(organizationId: string, input: BulkUpsertPolicyInput) {
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const variantIds = [...new Set(input.items.map((i) => i.variantId))];
+      const warehouseIds = [...new Set(input.items.map((i) => i.warehouseId))];
+      const [variants, warehouses] = await Promise.all([
+        tx.productVariant.findMany({ where: { id: { in: variantIds } }, select: { id: true } }),
+        tx.warehouse.findMany({ where: { id: { in: warehouseIds } }, select: { id: true } }),
+      ]);
+      const okVar = new Set(variants.map((v) => v.id));
+      const okWh = new Set(warehouses.map((w) => w.id));
+      // Dedup + solo pares del propio tenant (defensa: variantId no tiene FK).
+      const seen = new Set<string>();
+      const pairs = input.items.filter((i) => {
+        const k = `${i.warehouseId}:${i.variantId}`;
+        if (seen.has(k) || !okVar.has(i.variantId) || !okWh.has(i.warehouseId)) return false;
+        seen.add(k);
+        return true;
+      });
+      if (pairs.length === 0) return { applied: 0, skipped: input.items.length };
+
+      const rp = new Prisma.Decimal(input.reorderPoint);
+      const ts = new Prisma.Decimal(input.targetStock ?? input.reorderPoint * 2);
+      const rows = pairs.map(
+        (p) =>
+          Prisma.sql`(gen_random_uuid(), ${organizationId}::uuid, ${p.warehouseId}::uuid, ${p.variantId}::uuid, 0, 0, ${rp}, ${ts}, true, now(), now())`
+      );
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "InventoryPolicy"
+          ("id", "organizationId", "warehouseId", "variantId", "minimumStock", "safetyStock", "reorderPoint", "targetStock", "enabled", "createdAt", "updatedAt")
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT ("organizationId", "warehouseId", "variantId") DO UPDATE
+          SET "reorderPoint" = EXCLUDED."reorderPoint",
+              "targetStock" = EXCLUDED."targetStock",
+              "enabled" = true,
+              "updatedAt" = now()
+      `);
+      return { applied: pairs.length, skipped: input.items.length - pairs.length };
     });
   }
 

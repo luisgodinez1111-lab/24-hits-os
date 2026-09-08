@@ -15,6 +15,7 @@ import {
   openingBalanceSchema,
   reserveSchema,
   upsertPolicySchema,
+  bulkUpsertPolicySchema,
   type BalancesQuery,
   type DamageBody,
   type ManualAdjustmentBody,
@@ -22,6 +23,7 @@ import {
   type OpeningBalanceBody,
   type ReserveBody,
   type UpsertPolicyBody,
+  type BulkUpsertPolicyBody,
 } from "./inventory.dto.js";
 
 @ApiTags("inventory")
@@ -85,6 +87,16 @@ export class InventoryController {
     @Body(new ZodValidationPipe(upsertPolicySchema)) body: UpsertPolicyBody
   ) {
     return this.inventory.upsertPolicy(user.organizationId!, body);
+  }
+
+  // Carga masiva: mismo punto de reorden / stock objetivo para muchos productos.
+  @Post("policies/bulk")
+  @RequirePermissions("inventory.adjust")
+  bulkUpsertPolicy(
+    @CurrentUser() user: AuthContext,
+    @Body(new ZodValidationPipe(bulkUpsertPolicySchema)) body: BulkUpsertPolicyBody
+  ) {
+    return this.inventory.bulkUpsertPolicy(user.organizationId!, body);
   }
 
   // Capital atrapado: existencias sin venta en `days` días (default 60), valoradas.
