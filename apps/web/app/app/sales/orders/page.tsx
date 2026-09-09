@@ -272,12 +272,21 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
   const toast = useToast();
   const [form, setForm] = useState<{ method: "CASH" | "CARD" | "TRANSFER" | "OTHER"; amount: string; reference: string }>({ method: "CASH", amount: "", reference: "" });
 
+  // Comisión por tarjeta: +$15 si es TARJETA (efectivo/transferencia sin comisión).
+  const orderTotal = Number(order?.total ?? 0);
+  const surcharge = form.method === "CARD" ? 15 : 0;
+  const chargeTotal = orderTotal + surcharge;
+  // Prefill del monto a cobrar según el método (se recalcula al cambiar de método).
+  useEffect(() => {
+    if (order) setForm((f) => ({ ...f, amount: String(Number(order.total ?? 0) + (f.method === "CARD" ? 15 : 0)) }));
+  }, [order, form.method]);
+
   const pay = useMutation({
     mutationFn: () => api.post(`/payments`, {
       orderId: order!.id,
       method: form.method,
       amount: Number(form.amount || 0),
-      reference: form.reference || undefined,
+      reference: form.reference || (form.method === "CARD" ? "Incluye $15 comisión tarjeta" : undefined),
     }),
     onSuccess: () => { setForm({ method: "CASH", amount: "", reference: "" }); onDone(); },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
@@ -291,7 +300,12 @@ function PaymentDialog({ order, onClose, onDone }: { order: Order | null; onClos
           pay.mutate();
         }}>Cobrar</Button></>}>
       <div className="space-y-3">
-        <p className="text-sm text-gray-500">Total del pedido: <span className="font-mono font-semibold text-gray-900 tabular-nums">${Number(order?.total ?? 0).toFixed(2)}</span></p>
+        <p className="text-sm text-gray-500">Total del pedido: <span className="font-mono font-semibold text-gray-900 tabular-nums">${orderTotal.toFixed(2)}</span></p>
+        {surcharge > 0 && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Con tarjeta se cobra comisión: ${orderTotal.toFixed(2)} + ${surcharge.toFixed(2)} = <b className="tabular-nums">${chargeTotal.toFixed(2)}</b>
+          </p>
+        )}
         <FormField label="Método">
           <Segmented
             full
