@@ -20,7 +20,9 @@
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
-    "OTEL_SERVICE_NAME"
+    "OTEL_SERVICE_NAME",
+    "RLS_STARTUP_CHECK",
+    "CRON_SECRET"
   ],
   "tasks": {
     "build": {
