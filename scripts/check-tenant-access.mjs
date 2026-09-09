@@ -12,13 +12,20 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const schema = readFileSync(join(root, "packages/database/prisma/schema.prisma"), "utf8");
 
-// Modelos tenant = los que declaran organizationId. Se pasa a la forma del accesor de
-// Prisma (primera letra minúscula): `Order` -> `order`, `ProductVariant` -> `productVariant`.
+// Modelos de INFRA que gestionan la tenancy y se acceden por el cliente base POR
+// DISEÑO (auth/iam/audit operan alrededor del contexto RLS). Se excluyen del chequeo
+// aunque tengan organizationId. Todo lo demás (negocio) SÍ debe ir por withTenant.
+const INFRA_MODELS = new Set([
+  "session", "organizationMembership", "role", "auditEvent", "organization",
+]);
+
+// Modelos tenant = los que declaran organizationId, menos los de infra. Se pasan a la
+// forma del accesor de Prisma (primera letra minúscula): `ProductVariant` -> `productVariant`.
 const tenantModels = [];
 for (const m of schema.matchAll(/model\s+(\w+)\s*\{([^}]*)\}/g)) {
   if (/\borganizationId\b/.test(m[2])) {
-    const name = m[1];
-    tenantModels.push(name[0].toLowerCase() + name.slice(1));
+    const accessor = m[1][0].toLowerCase() + m[1].slice(1);
+    if (!INFRA_MODELS.has(accessor)) tenantModels.push(accessor);
   }
 }
 if (tenantModels.length === 0) {
@@ -29,16 +36,13 @@ if (tenantModels.length === 0) {
 const methods = "(find\\w*|count|aggregate|groupBy|create\\w*|update\\w*|delete\\w*|upsert)";
 const re = new RegExp(`this\\.prisma\\.client\\.(${tenantModels.join("|")})\\.${methods}`);
 
-// Se excluye la infra que GESTIONA la tenancy y opera alrededor del contexto RLS por
-// diseño (auth, iam, audit): ahí el acceso por client es arquitectónico, no un bug.
-const EXCLUDE_DIRS = new Set(["auth", "iam", "audit"]);
 // Exención puntual: agrega `// rls-ok` al final de la línea (con una razón) si es un
-// acceso por client legítimo y verificado en una carpeta de negocio.
+// acceso por client legítimo y verificado. Se escanea TODO apps/api/src (no se excluye
+// por carpeta: leer una tabla de negocio por el client es un bug esté donde esté).
 
 const offenders = [];
 function walk(dir) {
   for (const e of readdirSync(dir)) {
-    if (EXCLUDE_DIRS.has(e)) continue;
     const p = join(dir, e);
     const s = statSync(p);
     if (s.isDirectory()) { walk(p); continue; }
