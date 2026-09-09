@@ -1154,6 +1154,7 @@ model Customer {
   legalName      String?
   email          String?
   phone          String?
+  phoneNormalized String? // últimos 10 dígitos del WhatsApp (llave de identidad/búsqueda, tolera +52/52/521/espacios)
   address        String?
   zone           CustomerZone?
   lat            Float? // última ubicación conocida (para prellenar entregas)
@@ -1170,6 +1171,7 @@ model Customer {
   @@unique([organizationId, code])
   @@index([organizationId, status])
   @@index([organizationId, zone])
+  @@index([organizationId, phoneNormalized]) // buscar/identificar cliente por WhatsApp
 }
 
 model Order {

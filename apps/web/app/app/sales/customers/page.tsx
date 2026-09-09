@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Pencil, Plus, UserSquare, Wallet } from "lucide-react";
+import { BarChart3, Pencil, Plus, Search, UserSquare, Wallet } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, FormField, Input, Select, Skeleton,
   Table, TBody, TD, TH, THead, TR, useToast,
@@ -14,6 +14,7 @@ import type { Customer, CustomerAccount, CustomerInsights, CustomerZone } from "
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/format";
 import { classifyZone } from "@/lib/zone";
+import { customerMatches } from "@/lib/phone";
 
 const zoneLabel: Record<CustomerZone, string> = { NORTE: "Norte", SUR: "Sur", ESTE: "Este", OESTE: "Oeste", CENTRO: "Centro" };
 const zoneTone: Record<CustomerZone, "blue" | "green" | "amber" | "gray" | "red"> = {
@@ -26,7 +27,10 @@ export default function CustomersPage() {
   const [form, setForm] = useState<Customer | "new" | null>(null);
   const [account, setAccount] = useState<Customer | null>(null);
   const [insights, setInsights] = useState<Customer | null>(null);
+  const [q, setQ] = useState("");
   const { data, isLoading } = useQuery({ queryKey: ["customers"], queryFn: () => api.get<Customer[]>("/customers") });
+  // Filtro por nombre O WhatsApp (tolera +52/52/521/espacios).
+  const shown = (data ?? []).filter((c) => customerMatches(c, q));
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "INACTIVE" }) =>
@@ -43,6 +47,13 @@ export default function CustomersPage() {
         actions={<Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo</Button>}
       />
 
+      {!isLoading && data && data.length > 0 && (
+        <div className="relative mb-3 max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca por nombre o WhatsApp…" />
+        </div>
+      )}
+
       {isLoading ? (
         <TableSkeleton cols={8} />
       ) : !data || data.length === 0 ? (
@@ -52,6 +63,8 @@ export default function CustomersPage() {
           description="Registra tu primer cliente para asignarle zona de entrega y ver su análisis de compra."
           action={<Button onClick={() => setForm("new")}><Plus className="h-4 w-4" /> Nuevo cliente</Button>}
         />
+      ) : shown.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-gray-200 py-8 text-center text-sm text-gray-400">Sin coincidencias para «{q}»</p>
       ) : (
         <Table stickyHeader>
           <THead><TR>
@@ -59,7 +72,7 @@ export default function CustomersPage() {
             <TH className="text-right">Pedidos</TH><TH>Última compra</TH><TH>Estado</TH><TH className="text-right">Acciones</TH>
           </TR></THead>
           <TBody>
-            {data.map((c) => (
+            {shown.map((c) => (
               <TR key={c.id}>
                 <TD className="font-mono text-xs text-gray-500">{c.code ?? "—"}</TD>
                 <TD className="font-medium"><Link href={`/app/sales/customers/${c.id}`} className="text-brand hover:underline">{c.name}</Link></TD>

@@ -14,6 +14,7 @@ import { LedgerService } from "../inventory/ledger.service.js";
 import { CostService } from "../inventory/cost.service.js";
 import { BalanceService } from "../inventory/balance.service.js";
 import { ReservationService } from "../inventory/reservation.service.js";
+import { CustomerService } from "./customer.service.js";
 import type { CreateOrderInput, UpdateDeliveryInput } from "./sales.dto.js";
 import { resolveLatLng } from "./geo.js";
 import { haversineMatrix, optimizeSubset, osrmMatrix, osrmRoute, type Pt } from "./route-optimizer.js";
@@ -36,7 +37,8 @@ export class OrderService {
     private readonly cost: CostService,
     private readonly balances: BalanceService,
     private readonly reservations: ReservationService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly customers: CustomerService
   ) {}
 
   async list(organizationId: string) {
@@ -434,11 +436,19 @@ export class OrderService {
       const wh = await tx.warehouse.findFirst({ where: { id: warehouseId }, select: { branchId: true } });
       if (!wh) throw AppException.badRequest("Almacén no encontrado");
 
+      // Identidad por WhatsApp: si no se eligió cliente pero viene teléfono, se liga
+      // (o se crea) el cliente con ese número normalizado, para que la compra entre a
+      // su historial. Alta automática con el número (decisión del negocio).
+      let resolvedCustomerId = input.customerId ?? null;
+      if (!resolvedCustomerId && input.deliveryPhone) {
+        resolvedCustomerId = await this.customers.findOrCreateByPhoneTx(tx, organizationId, input.deliveryPhone, input.customerName);
+      }
+
       let customerType: PriceListType = "RETAIL";
       let customerCoords: { lat: number; lng: number } | null = null;
-      if (input.customerId) {
+      if (resolvedCustomerId) {
         const customer = await tx.customer.findFirst({
-          where: { id: input.customerId },
+          where: { id: resolvedCustomerId },
           select: { type: true, status: true, lat: true, lng: true },
         });
         if (!customer) throw new AppException(404, ErrorCode.CUSTOMER_NOT_FOUND, "Cliente no encontrado");
@@ -479,7 +489,7 @@ export class OrderService {
           organizationId,
           branchId: wh.branchId,
           warehouseId,
-          customerId: input.customerId ?? null,
+          customerId: resolvedCustomerId,
           number: `SO-${newId().replace(/-/g, "").slice(-12).toUpperCase()}`,
           status: "DRAFT",
           channel: input.channel ?? null,

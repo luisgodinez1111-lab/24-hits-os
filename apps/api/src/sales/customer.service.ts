@@ -6,6 +6,7 @@ import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
 import type { CreateCustomerInput, UpdateCustomerInput } from "./sales.dto.js";
 import { classifyZone } from "./zone-classifier.js";
+import { phoneKey } from "./phone.js";
 
 @Injectable()
 export class CustomerService {
@@ -160,6 +161,7 @@ export class CustomerService {
             legalName: input.legalName ?? null,
             email: input.email ?? null,
             phone: input.phone ?? null,
+            phoneNormalized: phoneKey(input.phone) || null,
             address: input.address ?? null,
             // Zona: la indicada; si no, se deriva de la dirección (autoridad backend).
             zone: input.zone ?? (input.address ? classifyZone(input.address) : null),
@@ -180,6 +182,30 @@ export class CustomerService {
     } catch (e) {
       throw this.mapCodeConflict(e);
     }
+  }
+
+  // Identidad por WhatsApp DENTRO de una transacción existente (la usa el alta de
+  // pedidos): busca al cliente por su número normalizado (tolera cualquier formato) y
+  // si no existe lo crea al vuelo. Devuelve el id del cliente, o null si el número no
+  // trae dígitos. El nombre es opcional; si falta, se usa el propio número.
+  async findOrCreateByPhoneTx(tx: TenantTx, organizationId: string, rawPhone: string, name?: string | null): Promise<string | null> {
+    const key = phoneKey(rawPhone);
+    if (!key) return null;
+    const found = await tx.customer.findFirst({ where: { phoneNormalized: key }, select: { id: true } });
+    if (found) return found.id;
+    const code = await this.nextCustomerCode(tx, organizationId);
+    const created = await tx.customer.create({
+      data: {
+        organizationId,
+        code,
+        name: name?.trim() || rawPhone.trim(),
+        phone: rawPhone.trim(),
+        phoneNormalized: key,
+        type: "RETAIL",
+      },
+      select: { id: true },
+    });
+    return created.id;
   }
 
   // Siguiente número de cliente (C-0001, C-0002…) con secuencia atómica
@@ -233,6 +259,8 @@ export class CustomerService {
             legalName: input.legalName === undefined ? undefined : input.legalName,
             email: input.email === undefined ? undefined : input.email,
             phone: input.phone === undefined ? undefined : input.phone,
+            // Mantiene la llave de búsqueda sincronizada cuando cambia el teléfono.
+            phoneNormalized: input.phone === undefined ? undefined : phoneKey(input.phone) || null,
             address: input.address === undefined ? undefined : input.address,
             // Si se cambia la dirección sin indicar zona, se reclasifica (autoridad
             // backend); si la clasificación no reconoce nada, se deja la zona actual.
