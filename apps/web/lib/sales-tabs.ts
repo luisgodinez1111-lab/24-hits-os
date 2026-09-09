@@ -1,9 +1,9 @@
-import { ClipboardCheck, Receipt, Route, ScanLine, Undo2, UserSquare, Wallet } from "lucide-react";
+import { ClipboardCheck, Receipt, Route, Undo2, UserSquare, Wallet } from "lucide-react";
 import type { SectionTab } from "@/components/SectionTabs";
 
-// Pestañas de la ventana única de Ventas.
+// Pestañas de la ventana única de Ventas. (Punto de venta / mostrador se ocultó: el
+// negocio es 100% pedidos a domicilio; se crea desde "Pedidos → Nuevo".)
 export const salesTabs: SectionTab[] = [
-  { href: "/app/sales/pos", label: "Punto de venta", icon: ScanLine, perm: "orders.create" },
   { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
   { href: "/app/sales/route", label: "Ruta de hoy", icon: Route, perm: "orders.read" },
   { href: "/app/sales/cash", label: "Caja", icon: Wallet, perm: "cash.read" },

@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle, Award, Boxes, ClipboardCheck, Droplet, Package, PackageX, ScanLine, Truck, UserSquare, UserX, Wallet,
+  AlertTriangle, Award, Boxes, ClipboardCheck, Droplet, Package, PackageX, Truck, UserSquare, UserX, Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { PermissionKey } from "@24hits/contracts";
@@ -33,8 +33,7 @@ interface HealthSummary { inventoryDrift: number; paymentDrift: number; cashDisc
 
 interface Action { href: string; label: string; desc: string; icon: LucideIcon; perm?: PermissionKey }
 const actions: Action[] = [
-  { href: "/app/sales/pos", label: "Punto de venta", desc: "Escanea y cobra", icon: ScanLine, perm: "orders.create" },
-  { href: "/app/sales/orders", label: "Pedidos", desc: "Gestiona y entrega", icon: ClipboardCheck, perm: "orders.read" },
+  { href: "/app/sales/orders", label: "Pedidos", desc: "Nuevo pedido y entrega", icon: ClipboardCheck, perm: "orders.read" },
   { href: "/app/sales/customers", label: "Clientes", desc: "Registro y análisis", icon: UserSquare, perm: "customers.read" },
   { href: "/app/inventory", label: "Inventario", desc: "Existencias", icon: Boxes, perm: "inventory.read" },
   { href: "/app/catalog/products", label: "Catálogo", desc: "Productos y precios", icon: Package, perm: "products.read" },
@@ -59,7 +58,7 @@ export default function AppHomePage() {
     const isManager = hasPermission(me, "reports.read") || hasPermission(me, "inventory.read") || hasPermission(me, "products.read");
     if (isManager) return;
     if (hasPermission(me, "orders.deliver")) router.replace("/app/sales/route");
-    else if (hasPermission(me, "orders.create")) router.replace("/app/sales/pos");
+    else if (hasPermission(me, "orders.create")) router.replace("/app/sales/orders");
   }, [me, router]);
 
   const today = isoLocal(new Date());
