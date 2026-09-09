@@ -68,16 +68,27 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState(""); // ¿quién recibió? (opcional)
 
-  // Reinicia al abrir un pedido nuevo; monto por defecto = total del pedido.
+  // Reinicia al abrir un pedido nuevo.
   useEffect(() => {
     if (open) {
       setVerified(new Map());
       setOverride(false);
       setMethod("CASH");
-      setAmount(order?.total ?? "");
       setRecipient("");
     }
-  }, [open, order?.id, order?.total]);
+  }, [open, order?.id]);
+
+  // Comisión por tarjeta: el cliente paga +$15 si cobra con TARJETA (efectivo y
+  // transferencia sin comisión). El monto sugerido se recalcula solo según el método.
+  const CARD_SURCHARGE = 15;
+  const orderTotal = Number(order?.total ?? 0);
+  const surcharge = method === "CARD" ? CARD_SURCHARGE : 0;
+  const chargeTotal = orderTotal + surcharge;
+  useEffect(() => {
+    if (!open) return;
+    const s = method === "CARD" ? CARD_SURCHARGE : 0;
+    setAmount(String(Number(order?.total ?? 0) + s));
+  }, [open, method, order?.total]);
 
   const totalVerified = [...verified.values()].reduce((a, v) => a + v.count, 0);
   const ready = override || (totalNeeded > 0 && totalVerified >= totalNeeded);
@@ -125,7 +136,7 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
       try {
         // 1) Entregar (auto-confirma + fulfill → consume inventario, sella la prueba). 2) Cobrar.
         await api.patch(`/orders/${stopId}/delivery`, { status: "DELIVERED", ...proof });
-        if (amt > 0) await api.post("/payments", { orderId: stopId, method, amount: amt, idempotencyKey });
+        if (amt > 0) await api.post("/payments", { orderId: stopId, method, amount: amt, idempotencyKey, reference: method === "CARD" ? "Incluye $15 comisión tarjeta" : undefined });
         return { queued: false };
       } catch (err) {
         // Error del SERVIDOR (ApiError): rechazo real → propaga y se muestra.
@@ -215,6 +226,11 @@ export function DeliverDialog({ stopId, onClose, onDone }: { stopId: string | nu
               <Input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
             </FormField>
           </div>
+          {surcharge > 0 && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Con tarjeta se cobra comisión: {money(orderTotal)} + {money(surcharge)} = <b className="tabular-nums">{money(chargeTotal)}</b>
+            </p>
+          )}
           {/* Prueba de entrega: quién recibió (opcional). La ubicación/hora se sellan solas. */}
           <FormField label="¿Quién recibió? (opcional)">
             <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Nombre de quien recibió" maxLength={120} />
