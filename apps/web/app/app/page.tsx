@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Award, Boxes, ClipboardCheck, Droplet, Package, PackageX, ScanLine, Truck, UserSquare, UserX, Wallet,
@@ -48,6 +49,18 @@ export default function AppHomePage() {
   const canOrders = hasPermission(me, "orders.read");
   const canInv = hasPermission(me, "inventory.read");
   const canCust = hasPermission(me, "customers.read");
+
+  // Aterrizaje por rol: quien SOLO reparte o SOLO cobra no necesita el tablero —
+  // lo llevamos directo a su pantalla. El dueño/gerente (ve reportes, inventario o
+  // catálogo) se queda en Inicio. Solo redirige a roles inequívocos; si hay duda, Inicio.
+  const router = useRouter();
+  useEffect(() => {
+    if (!me) return;
+    const isManager = hasPermission(me, "reports.read") || hasPermission(me, "inventory.read") || hasPermission(me, "products.read");
+    if (isManager) return;
+    if (hasPermission(me, "orders.deliver")) router.replace("/app/sales/route");
+    else if (hasPermission(me, "orders.create")) router.replace("/app/sales/pos");
+  }, [me, router]);
 
   const today = isoLocal(new Date());
   const y = new Date(); y.setDate(y.getDate() - 1);
