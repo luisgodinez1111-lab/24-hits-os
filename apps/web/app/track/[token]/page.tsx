@@ -88,27 +88,33 @@ export default function TrackPage() {
                 Gracias{data?.customerName ? `, ${data.customerName}` : ""}. Tu pedido {data?.number} fue entregado.
               </p>
             </>
-          ) : data?.driver ? (
+          ) : dispatched ? (
             <>
-              <p className="text-sm font-medium text-gray-500">{dispatched ? "Tu pedido va en camino" : "Tu repartidor está por salir"}</p>
+              <p className="text-sm font-medium text-gray-500">Tu pedido va en camino</p>
               <div className="mt-1 flex items-baseline gap-2">
-                {data.etaMin != null ? (
+                {data?.driver && data.etaMin != null ? (
                   <p className="font-mono text-3xl font-extrabold tabular-nums text-gray-900">
                     ~{data.etaMin} <span className="text-lg font-bold text-gray-500">min</span>
                   </p>
                 ) : (
-                  <p className="text-2xl font-bold text-gray-900">En camino</p>
+                  <p className="text-2xl font-bold text-gray-900">En camino 🛵</p>
                 )}
               </div>
-              <p className="mt-1 text-sm text-gray-500">
-                {data.driver.name ? (
-                  <>
-                    <b className="text-gray-700">{data.driver.name}</b> es tu repartidor
-                  </>
-                ) : (
-                  "Repartidor en ruta"
-                )}
-                {data.driver.minutesAgo > 1 ? ` · ubicación hace ${data.driver.minutesAgo} min` : " · en vivo"}
+              {data?.driver && (
+                <p className="mt-1 text-sm text-gray-500">
+                  {data.driver.name ? (
+                    <>
+                      <b className="text-gray-700">{data.driver.name}</b> es tu repartidor
+                    </>
+                  ) : (
+                    "Repartidor en ruta"
+                  )}
+                  {data.driver.minutesAgo > 1 ? ` · ubicación hace ${data.driver.minutesAgo} min` : " · en vivo"}
+                </p>
+              )}
+              {/* Tranquilidad ante la demora: el cliente entiende que hay varias entregas. */}
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                Hoy estamos entregando varios pedidos. Si tarda un poco, no te preocupes: tu pedido va en camino. ¡Gracias por tu paciencia! 🙏
               </p>
             </>
           ) : (
