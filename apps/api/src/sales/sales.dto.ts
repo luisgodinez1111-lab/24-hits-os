@@ -50,6 +50,9 @@ export const createOrderSchema = z.object({
   // Opcional: si se omite se usa el almacén fijo del usuario (operación por usuario).
   warehouseId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
+  // Nombre para el alta automática de cliente cuando se captura por WhatsApp sin
+  // customerId (si se omite, el cliente se crea con el propio número como nombre).
+  customerName: z.string().max(120).optional(),
   channel: z.string().max(40).optional(),
   currency: z.string().length(3).default("MXN"),
   // Lista de precios explícita; si se omite se resuelve por tipo de cliente.
