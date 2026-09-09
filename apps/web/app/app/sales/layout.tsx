@@ -7,7 +7,7 @@ import { salesTabs } from "@/lib/sales-tabs";
 export default function SalesLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <SectionTabs title="Ventas" subtitle="Punto de venta, pedidos, notas de venta y de crédito, y clientes" tabs={salesTabs} />
+      <SectionTabs title="Ventas" subtitle="Pedidos, entregas, cobros y clientes" tabs={salesTabs} />
       {children}
     </>
   );
