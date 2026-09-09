@@ -76,6 +76,37 @@ export async function osrmRoute(pts: Pt[], osrmUrl: string, headers?: OsrmHeader
   }
 }
 
+// Ruta turn-by-turn (con maniobras) de A a B. Devuelve el `routes[0]` crudo de OSRM
+// (geometría + legs.steps) para que el front lo traduzca a instrucciones en español.
+// Se usa desde el proxy de la API: así el navegador NO pega directo al OSRM.
+export interface OsrmNavRoute {
+  distance: number;
+  duration: number;
+  geometry?: { coordinates?: [number, number][] };
+  legs?: Array<{
+    steps?: Array<{
+      name?: string;
+      distance: number;
+      maneuver?: { type?: string; modifier?: string; location?: [number, number]; exit?: number };
+    }>;
+  }>;
+}
+
+export async function osrmNavRoute(from: Pt, to: Pt, osrmUrl: string, headers?: OsrmHeaders): Promise<OsrmNavRoute | null> {
+  try {
+    const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+    const url = `${osrmUrl.replace(/\/+$/, "")}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+    const res = await fetchWithTimeout(url, headers, 4000);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code?: string; routes?: OsrmNavRoute[] };
+    const r = j.routes?.[0];
+    if (j.code !== "Ok" || !r?.geometry?.coordinates) return null;
+    return r;
+  } catch {
+    return null;
+  }
+}
+
 type Cost = (a: number, b: number) => number;
 
 // Tour inicial por vecino más cercano (índice 0 fijo como origen).

@@ -9,6 +9,7 @@ import type { AuthContext } from "../common/context/request-context.js";
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe.js";
 import { CustomerService } from "./customer.service.js";
 import { OrderService } from "./order.service.js";
+import { osrmNavRoute } from "./route-optimizer.js";
 import { DeliveryTrackingService } from "./delivery-tracking.service.js";
 import { TrackingTokenService } from "./tracking-token.service.js";
 import { PaymentService } from "../cash/payment.service.js";
@@ -127,6 +128,25 @@ export class OrderController {
     const ln = lng != null ? Number(lng) : NaN;
     const start = Number.isFinite(la) && Number.isFinite(ln) ? { lat: la, lng: ln } : null;
     return this.orders.optimizeRoute(u.organizationId!, u.userId, start, this.env.OSRM_URL, this.osrmHeaders());
+  }
+
+  // Turn-by-turn (proxy): el front pide las maniobras a la API, NO al OSRM público.
+  // Prod usa solo el OSRM propio (OSRM_URL); en dev sin OSRM cae al demo público
+  // para no perder la navegación al desarrollar (datos de prueba).
+  @Get("route-nav")
+  @RequirePermissions("orders.read")
+  routeNav(
+    @Query("fromLat") fromLat?: string,
+    @Query("fromLng") fromLng?: string,
+    @Query("toLat") toLat?: string,
+    @Query("toLng") toLng?: string
+  ) {
+    const from = { lat: Number(fromLat), lng: Number(fromLng) };
+    const to = { lat: Number(toLat), lng: Number(toLng) };
+    if (![from.lat, from.lng, to.lat, to.lng].every(Number.isFinite)) return null;
+    const osrmUrl = this.env.OSRM_URL || (this.env.NODE_ENV !== "production" ? "https://router.project-osrm.org" : null);
+    if (!osrmUrl) return null;
+    return osrmNavRoute(from, to, osrmUrl, this.osrmHeaders());
   }
 
   // Ruta editable: fija el orden manual de las paradas (lista ordenada; vacío = automático).
