@@ -22,7 +22,10 @@
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
     "RLS_STARTUP_CHECK",
-    "CRON_SECRET"
+    "CRON_SECRET",
+    "OSRM_URL",
+    "OSRM_CF_ACCESS_CLIENT_ID",
+    "OSRM_CF_ACCESS_CLIENT_SECRET"
   ],
   "tasks": {
     "build": {
