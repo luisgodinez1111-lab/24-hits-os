@@ -131,7 +131,7 @@ export default function SalesOrdersPage() {
     <div>
       <PageHeader
         title="Pedidos"
-        subtitle="Confirmar reserva stock · entregar consume inventario y captura COGS"
+        subtitle="Captura un pedido, envíalo a ruta y cóbralo al entregar"
         actions={
           <>
             <Button variant="outline" onClick={() => router.push("/app/sales/route")}><RouteIcon className="h-4 w-4" /> Ruta de hoy</Button>
