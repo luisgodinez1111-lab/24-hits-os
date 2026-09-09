@@ -1,9 +1,8 @@
 import type { LatLng } from "./route";
 
-// Motor de rutas público (OSRM demo). Devuelve el trazo por calles + las
-// maniobras paso a paso (turn-by-turn). TEMPORAL: al montar OSRM propio se
-// cambia esta URL. Ver infra/osrm.
-const OSRM = "https://router.project-osrm.org";
+// El turn-by-turn (trazo por calles + maniobras) ya NO se pide directo a un OSRM
+// público desde el navegador: `fetchNavRoute` consulta nuestra API, que a su vez usa
+// el OSRM propio (OSRM_URL). Así las coordenadas de la entrega no salen a un tercero.
 
 export type ManeuverType =
   | "depart" | "arrive" | "turn" | "continue" | "new name" | "merge"
@@ -105,24 +104,21 @@ function cap(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1);
 // Pide la ruta con maniobras paso a paso entre dos puntos.
 export async function fetchNavRoute(from: LatLng, to: LatLng): Promise<NavRoute | null> {
   const ctrl = new AbortController();
-  // 4s: el demo público de OSRM suele responder en 1-3s; si tarda más, se aborta y el
-  // mapa cae a la línea recta en vez de dejar la navegación trabada hasta 10s.
-  const t = setTimeout(() => ctrl.abort(), 4000);
+  // 4.5s: la API responde en 1-3s; si tarda más, se aborta y el mapa cae a la línea
+  // recta en vez de dejar la navegación trabada.
+  const t = setTimeout(() => ctrl.abort(), 4500);
   try {
-    const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-    const url = `${OSRM}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
-    const res = await fetch(url, { signal: ctrl.signal });
+    // Las maniobras se piden a NUESTRA API (mismo origen), que a su vez consulta el
+    // OSRM propio. Así las coordenadas de la entrega NO se envían a un tercero.
+    const qs = `fromLat=${from.lat}&fromLng=${from.lng}&toLat=${to.lat}&toLng=${to.lng}`;
+    const res = await fetch(`/api/v1/orders/route-nav?${qs}`, { signal: ctrl.signal, credentials: "include" });
     if (!res.ok) return null;
-    const j = (await res.json()) as {
-      code?: string;
-      routes?: Array<{
-        distance: number; duration: number;
-        geometry?: { coordinates?: [number, number][] };
-        legs?: Array<{ steps?: Array<{ name?: string; distance: number; maneuver?: { type?: string; modifier?: string; location?: [number, number]; exit?: number } }> }>;
-      }>;
-    };
-    const r = j.routes?.[0];
-    if (j.code !== "Ok" || !r?.geometry?.coordinates) return null;
+    const r = (await res.json().catch(() => null)) as {
+      distance: number; duration: number;
+      geometry?: { coordinates?: [number, number][] };
+      legs?: Array<{ steps?: Array<{ name?: string; distance: number; maneuver?: { type?: string; modifier?: string; location?: [number, number]; exit?: number } }> }>;
+    } | null;
+    if (!r?.geometry?.coordinates) return null;
 
     const geometry = r.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]);
     const maneuvers: Maneuver[] = [];
