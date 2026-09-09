@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Check, Package, ScanLine, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, ClipboardCheck, Package, UserPlus, type LucideIcon } from "lucide-react";
 import { cn } from "@24hits/ui";
 import { api } from "@/lib/api";
 import type { Customer, Order, ProductPage } from "@/lib/catalog-types";
@@ -35,7 +35,7 @@ export function OnboardingChecklist({ enabled }: { enabled: boolean }) {
 
   const steps: { key: string; label: string; desc: string; href: string; icon: LucideIcon; done: boolean }[] = [
     { key: "product", label: "Agrega tu primer producto", desc: "Marca, modelo y sabor con su precio.", href: "/app/catalog/products", icon: Package, done: products.items.length > 0 },
-    { key: "sale", label: "Registra tu primera venta", desc: "Escanea un código de barras y cobra.", href: "/app/sales/pos", icon: ScanLine, done: orders.length > 0 },
+    { key: "sale", label: "Crea tu primer pedido", desc: "Captura un pedido de WhatsApp a domicilio.", href: "/app/sales/orders", icon: ClipboardCheck, done: orders.length > 0 },
     { key: "customer", label: "Agrega un cliente", desc: "Para dar seguimiento y crédito.", href: "/app/sales/customers", icon: UserPlus, done: customers.length > 0 },
   ];
   const doneCount = steps.filter((s) => s.done).length;
