@@ -106,13 +106,22 @@ export default function SalesOrdersPage() {
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
 
-  // Genera y copia el link PÚBLICO de rastreo para compartir con el cliente.
-  async function shareTracking(orderId: string) {
+  // Envía el rastreo al cliente: si el pedido tiene teléfono, abre WhatsApp con el
+  // mensaje + link prellenados; si no, copia el link. Pensado para el flujo WhatsApp.
+  async function shareTracking(o: Order) {
     try {
-      const { token } = await api.get<{ token: string }>(`/orders/${orderId}/track-token`);
+      const { token } = await api.get<{ token: string }>(`/orders/${o.id}/track-token`);
       const url = `${window.location.origin}/track/${token}`;
-      await navigator.clipboard.writeText(url);
-      toast.push("Link de rastreo copiado — compártelo con el cliente", "success");
+      const phone = (o.deliveryPhone ?? "").replace(/\D/g, "");
+      const wa = phone.length === 10 ? `52${phone}` : phone; // MX: agrega lada país si es local
+      const msg = `¡Hola! Puedes seguir tu pedido ${o.number} en vivo aquí: ${url}`;
+      if (wa.length >= 11) {
+        window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+        toast.push("Abriendo WhatsApp con el rastreo…", "success");
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.push("Link de rastreo copiado — compártelo con el cliente", "success");
+      }
     } catch (e) {
       toast.push(e instanceof ApiError ? e.message : "No se pudo generar el link", "error");
     }
@@ -209,7 +218,7 @@ export default function SalesOrdersPage() {
                       {(o.deliveryLat == null || o.deliveryLng == null) && o.status !== "CANCELLED" ? (
                         <button onClick={() => setLocating(o)} className="text-amber-600 hover:underline">Falta ubicación</button>
                       ) : o.deliveryStatus !== "DELIVERED" && o.status !== "CANCELLED" ? (
-                        <button onClick={() => shareTracking(o.id)} className="text-gray-500 hover:text-brand hover:underline">Rastreo</button>
+                        <button onClick={() => shareTracking(o)} className="text-gray-500 hover:text-brand hover:underline">Enviar rastreo</button>
                       ) : null}
                       {!delivered && o.paymentStatus !== "PAID" && o.status !== "CANCELLED" && (
                         <button onClick={() => setPaying(o)} className="text-gray-500 hover:text-brand hover:underline">Cobrar</button>
