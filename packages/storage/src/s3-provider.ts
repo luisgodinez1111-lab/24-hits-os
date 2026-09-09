@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -58,6 +59,15 @@ export class S3FileStorageProvider implements FileStorageProvider {
     return getSignedUrl(this.client, command, {
       expiresIn: options?.expiresInSec ?? DEFAULT_EXPIRY_SEC,
     });
+  }
+
+  async objectSize(key: string): Promise<number | null> {
+    try {
+      const r = await this.client.send(new HeadObjectCommand({ Bucket: this.config.bucket, Key: key }));
+      return typeof r.ContentLength === "number" ? r.ContentLength : null;
+    } catch {
+      return null; // no existe o sin acceso
+    }
   }
 
   async remove(key: string): Promise<void> {

@@ -191,9 +191,9 @@ export class InventoryService {
   }
 
   async approveAdjustment(organizationId: string, approverUserId: string, requestId: string) {
-    const request = await this.prisma.client.adjustmentRequest.findFirst({
-      where: { id: requestId, organizationId },
-    });
+    const request = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.adjustmentRequest.findFirst({ where: { id: requestId } })
+    );
     if (!request) throw AppException.notFound("Solicitud de ajuste no encontrada");
     if (request.status !== "PENDING") {
       throw new AppException(409, ErrorCode.INVENTORY_ADJUSTMENT_INVALID, "La solicitud no está pendiente");
@@ -213,10 +213,12 @@ export class InventoryService {
       idempotencyKey: request.idempotencyKey,
       approvedByUserId: approverUserId,
     });
-    await this.prisma.client.adjustmentRequest.update({
-      where: { id: request.id },
-      data: { status: "APPLIED", approvedByUserId: approverUserId, appliedMovementId: movement.id },
-    });
+    await this.prisma.withTenant(organizationId, (tx) =>
+      tx.adjustmentRequest.update({
+        where: { id: request.id },
+        data: { status: "APPLIED", approvedByUserId: approverUserId, appliedMovementId: movement.id },
+      })
+    );
     await this.audit.record({
       action: "inventory.adjustment_approved",
       organizationId,

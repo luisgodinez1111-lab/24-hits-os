@@ -16,6 +16,9 @@ export interface FileStorageProvider {
   getSignedUploadUrl(key: string, options?: SignedUploadOptions): Promise<string>;
   // URL firmada para DESCARGAR un objeto (GET).
   getSignedDownloadUrl(key: string, options?: SignedDownloadOptions): Promise<string>;
+  // Tamaño real (bytes) del objeto, o null si no existe. Para validar el peso SUBIDO
+  // (el PUT firmado no puede limitar bytes; esto verifica lo que realmente llegó).
+  objectSize(key: string): Promise<number | null>;
   // Elimina un objeto.
   remove(key: string): Promise<void>;
 }
