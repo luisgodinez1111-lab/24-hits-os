@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardCheck, CreditCard, MapPin, Plus, Receipt, Route as RouteIcon, Share2 } from "lucide-react";
+import { Check, ClipboardCheck, CreditCard, Plus, Route as RouteIcon } from "lucide-react";
 import {
   Badge, Button, Dialog, EmptyState, ErrorState, FormField, Input, PageHeader, Segmented,   Table, TBody, TD, TH, THead, TR, useToast,
   TableSkeleton,
@@ -14,21 +14,23 @@ import { api, ApiError } from "@/lib/api";
 import { QuickOrderDialog } from "@/components/QuickOrderDialog";
 import { haversineKm } from "@/lib/route";
 
-const tone: Record<string, "gray" | "amber" | "blue" | "green" | "red"> = {
-  DRAFT: "gray", CONFIRMED: "blue", PARTIALLY_FULFILLED: "amber",
-  FULFILLED: "green", COMPLETED: "green", CANCELLED: "red",
-};
-const payTone: Record<string, "gray" | "amber" | "green"> = {
-  PENDING: "gray", PARTIAL: "amber", PAID: "green",
-};
-const deliveryTone: Record<string, "gray" | "amber" | "green"> = { PENDING: "gray", DISPATCHED: "amber", DELIVERED: "green" };
-const deliveryLabel: Record<string, string> = { PENDING: "Por enviar", DISPATCHED: "Enviado", DELIVERED: "Entregado" };
-// Etiquetas legibles (antes se mostraba el enum crudo: DRAFT, PENDING…).
-const statusLabel: Record<string, string> = {
-  DRAFT: "Borrador", CONFIRMED: "Confirmado", PARTIALLY_FULFILLED: "Parcial",
-  FULFILLED: "Entregado", COMPLETED: "Completado", CANCELLED: "Cancelado",
-};
-const payLabel: Record<string, string> = { PENDING: "Pendiente", PARTIAL: "Parcial", PAID: "Pagado" };
+// UNA etapa humana derivada de los 3 estados internos (estado/pago/entrega). El
+// operador ve una sola etiqueta y una sola acción, no la maquinaria (reserva/COGS).
+type Stage = { label: string; tone: "gray" | "amber" | "blue" | "green" | "red" };
+function stageOf(o: Order): Stage {
+  if (o.status === "CANCELLED") return { label: "Cancelado", tone: "red" };
+  const delivered = o.deliveryStatus === "DELIVERED" || o.status === "FULFILLED" || o.status === "COMPLETED";
+  if (delivered) {
+    return o.paymentStatus === "PAID"
+      ? { label: "Entregado y cobrado", tone: "green" }
+      : { label: "Entregado · por cobrar", tone: "amber" };
+  }
+  if (o.deliveryStatus === "DISPATCHED") return { label: "En ruta", tone: "blue" };
+  return { label: "Nuevo", tone: "gray" };
+}
+function isDelivered(o: Order): boolean {
+  return o.deliveryStatus === "DELIVERED" || o.status === "FULFILLED" || o.status === "COMPLETED";
+}
 
 // Prueba de entrega (geo-sello): "14:32 · a 8 m · recibió Juan". La distancia es entre
 // el punto de entrega del pedido y donde el repartidor marcó entregado (evidencia de
@@ -130,7 +132,7 @@ export default function SalesOrdersPage() {
       />
 
       {isLoading ? (
-        <TableSkeleton cols={7} />
+        <TableSkeleton cols={5} />
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : !data || data.length === 0 ? (
@@ -158,9 +160,12 @@ export default function SalesOrdersPage() {
             <EmptyState icon={<ClipboardCheck className="h-8 w-8 text-gray-400" />} title="Sin resultados" description="Ningún pedido con este filtro." />
           ) : (
           <Table stickyHeader>
-          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Estado</TH><TH>Pago</TH><TH>Entrega</TH><TH className="text-right">Acciones</TH></TR></THead>
+          <THead><TR><TH>Folio</TH><TH>Cliente</TH><TH className="text-right">Total</TH><TH>Etapa</TH><TH className="text-right">Acción</TH></TR></THead>
           <TBody>
-            {shown.map((o) => (
+            {shown.map((o) => {
+              const st = stageOf(o);
+              const delivered = isDelivered(o);
+              return (
               <TR key={o.id}>
                 <TD className="font-mono text-xs">{o.number}</TD>
                 <TD className="font-medium">
@@ -181,45 +186,46 @@ export default function SalesOrdersPage() {
                   ) : null}
                 </TD>
                 <TD className="text-right font-mono tabular-nums">${Number(o.total).toFixed(2)}</TD>
-                <TD><Badge tone={tone[o.status] ?? "gray"}>{statusLabel[o.status] ?? o.status}</Badge></TD>
-                <TD><Badge tone={payTone[o.paymentStatus] ?? "gray"}>{payLabel[o.paymentStatus] ?? o.paymentStatus}</Badge></TD>
+                {/* UNA etapa humana (esconde estado/pago/entrega internos). */}
                 <TD>
-                  {o.deliveryStatus ? (
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={deliveryTone[o.deliveryStatus] ?? "gray"}>{deliveryLabel[o.deliveryStatus] ?? o.deliveryStatus}</Badge>
-                        {o.deliveryStatus === "PENDING" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}>Enviar</Button>}
-                        {o.deliveryStatus === "DISPATCHED" && <Button size="sm" variant="ghost" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}>Entregado</Button>}
-                        {/* Sin coordenadas = no aparece en la ruta: se ofrece corregir. */}
-                        {o.deliveryLat == null || o.deliveryLng == null ? (
-                          <Button size="sm" variant="outline" onClick={() => setLocating(o)}><MapPin className="h-4 w-4" /> Corregir ubicación</Button>
-                        ) : (
-                          <button onClick={() => setLocating(o)} className="inline-flex items-center gap-1 text-xs text-brand underline"><MapPin className="h-3.5 w-3.5" /> ubicación ✓</button>
-                        )}
-                        {o.deliveryStatus !== "DELIVERED" && o.deliveryLat != null && o.deliveryLng != null && (
-                          <button onClick={() => shareTracking(o.id)} className="inline-flex items-center gap-1 text-xs text-brand underline"><Share2 className="h-3.5 w-3.5" /> Rastreo</button>
-                        )}
-                      </div>
-                      {/* Prueba de entrega (geo-sello): hora · distancia al punto · quién recibió. */}
-                      {deliveryProof(o) && (
-                        <p className="text-[11px] text-gray-400" title="Prueba de entrega: hora y distancia entre el punto de entrega y donde se marcó entregado">
-                          ✓ {deliveryProof(o)}
-                        </p>
+                  <Badge tone={st.tone}>{st.label}</Badge>
+                  {deliveryProof(o) && (
+                    <p className="mt-1 text-[11px] text-gray-400" title="Prueba de entrega: hora y distancia entre el punto de entrega y donde se marcó entregado">✓ {deliveryProof(o)}</p>
+                  )}
+                </TD>
+                {/* UNA acción principal + secundarias discretas. */}
+                <TD className="text-right">
+                  <div className="flex flex-col items-end gap-1.5">
+                    {o.status !== "CANCELLED" && !delivered && o.deliveryStatus === "DISPATCHED" && (
+                      <Button size="sm" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DELIVERED" })}><Check className="h-4 w-4" /> Marcar entregado</Button>
+                    )}
+                    {o.status !== "CANCELLED" && !delivered && o.deliveryStatus !== "DISPATCHED" && (
+                      <Button size="sm" loading={delivery.isPending} onClick={() => delivery.mutate({ id: o.id, status: "DISPATCHED" })}><RouteIcon className="h-4 w-4" /> Enviar a ruta</Button>
+                    )}
+                    {delivered && o.paymentStatus !== "PAID" && (
+                      <Button size="sm" onClick={() => setPaying(o)}><CreditCard className="h-4 w-4" /> Cobrar</Button>
+                    )}
+                    <div className="flex flex-wrap justify-end gap-x-3 text-xs">
+                      {(o.deliveryLat == null || o.deliveryLng == null) && o.status !== "CANCELLED" ? (
+                        <button onClick={() => setLocating(o)} className="text-amber-600 hover:underline">Falta ubicación</button>
+                      ) : o.deliveryStatus !== "DELIVERED" && o.status !== "CANCELLED" ? (
+                        <button onClick={() => shareTracking(o.id)} className="text-gray-500 hover:text-brand hover:underline">Rastreo</button>
+                      ) : null}
+                      {!delivered && o.paymentStatus !== "PAID" && o.status !== "CANCELLED" && (
+                        <button onClick={() => setPaying(o)} className="text-gray-500 hover:text-brand hover:underline">Cobrar</button>
+                      )}
+                      {o.status !== "CANCELLED" && o.status !== "DRAFT" && (
+                        <button onClick={() => issueNote.mutate(o.id)} className="text-gray-500 hover:text-brand hover:underline">Nota</button>
+                      )}
+                      {!delivered && o.status !== "CANCELLED" && (
+                        <button onClick={() => action.mutate({ id: o.id, verb: "cancel" })} className="text-gray-400 hover:text-red-600 hover:underline">Cancelar</button>
                       )}
                     </div>
-                  ) : <span className="text-gray-300">—</span>}
-                </TD>
-                <TD className="text-right">
-                  <div className="flex justify-end gap-2">
-                    {o.status === "DRAFT" && <Button size="sm" variant="outline" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "confirm" })}>Confirmar</Button>}
-                    {(o.status === "CONFIRMED" || o.status === "PARTIALLY_FULFILLED") && <Button size="sm" loading={action.isPending} onClick={() => action.mutate({ id: o.id, verb: "fulfill" })}>Entregar</Button>}
-                    {o.status !== "CANCELLED" && o.paymentStatus !== "PAID" && <Button size="sm" variant="outline" onClick={() => setPaying(o)}><CreditCard className="h-4 w-4" /> Cobrar</Button>}
-                    {o.status !== "CANCELLED" && o.status !== "DRAFT" && <Button size="sm" variant="outline" loading={issueNote.isPending} onClick={() => issueNote.mutate(o.id)}><Receipt className="h-4 w-4" /> Nota</Button>}
-                    {(o.status === "DRAFT" || o.status === "CONFIRMED") && <Button size="sm" variant="ghost" onClick={() => action.mutate({ id: o.id, verb: "cancel" })}>Cancelar</Button>}
                   </div>
                 </TD>
               </TR>
-            ))}
+              );
+            })}
           </TBody>
         </Table>
           )}
