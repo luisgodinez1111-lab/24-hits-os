@@ -51,10 +51,12 @@ export class MemberService {
   ): Promise<void> {
     await this.getMembershipInOrg(organizationId, membershipId);
     if (input.defaultWarehouseId) {
-      const wh = await this.prisma.client.warehouse.findFirst({
-        where: { id: input.defaultWarehouseId, organizationId },
-        select: { id: true },
-      });
+      // Warehouse es tabla TENANT (RLS): debe leerse dentro de withTenant, si no
+      // el cliente base la filtra a vacío en prod y da un falso "no pertenece".
+      const whId = input.defaultWarehouseId;
+      const wh = await this.prisma.withTenant(organizationId, (tx) =>
+        tx.warehouse.findFirst({ where: { id: whId }, select: { id: true } })
+      );
       if (!wh) throw AppException.badRequest("El almacén no pertenece a la organización");
     }
     await this.prisma.client.organizationMembership.update({
