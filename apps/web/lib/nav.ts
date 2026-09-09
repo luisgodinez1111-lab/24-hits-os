@@ -64,3 +64,13 @@ export const navSections: NavSection[] = [
     items: [{ href: "/app/settings", label: "Configuración", icon: Settings }],
   },
 ];
+
+// Barra inferior SOLO en móvil (cajero en tablet, repartidor en celular): atajo a las
+// 4 acciones del día. El resto del menú vive en el cajón (☰). Etiquetas cortas a
+// propósito. Se filtra por permiso, así que cada rol ve solo lo suyo.
+export const bottomNavItems: NavItem[] = [
+  { href: "/app/sales/pos", label: "Vender", icon: ScanLine, perm: "orders.create" },
+  { href: "/app/sales/orders", label: "Pedidos", icon: ClipboardCheck, perm: "orders.read" },
+  { href: "/app/sales/route", label: "Ruta", icon: Route, perm: "orders.read" },
+  { href: "/app/sales/cash", label: "Caja", icon: Wallet, perm: "cash.read" },
+];
