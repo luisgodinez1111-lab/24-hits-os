@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Spinner } from "@24hits/ui";
 import { useMe } from "@/lib/me";
 import { Sidebar } from "@/components/Sidebar";
+import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -47,10 +48,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main className="flex flex-1 flex-col overflow-y-auto">
         <Header me={me} onMenu={() => setNavOpen(true)} />
         <VerifyEmailBanner />
-        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+        {/* pb-24 en móvil: deja aire para el bottom-nav fijo (lg no lo tiene). */}
+        <div className="flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 lg:pb-8">
           <PageTransition>{children}</PageTransition>
         </div>
       </main>
+      <BottomNav />
       <CommandPalette />
     </div>
   );
