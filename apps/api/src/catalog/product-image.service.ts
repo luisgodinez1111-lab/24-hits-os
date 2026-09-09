@@ -6,7 +6,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { AppException } from "../common/errors/app-exception.js";
 import { ErrorCode } from "../common/errors/error-codes.js";
 import { FILE_STORAGE } from "../storage/storage.tokens.js";
-import type { ImageUploadUrlInput, RegisterImageInput } from "./product-image.dto.js";
+import { MAX_IMAGE_BYTES, type ImageUploadUrlInput, type RegisterImageInput } from "./product-image.dto.js";
 
 // Imágenes de producto: el binario vive en el FileStorageProvider (MinIO/S3), no en
 // PostgreSQL. Acceso privado con URLs firmadas. Claves prefijadas por organización.
@@ -39,6 +39,13 @@ export class ProductImageService {
     // La clave debe pertenecer a la organización (defensa adicional).
     if (!input.storageKey.startsWith(`org/${organizationId}/`)) {
       throw AppException.badRequest("storageKey inválida para la organización");
+    }
+    // Límite DURO de tamaño: verifica los bytes REALES subidos (el PUT firmado no
+    // puede limitarlos). Si excede, borra el objeto y rechaza el registro.
+    const actualSize = await this.storage.objectSize(input.storageKey);
+    if (actualSize != null && actualSize > MAX_IMAGE_BYTES) {
+      await this.storage.remove(input.storageKey).catch(() => undefined);
+      throw AppException.badRequest(`La imagen supera el máximo de ${Math.floor(MAX_IMAGE_BYTES / (1024 * 1024))} MB.`);
     }
     const image = await this.prisma.withTenant(organizationId, (tx) =>
       tx.productImage.create({

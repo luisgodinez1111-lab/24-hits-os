@@ -13,6 +13,7 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "eslint .",
+    "check:rls": "node scripts/check-tenant-access.mjs",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",

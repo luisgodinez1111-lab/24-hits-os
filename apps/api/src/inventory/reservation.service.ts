@@ -190,10 +190,12 @@ export class ReservationService {
 
   // Libera reservas vencidas (job del worker). Idempotente; nunca toca CONSUMED.
   async expireDue(organizationId: string, now: Date = new Date()): Promise<number> {
-    const due = await this.prisma.client.inventoryReservation.findMany({
-      where: { organizationId, status: "ACTIVE", expiresAt: { not: null, lt: now } },
-      select: { id: true },
-    });
+    const due = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.inventoryReservation.findMany({
+        where: { status: "ACTIVE", expiresAt: { not: null, lt: now } },
+        select: { id: true },
+      })
+    );
     let released = 0;
     for (const { id } of due) {
       await this.prisma.withTenant(organizationId, async (tx) => {

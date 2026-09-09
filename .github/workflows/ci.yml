@@ -65,6 +65,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Tripwire de RLS: falla si algún servicio lee/escribe una tabla tenant vía
+      # this.prisma.client (fuera de withTenant/withSystem) → evadiría RLS en silencio.
+      - name: RLS tripwire
+        run: pnpm check:rls
+
       - name: Typecheck
         run: pnpm typecheck
 
