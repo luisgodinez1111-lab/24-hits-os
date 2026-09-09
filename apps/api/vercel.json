@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install --prod=false",
-  "buildCommand": "pnpm turbo run build --filter=@24hits/api",
+  "buildCommand": "pnpm --filter @24hits/api vercel-build",
   "outputDirectory": "public",
   "functions": {
     "api/index.mjs": {
