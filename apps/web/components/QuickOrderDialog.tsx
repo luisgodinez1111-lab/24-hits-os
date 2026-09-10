@@ -92,7 +92,13 @@ export function QuickOrderDialog({
         deliveryNotes: notes.trim() || undefined,
         items: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty })),
       }),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["sales-orders"] }); onCreated(); },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      // El pedido pudo dar de alta un cliente nuevo (por WhatsApp) → refresca la lista
+      // de clientes para que su nombre aparezca al instante en Pedidos (no el id).
+      void qc.invalidateQueries({ queryKey: ["customers"] });
+      onCreated();
+    },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "No se pudo crear el pedido", "error"),
   });
 
