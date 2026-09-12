@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Eye, EyeOff } from "lucide-react";
 import { Alert, Button, Card, CardBody, FormField, Input, Spinner, useToast } from "@24hits/ui";
 import { api, ApiError } from "@/lib/api";
 
@@ -17,6 +18,7 @@ function ResetPasswordInner() {
   const token = params.get("token");
   const toast = useToast();
   const [done, setDone] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const {
     register,
     handleSubmit,
@@ -45,8 +47,16 @@ function ResetPasswordInner() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormField label="Nueva contraseña" error={errors.password?.message}>
-              <Input type="password" autoComplete="new-password" {...register("password")} />
+              <div className="relative">
+                <Input type={showPw ? "text" : "password"} autoComplete="new-password" className="pr-10" {...register("password")} />
+                <button type="button" onClick={() => setShowPw((v) => !v)} tabIndex={-1}
+                  aria-label={showPw ? "Ocultar contraseña" : "Ver contraseña"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </FormField>
+            <p className="-mt-2 text-[11px] text-gray-400">Usa el ojo para ver que quede bien escrita. Mínimo 8 caracteres, sin espacios al inicio o final.</p>
             <Button type="submit" className="w-full" loading={isSubmitting}>
               Cambiar contraseña
             </Button>
