@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Eye, EyeOff } from "lucide-react";
 import { Button, Card, CardBody, FormField, Input, useToast } from "@24hits/ui";
 import { api, ApiError } from "@/lib/api";
 
@@ -17,6 +19,7 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
+  const [showPw, setShowPw] = useState(false);
   const {
     register,
     handleSubmit,
@@ -44,7 +47,14 @@ export default function LoginPage() {
             <Input type="email" autoComplete="email" {...register("email")} />
           </FormField>
           <FormField label="Contraseña" error={errors.password?.message}>
-            <Input type="password" autoComplete="current-password" {...register("password")} />
+            <div className="relative">
+              <Input type={showPw ? "text" : "password"} autoComplete="current-password" className="pr-10" {...register("password")} />
+              <button type="button" onClick={() => setShowPw((v) => !v)} tabIndex={-1}
+                aria-label={showPw ? "Ocultar contraseña" : "Ver contraseña"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </FormField>
           <Button type="submit" className="w-full" loading={isSubmitting}>
             Entrar
