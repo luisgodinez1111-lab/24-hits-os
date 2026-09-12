@@ -74,7 +74,11 @@ export default function UsersPage() {
 
   const invite = useMutation({
     mutationFn: (values: InviteValues) =>
-      api.post<{ membershipId: string; inviteUrl: string }>("/members/invite", { ...values, roleIds: inviteRoles }),
+      api.post<{ membershipId: string; inviteUrl: string }>("/members/invite", {
+        email: values.email.trim(),
+        name: values.name?.trim() || undefined, // vacío → se omite (nombre es opcional)
+        roleIds: inviteRoles,
+      }),
     onSuccess: async (res) => {
       reset({ email: "", name: "" });
       setInviteRoles([]);
