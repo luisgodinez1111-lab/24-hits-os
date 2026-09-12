@@ -213,6 +213,27 @@ export class MemberService {
     });
   }
 
+  // Elimina al usuario de la organización (borra su membresía). NO borra la cuenta
+  // global del usuario (puede pertenecer a otras orgs y arrastraría su historial). Las
+  // filas hijas (roles, sucursales) se borran solas por onDelete: Cascade. No puedes
+  // eliminarte a ti mismo → la org nunca se queda sin dueño (quien actúa último no puede
+  // quitarse a sí mismo).
+  async remove(organizationId: string, membershipId: string, actorUserId: string): Promise<void> {
+    const membership = await this.getMembershipInOrg(organizationId, membershipId);
+    if (membership.userId === actorUserId) {
+      throw AppException.badRequest("No puedes eliminarte a ti mismo de la organización.");
+    }
+    await this.prisma.client.organizationMembership.delete({ where: { id: membershipId } });
+    await this.permissions.invalidate(membershipId);
+    await this.audit.record({
+      action: "membership.removed",
+      organizationId,
+      entityType: "OrganizationMembership",
+      entityId: membershipId,
+      metadata: { userId: membership.userId },
+    });
+  }
+
   private async getMembershipInOrg(organizationId: string, membershipId: string) {
     const membership = await this.prisma.client.organizationMembership.findFirst({
       where: { id: membershipId, organizationId },
