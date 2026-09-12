@@ -5,6 +5,13 @@
 // organización EN SILENCIO — el bug más peligroso del multi-tenant. Ver la memoria
 // rls-withtenant-reads. Es auto-mantenible: la lista de modelos tenant se deriva del
 // schema, no se hardcodea.
+//
+// Detecta DOS formas del bug:
+//   1) Directa:  this.prisma.client.<tablaTenant>.findMany(...)
+//   2) Anidada:  this.prisma.client.<tablaInfra>.findMany({ select: { <relTenant>: {...} } })
+//      — el join anidado a una tabla tenant también lo filtra la RLS a null (así se
+//      coló el bug del almacén del usuario, PR #79). Se derivan del schema los CAMPOS
+//      de relación cuyo destino es una tabla tenant (p. ej. defaultWarehouse -> Warehouse).
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,46 +26,99 @@ const INFRA_MODELS = new Set([
   "session", "organizationMembership", "role", "auditEvent", "organization",
 ]);
 
-// Modelos tenant = los que declaran organizationId, menos los de infra. Se pasan a la
-// forma del accesor de Prisma (primera letra minúscula): `ProductVariant` -> `productVariant`.
-const tenantModels = [];
+const accessorOf = (pascal) => pascal[0].toLowerCase() + pascal.slice(1);
+
+// Pasada 1: todos los modelos y cuáles son tenant (organizationId, no-infra).
+const allModels = new Set();      // nombres PascalCase
+const tenantAccessors = new Set(); // productVariant, warehouse, ...
+const tenantPascal = new Set();    // ProductVariant, Warehouse, ...
+const modelBodies = [];
 for (const m of schema.matchAll(/model\s+(\w+)\s*\{([^}]*)\}/g)) {
-  if (/\borganizationId\b/.test(m[2])) {
-    const accessor = m[1][0].toLowerCase() + m[1].slice(1);
-    if (!INFRA_MODELS.has(accessor)) tenantModels.push(accessor);
+  const [, name, body] = m;
+  allModels.add(name);
+  modelBodies.push([name, body]);
+  if (/\borganizationId\b/.test(body) && !INFRA_MODELS.has(accessorOf(name))) {
+    tenantAccessors.add(accessorOf(name));
+    tenantPascal.add(name);
   }
 }
-if (tenantModels.length === 0) {
+if (tenantAccessors.size === 0) {
   console.error("check-tenant-access: no se encontraron modelos tenant en el schema (¿ruta correcta?)");
   process.exit(2);
 }
 
-const methods = "(find\\w*|count|aggregate|groupBy|create\\w*|update\\w*|delete\\w*|upsert)";
-const re = new RegExp(`this\\.prisma\\.client\\.(${tenantModels.join("|")})\\.${methods}`);
+// Pasada 2: campos de relación cuyo destino es una tabla tenant. Un campo es relación
+// si su tipo (sin []/?) es otro modelo. p. ej. `defaultWarehouse Warehouse?` -> destino
+// Warehouse (tenant) -> el nombre `defaultWarehouse` es un "campo de relación tenant".
+const tenantRelationFields = new Set();
+for (const [, body] of modelBodies) {
+  for (const line of body.split("\n")) {
+    const f = line.match(/^\s*(\w+)\s+(\w+)(\[\])?/);
+    if (!f) continue;
+    const [, field, type] = f;
+    if (allModels.has(type) && tenantPascal.has(type)) tenantRelationFields.add(field);
+  }
+}
 
-// Exención puntual: agrega `// rls-ok` al final de la línea (con una razón) si es un
-// acceso por client legítimo y verificado. Se escanea TODO apps/api/src (no se excluye
-// por carpeta: leer una tabla de negocio por el client es un bug esté donde esté).
+const methods = "(?:find\\w*|count|aggregate|groupBy|create\\w*|update\\w*|delete\\w*|upsert)";
+const callRe = new RegExp(`this\\.prisma\\.client\\.(\\w+)\\.${methods}\\s*\\(`, "g");
+// Regex de campos de relación tenant como CLAVE de objeto: `\bdefaultWarehouse\s*:`
+// (no matchea `defaultWarehouseId:` porque exige `:` inmediato tras el nombre).
+const relKeyRe = tenantRelationFields.size
+  ? new RegExp(`\\b(${[...tenantRelationFields].join("|")})\\s*:`)
+  : null;
 
-const offenders = [];
+// Extrae el argumento balanceado `(...)` desde `open` (índice del `(`), saltando el
+// contenido de strings para no contar paréntesis dentro de literales.
+function balancedArg(text, open) {
+  let depth = 0, quote = null;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i], prev = text[i - 1];
+    if (quote) { if (c === quote && prev !== "\\") quote = null; continue; }
+    if (c === "'" || c === '"' || c === "`") { quote = c; continue; }
+    if (c === "(") depth++;
+    else if (c === ")") { depth--; if (depth === 0) return text.slice(open, i + 1); }
+  }
+  return text.slice(open); // sin cierre (raro): devuelve hasta el final
+}
+
+const lineOf = (text, idx) => text.slice(0, idx).split("\n").length;
+
+// Exención puntual: `// rls-ok` (con una razón) en el texto de la llamada.
+const offenders = new Map(); // file:line -> mensaje (dedupe)
 function walk(dir) {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e);
     const s = statSync(p);
     if (s.isDirectory()) { walk(p); continue; }
     if (!p.endsWith(".ts") || p.endsWith(".spec.ts") || p.endsWith(".test.ts")) continue;
-    readFileSync(p, "utf8").split("\n").forEach((line, i) => {
-      if (re.test(line) && !line.includes("rls-ok")) offenders.push(`${p.replace(root + "/", "")}:${i + 1}: ${line.trim()}`);
-    });
+    const text = readFileSync(p, "utf8");
+    const rel = p.replace(root + "/", "");
+    for (const m of text.matchAll(callRe)) {
+      const model = m[1];
+      const openIdx = text.indexOf("(", m.index + m[0].length - 1);
+      const arg = balancedArg(text, openIdx);
+      const callText = m[0] + arg;
+      if (callText.includes("rls-ok")) continue;
+      const ln = lineOf(text, m.index);
+      const key = `${rel}:${ln}`;
+      if (tenantAccessors.has(model)) {
+        offenders.set(key, `${key}: acceso DIRECTO a tabla tenant "${model}" vía this.prisma.client`);
+      } else if (relKeyRe) {
+        const hit = arg.match(relKeyRe);
+        if (hit) offenders.set(key, `${key}: join ANIDADO a tabla tenant vía relación "${hit[1]}" bajo this.prisma.client.${model}`);
+      }
+    }
   }
 }
 walk(join(root, "apps/api/src"));
 
-if (offenders.length > 0) {
-  console.error(`\n❌ RLS: ${offenders.length} acceso(s) a tabla TENANT vía this.prisma.client (evaden RLS):\n`);
-  for (const o of offenders) console.error("  " + o);
+if (offenders.size > 0) {
+  console.error(`\n❌ RLS: ${offenders.size} acceso(s) a tabla TENANT vía this.prisma.client (evaden RLS):\n`);
+  for (const o of offenders.values()) console.error("  " + o);
   console.error(`\nUsa this.prisma.withTenant(orgId, (tx) => tx.<modelo>...) o withSystem. Leer una tabla tenant`);
-  console.error(`por el client filtra a null/otra organización EN SILENCIO. Ver memoria rls-withtenant-reads.\n`);
+  console.error(`(directa o por join anidado) con el client filtra a null/otra organización EN SILENCIO.`);
+  console.error(`Ver memoria rls-withtenant-reads. Exención puntual verificada: // rls-ok <razón>.\n`);
   process.exit(1);
 }
-console.log(`✓ RLS tripwire OK: sin accesos directos a tablas tenant vía prisma.client (${tenantModels.length} modelos tenant verificados).`);
+console.log(`✓ RLS tripwire OK: sin accesos (directos ni anidados) a tablas tenant vía prisma.client (${tenantAccessors.size} modelos tenant, ${tenantRelationFields.size} relaciones tenant verificadas).`);
