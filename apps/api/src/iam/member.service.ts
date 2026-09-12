@@ -27,9 +27,9 @@ export class MemberService {
     @Inject(ENV) private readonly env: Env
   ) {}
 
-  // Lista las membresías de la organización con usuario y roles.
-  list(organizationId: string) {
-    return this.prisma.client.organizationMembership.findMany({
+  // Lista las membresías de la organización con usuario, roles y almacén asignado.
+  async list(organizationId: string) {
+    const members = await this.prisma.client.organizationMembership.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -37,10 +37,25 @@ export class MemberService {
         createdAt: true,
         user: { select: { id: true, email: true, name: true, status: true } },
         roles: { select: { role: { select: { id: true, key: true, name: true } } } },
-        defaultWarehouse: { select: { id: true, name: true } },
+        defaultWarehouseId: true,
       },
       orderBy: { createdAt: "asc" },
     });
+    // El NOMBRE del almacén vive en Warehouse (tabla TENANT con RLS). Si se leyera como
+    // join anidado con el cliente base, en prod la RLS lo filtra a null y el almacén
+    // asignado "desaparece" en la UI aunque esté guardado. Se resuelve dentro de
+    // withTenant, donde la RLS sí ve los almacenes de la organización.
+    const whIds = [...new Set(members.map((m) => m.defaultWarehouseId).filter((v): v is string => !!v))];
+    const warehouses = whIds.length
+      ? await this.prisma.withTenant(organizationId, (tx) =>
+          tx.warehouse.findMany({ where: { id: { in: whIds } }, select: { id: true, name: true } })
+        )
+      : [];
+    const byId = new Map(warehouses.map((w) => [w.id, w]));
+    return members.map(({ defaultWarehouseId, ...m }) => ({
+      ...m,
+      defaultWarehouse: defaultWarehouseId ? byId.get(defaultWarehouseId) ?? null : null,
+    }));
   }
 
   // Asigna (o quita) el almacén fijo del usuario. Valida que el almacén sea de la org.
