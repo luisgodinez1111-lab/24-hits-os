@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../common/decorators/current-user.decorator.js";
 import { RequirePermissions } from "../common/decorators/require-permissions.decorator.js";
@@ -66,6 +66,13 @@ export class MemberController {
     @Body(new ZodValidationPipe(setMemberWarehouseSchema)) body: SetMemberWarehouseInput
   ): Promise<{ ok: boolean }> {
     await this.members.setDefaultWarehouse(user.organizationId!, id, body);
+    return { ok: true };
+  }
+
+  @Delete(":id")
+  @RequirePermissions("users.manage")
+  async remove(@CurrentUser() user: AuthContext, @Param("id") id: string): Promise<{ ok: boolean }> {
+    await this.members.remove(user.organizationId!, id, user.userId);
     return { ok: true };
   }
 }

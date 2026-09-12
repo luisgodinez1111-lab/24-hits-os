@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users } from "lucide-react";
+import { Trash2, Users } from "lucide-react";
 import {
   Badge,
   Button,
@@ -30,6 +30,7 @@ import {
 } from "@24hits/ui";
 import type { Member, RoleSummary, Warehouse } from "@24hits/contracts";
 import { api, ApiError } from "@/lib/api";
+import { useMe } from "@/lib/me";
 
 const inviteSchema = z.object({
   email: z.string().email("Correo inválido"),
@@ -46,8 +47,10 @@ const statusTone: Record<Member["status"], "green" | "amber" | "gray"> = {
 export default function UsersPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { data: me } = useMe();
   const [inviteRoles, setInviteRoles] = useState<string[]>([]);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [removing, setRemoving] = useState<Member | null>(null); // confirmación de eliminar
   const [inviteLink, setInviteLink] = useState<string | null>(null); // link para compartir
 
   const { data: members, isLoading } = useQuery({
@@ -116,6 +119,16 @@ export default function UsersPage() {
     onSuccess: async () => {
       await invalidateMembers();
       toast.push("Almacén asignado", "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`/members/${id}`),
+    onSuccess: async () => {
+      setRemoving(null);
+      await invalidateMembers();
+      toast.push("Usuario eliminado de la organización", "success");
     },
     onError: (e) => toast.push(e instanceof ApiError ? e.message : "Error", "error"),
   });
@@ -252,6 +265,11 @@ export default function UsersPage() {
                         Suspender
                       </Button>
                     )}
+                    {m.user.id !== me?.user?.id && (
+                      <Button size="sm" variant="ghost" aria-label="Eliminar usuario" onClick={() => setRemoving(m)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    )}
                   </div>
                 </TD>
               </TR>
@@ -269,6 +287,25 @@ export default function UsersPage() {
           await invalidateMembers();
         }}
       />
+
+      <Dialog
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        title="Eliminar usuario"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setRemoving(null)}>Cancelar</Button>
+            <Button variant="danger" size="sm" loading={remove.isPending} onClick={() => removing && remove.mutate(removing.id)}>
+              Eliminar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600">
+          ¿Eliminar a <b>{removing?.user.name ?? removing?.user.email}</b> de la organización? Perderá el
+          acceso y se quitará de la lista. No se puede deshacer (pero puedes volver a invitarlo después).
+        </p>
+      </Dialog>
     </div>
   );
 }
